@@ -7,6 +7,7 @@ use App\Http\Controllers\Admin\InstagramController;
 use App\Http\Controllers\Admin\PartController;
 use App\Http\Controllers\Admin\SettingsController;
 use App\Http\Controllers\Admin\StoryController;
+use App\Http\Controllers\Admin\UserManagementController;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Route;
 
@@ -49,6 +50,11 @@ Route::middleware('auth')->prefix('admin')->name('admin.')->group(function () {
     Route::put('instagram/settings', [InstagramController::class, 'saveSettings'])->name('instagram.settings');
     Route::put('instagram/auto-post', [InstagramController::class, 'saveAutoPost'])->name('instagram.autopost');
     Route::post('instagram/test', [InstagramController::class, 'test'])->name('instagram.test');
+    Route::post('instagram/music', [InstagramController::class, 'saveReelMusic'])->name('instagram.music');
+    Route::delete('instagram/music', [InstagramController::class, 'removeReelMusic'])->name('instagram.music.remove');
+    Route::get('instagram/cards/{card}/caption', [InstagramController::class, 'getCaption'])->name('instagram.card.caption.get');
+    Route::post('instagram/cards/{card}/caption/generate', [InstagramController::class, 'generateCaption'])->name('instagram.card.caption.generate');
+    Route::put('instagram/cards/{card}/caption', [InstagramController::class, 'saveCaption'])->name('instagram.card.caption.save');
     Route::post('instagram/cards/{card}/post', [InstagramController::class, 'postCard'])->name('instagram.card.post');
     Route::post('instagram/cards/{card}/reel', [InstagramController::class, 'postReel'])->name('instagram.card.reel');
     Route::post('instagram/parts/{part}/post', [InstagramController::class, 'postPart'])->name('instagram.part.post');
@@ -73,4 +79,19 @@ Route::middleware('auth')->prefix('admin')->name('admin.')->group(function () {
     Route::get('parts/{part}/cards', [CardController::class, 'editor'])->name('parts.cards');
     Route::post('parts/{part}/cards', [CardController::class, 'store'])->name('parts.cards.store');
     Route::delete('parts/{part}/cards', [CardController::class, 'clear'])->name('parts.cards.clear');
+    Route::delete('cards/{card}', [CardController::class, 'destroy'])->name('cards.destroy');
+
+    // User management — sirf admin
+    Route::middleware('role:admin')->group(function () {
+        Route::get('users', [UserManagementController::class, 'index'])->name('users.index');
+        Route::get('users/create', [UserManagementController::class, 'create'])->name('users.create');
+        Route::post('users', [UserManagementController::class, 'store'])->name('users.store');
+        Route::get('users/{user}/edit', [UserManagementController::class, 'edit'])->name('users.edit');
+        Route::put('users/{user}', [UserManagementController::class, 'update'])->name('users.update');
+        Route::delete('users/{user}', [UserManagementController::class, 'destroy'])->name('users.destroy');
+        Route::post('users/{user}/login-as', [UserManagementController::class, 'loginAs'])->name('users.loginAs');
+    });
+
+    // Impersonation ke dauraan hi chalega — isliye role:admin ke bahar
+    Route::post('return-to-admin', [UserManagementController::class, 'returnToAdmin'])->name('users.returnToAdmin');
 });

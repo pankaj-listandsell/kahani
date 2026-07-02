@@ -4,17 +4,25 @@ namespace App\Http\Controllers\Admin;
 
 use App\Http\Controllers\Controller;
 use App\Models\Part;
+use App\Models\PartCard;
+use App\Services\InstagramService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
 
 class CardController extends Controller
 {
+    public function __construct(private InstagramService $instagram)
+    {
+    }
+
     /**
      * Card editor page — yahan text cards preview aur generate hote hain.
      */
     public function editor(Part $part)
     {
+        $this->authorize('update', $part->story);
+
         $part->load('cards', 'story');
 
         return view('admin.cards.editor', compact('part'));
@@ -26,16 +34,18 @@ class CardController extends Controller
      */
     public function store(Request $request, Part $part)
     {
+        $this->authorize('update', $part->story);
+
         $data = $request->validate([
             'image'  => ['required', 'string'],   // data:image/png;base64,....
             'order'  => ['required', 'integer', 'min:1'],
             'reset'  => ['nullable', 'boolean'],
         ]);
 
-        // Naya set shuru — purane cards + files hata do
+        // Naya set shuru — purane cards + unki saari files (image/JPEG/MP4) hata do
         if ($request->boolean('reset')) {
             foreach ($part->cards as $old) {
-                Storage::disk('public')->delete($old->image_path);
+                $this->instagram->deleteMediaFiles($old);
             }
             $part->cards()->delete();
         }
@@ -64,12 +74,27 @@ class CardController extends Controller
      */
     public function clear(Part $part)
     {
+        $this->authorize('update', $part->story);
+
         foreach ($part->cards as $card) {
-            Storage::disk('public')->delete($card->image_path);
+            $this->instagram->deleteMediaFiles($card);
         }
         $part->cards()->delete();
 
         return back()->with('success', 'All cards deleted.');
+    }
+
+    /**
+     * Ek particular card delete karo (uski saari media files ke saath).
+     */
+    public function destroy(PartCard $card)
+    {
+        $this->authorize('update', $card->part->story);
+
+        $this->instagram->deleteMediaFiles($card);
+        $card->delete();
+
+        return back()->with('success', 'Card deleted.');
     }
 
     /**

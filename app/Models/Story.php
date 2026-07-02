@@ -3,18 +3,29 @@
 namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Str;
 
 class Story extends Model
 {
     protected $fillable = [
+        'user_id',
         'title',
         'slug',
         'description',
         'cover_image',
         'status',
     ];
+
+    /**
+     * Is kahani ka malik (owner).
+     */
+    public function user(): BelongsTo
+    {
+        return $this->belongsTo(User::class);
+    }
 
     /**
      * Ek kahani ke bahut saare parts hote hain (order ke hisaab se).
@@ -29,6 +40,13 @@ class Story extends Model
      */
     protected static function booted(): void
     {
+        // Nayi story banate waqt owner apne aap logged-in user set ho jaaye
+        static::creating(function (Story $story) {
+            if (empty($story->user_id) && Auth::check()) {
+                $story->user_id = Auth::id();
+            }
+        });
+
         static::saving(function (Story $story) {
             if (empty($story->slug)) {
                 $base = Str::slug($story->title);

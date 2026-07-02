@@ -4,75 +4,101 @@ namespace App\Console\Commands;
 
 use App\Models\Setting;
 use App\Models\Story;
+use App\Models\User;
 use App\Services\InstagramService;
 use Illuminate\Console\Command;
 use Illuminate\Support\Carbon;
 
 class InstagramAutoPost extends Command
 {
-    protected $signature = 'instagram:auto-post {--force : Ignore enabled + window + interval checks and post one now}';
+    protected $signature = 'instagram:auto-post {--force : Ignore enabled + window + interval checks and post one now} {--user= : Sirf is user id ke liye chalao}';
 
-    protected $description = 'Auto-post the next pending card as image/reel, within the configured time windows';
+    protected $description = 'Har user ke apne Instagram account par next pending card auto-post karo (unke time windows ke andar)';
 
     public function handle(InstagramService $instagram): int
     {
         $force = (bool) $this->option('force');
-
-        if (! $force && Setting::get('ig_auto_enabled', '0') !== '1') {
-            $this->info('Auto-post is disabled.');
-            return self::SUCCESS;
-        }
-
-        if (! $instagram->isConfigured()) {
-            $this->error('Instagram is not configured.');
-            return self::FAILURE;
-        }
-
         $now = Carbon::now();
 
-        if (! $force) {
-            $window = $this->activeWindow($now);
-            if (! $window) {
-                $this->info('Outside all posting windows right now (' . $now->format('H:i') . ').');
-                return self::SUCCESS;
-            }
+        // Jin users ne apna IG access token set kiya hai, unhi ke liye chalao.
+        $userIds = Setting::where('key', 'ig_access_token')
+            ->whereNotNull('value')
+            ->where('value', '!=', '')
+            ->pluck('user_id')
+            ->unique();
 
-            // Interval respect karo — pichhle post se itne minute beet jaayein
-            $last = Setting::get('ig_auto_last_post_at');
-            if ($last) {
-                $mins = Carbon::parse($last)->diffInMinutes($now);
-                if ($mins < (int) $window['interval']) {
-                    $this->info("Waiting for interval ({$mins}/{$window['interval']} min since last post).");
-                    return self::SUCCESS;
-                }
-            }
+        if ($only = $this->option('user')) {
+            $userIds = $userIds->filter(fn ($id) => (int) $id === (int) $only);
         }
 
-        $card = $this->nextPendingCard();
-        if (! $card) {
-            $this->info('Nothing pending — all cards already posted. ✅');
+        if ($userIds->isEmpty()) {
+            $this->info('Kisi user ne Instagram configure nahi kiya.');
+
             return self::SUCCESS;
         }
 
-        $type = Setting::get('ig_post_type', 'image') === 'reel' ? 'reel' : 'image';
-
-        try {
-            $id = $type === 'reel' ? $instagram->postReel($card) : $instagram->postCard($card);
-            Setting::put('ig_auto_last_post_at', $now->toIso8601String());
-            $this->info("Posted {$type} card #{$card->id} → media {$id}");
-        } catch (\Throwable $e) {
-            $this->error("Card #{$card->id} failed: " . $e->getMessage());
+        foreach (User::whereIn('id', $userIds)->get() as $user) {
+            $this->runForUser($instagram, $user, $now, $force);
         }
 
         return self::SUCCESS;
     }
 
     /**
-     * Abhi ke time par active window (agar koi hai) laao.
+     * Ek user ke liye poori auto-post logic.
      */
-    protected function activeWindow(Carbon $now): ?array
+    protected function runForUser(InstagramService $instagram, User $user, Carbon $now, bool $force): void
     {
-        $windows = json_decode((string) Setting::get('ig_auto_windows', '[]'), true) ?: [];
+        $uid = $user->id;
+
+        if (! $force && Setting::getFor($uid, 'ig_auto_enabled', '0') !== '1') {
+            return;
+        }
+
+        if (! $instagram->forUser($uid)->isConfigured()) {
+            $this->warn("User #{$uid}: Instagram configured nahi.");
+
+            return;
+        }
+
+        if (! $force) {
+            $window = $this->activeWindow($uid, $now);
+            if (! $window) {
+                return; // is user ke window ke bahar
+            }
+
+            // Interval respect karo (per-user last post time)
+            $last = Setting::getFor($uid, 'ig_auto_last_post_at');
+            if ($last) {
+                $mins = Carbon::parse($last)->diffInMinutes($now);
+                if ($mins < (int) $window['interval']) {
+                    return;
+                }
+            }
+        }
+
+        $card = $this->nextPendingCard($uid);
+        if (! $card) {
+            return; // is user ki saari cards post ho chuki
+        }
+
+        $type = Setting::getFor($uid, 'ig_post_type', 'image') === 'reel' ? 'reel' : 'image';
+
+        try {
+            $id = $type === 'reel' ? $instagram->postReel($card) : $instagram->postCard($card);
+            Setting::putFor($uid, 'ig_auto_last_post_at', $now->toIso8601String());
+            $this->info("User #{$uid}: posted {$type} card #{$card->id} → media {$id}");
+        } catch (\Throwable $e) {
+            $this->error("User #{$uid} card #{$card->id} failed: " . $e->getMessage());
+        }
+    }
+
+    /**
+     * Is user ke abhi ke time par active window (agar koi hai).
+     */
+    protected function activeWindow(int $userId, Carbon $now): ?array
+    {
+        $windows = json_decode((string) Setting::getFor($userId, 'ig_auto_windows', '[]'), true) ?: [];
         $mins = $now->hour * 60 + $now->minute;
 
         foreach ($windows as $w) {
@@ -98,15 +124,17 @@ class InstagramAutoPost extends Command
         if (! preg_match('/^(\d{1,2}):(\d{2})$/', $hhmm, $m)) {
             return null;
         }
+
         return ((int) $m[1]) * 60 + (int) $m[2];
     }
 
     /**
-     * Published stories → parts (order) → cards (order): pehla unposted card.
+     * Sirf is user ki published stories → parts (order) → cards (order): pehla unposted card.
      */
-    protected function nextPendingCard()
+    protected function nextPendingCard(int $userId)
     {
         $stories = Story::where('status', 'published')
+            ->where('user_id', $userId)
             ->with(['parts' => fn ($q) => $q->orderBy('sort_order'), 'parts.cards'])
             ->orderBy('id')
             ->get();
@@ -114,7 +142,9 @@ class InstagramAutoPost extends Command
         foreach ($stories as $story) {
             foreach ($story->parts as $part) {
                 foreach ($part->cards as $card) {
-                    if ($card->ig_status !== 'posted') {
+                    // Sirf fresh cards (jo abhi tak kabhi post/queue/fail nahi hue).
+                    // Isse manual-queue ya failed cards dubara auto-post nahi honge.
+                    if ($card->ig_status === null) {
                         return $card;
                     }
                 }

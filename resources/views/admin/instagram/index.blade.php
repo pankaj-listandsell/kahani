@@ -145,6 +145,35 @@
             </div>
         </form>
 
+        {{-- Reel Music --}}
+        <div class="bg-white rounded-xl border border-slate-200 p-6">
+            <h3 class="font-semibold mb-1">🎵 Reel Music (sabhi reels par)</h3>
+            <p class="text-sm text-slate-500 mb-4">
+                Ek <b>royalty-free</b> mp3 upload karo — har reel ke video me yahi music bajega.
+                (Instagram ke trending/licensed songs API se add nahi ho sakte.)
+            </p>
+
+            @if (! empty($settings['ig_reel_music']))
+                <div class="flex items-center gap-3 mb-4 flex-wrap">
+                    <audio controls src="{{ asset('storage/' . $settings['ig_reel_music']) }}" class="h-10"></audio>
+                    <form method="POST" action="{{ route('admin.instagram.music.remove') }}" onsubmit="return confirm('Music hata dein?')">
+                        @csrf @method('DELETE')
+                        <button class="text-sm text-red-600 hover:underline">Remove</button>
+                    </form>
+                </div>
+            @else
+                <p class="text-sm text-amber-600 mb-4">⚠️ Abhi koi music set nahi — reels silent (bina awaaz) banenge.</p>
+            @endif
+
+            <form method="POST" action="{{ route('admin.instagram.music') }}" enctype="multipart/form-data" class="space-y-3">
+                @csrf
+                <input type="file" name="reel_music" accept="audio/*" required
+                       class="w-full text-sm text-slate-600 file:mr-3 file:rounded-lg file:border-0 file:bg-sky-100 file:px-4 file:py-2 file:text-sky-800">
+                <p class="text-xs text-slate-500">mp3 / m4a / wav · max 20 MB · sirf royalty-free music (copyright strike se bachne ke liye).</p>
+                <button class="bg-rose-600 hover:bg-rose-700 text-white font-medium rounded-lg px-5 py-2.5">Save Music</button>
+            </form>
+        </div>
+
         {{-- Row template --}}
         <template id="windowTemplate">
             <div class="window-row grid grid-cols-12 gap-2 items-end border border-slate-200 rounded-lg p-3">
@@ -185,7 +214,10 @@
     <div data-panel="manual" class="ig-panel">
         <div class="bg-white rounded-xl border border-slate-200 p-6">
             <h3 class="font-semibold mb-1">🚀 Post Manually</h3>
-            <p class="text-sm text-slate-500 mb-4">Choose <b>Post</b> (image) or <b>Reel</b> (video) per card. Reels take ~1 min each.</p>
+            <p class="text-sm text-slate-500 mb-4">
+                Choose <b>Post</b> (image) or <b>Reel</b> (video) per card. Button dabate hi card <b>turant</b> Instagram par
+                post ho jaata hai — reel ban ne me thoda time lag sakta hai, isliye request poori hone tak wait karein.
+            </p>
 
             @if ($stories->isEmpty())
                 <p class="text-slate-500 text-sm">No stories yet.</p>
@@ -213,10 +245,15 @@
                                         <div class="flex gap-3 overflow-x-auto pb-1">
                                             @foreach ($part->cards as $card)
                                                 <div class="shrink-0 text-center w-28">
-                                                    <img src="{{ asset('storage/' . $card->image_path) }}" class="h-28 w-28 object-cover rounded-lg border border-slate-200" alt="">
                                                     @if ($card->isPosted())
+                                                        {{-- Post hone ke baad local image/video delete ho jaate hain --}}
+                                                        <div class="h-28 w-28 flex flex-col items-center justify-center rounded-lg border border-green-200 bg-green-50 text-green-600">
+                                                            <span class="text-2xl">✓</span>
+                                                            <span class="text-[10px] mt-1">Uploaded</span>
+                                                        </div>
                                                         <span class="block text-[11px] text-green-600 mt-1">✓ Posted</span>
                                                     @else
+                                                        <img src="{{ asset('storage/' . $card->image_path) }}" class="h-28 w-28 object-cover rounded-lg border border-slate-200" alt="">
                                                         <div class="flex gap-1 mt-1 justify-center">
                                                             <form method="POST" action="{{ route('admin.instagram.card.post', $card) }}" class="ig-form">
                                                                 @csrf
@@ -227,6 +264,13 @@
                                                                 <button @disabled(!$configured) class="text-[11px] bg-purple-50 text-purple-700 border border-purple-200 rounded px-2 py-0.5 hover:bg-purple-100 disabled:opacity-40">Reel</button>
                                                             </form>
                                                         </div>
+                                                        <button type="button"
+                                                            class="caption-btn mt-1 w-full text-[11px] border rounded px-2 py-0.5 hover:bg-slate-50 {{ filled($card->ig_caption) ? 'bg-amber-50 text-amber-700 border-amber-200' : 'text-slate-500 border-slate-200' }}"
+                                                            data-get="{{ route('admin.instagram.card.caption.get', $card) }}"
+                                                            data-generate="{{ route('admin.instagram.card.caption.generate', $card) }}"
+                                                            data-save="{{ route('admin.instagram.card.caption.save', $card) }}">
+                                                            {{ filled($card->ig_caption) ? '📝 Caption' : '✨ Caption' }}
+                                                        </button>
                                                         @if ($card->ig_status === 'failed')
                                                             <span class="block text-[10px] text-red-500 mt-0.5" title="{{ $card->ig_error }}">failed</span>
                                                         @endif
@@ -244,6 +288,30 @@
         </div>
     </div>
 
+</div>
+
+{{-- ================= AI CAPTION MODAL ================= --}}
+<div id="capModal" class="fixed inset-0 z-40 hidden items-center justify-center bg-black/50 p-4">
+    <div class="bg-white rounded-xl w-full max-w-lg shadow-xl">
+        <div class="flex items-center justify-between px-5 py-3 border-b border-slate-200">
+            <h3 class="font-semibold">✨ Instagram Caption</h3>
+            <button type="button" id="capClose" class="text-slate-400 hover:text-slate-700 text-xl leading-none">&times;</button>
+        </div>
+        <div class="p-5 space-y-3">
+            <textarea id="capText" rows="8"
+                      class="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:ring-2 focus:ring-rose-400 focus:outline-none"
+                      placeholder="Yahan caption aayegi… ✨ AI se banao ya khud likho. Khaali chhodo to default caption use hogi."></textarea>
+            <p id="capMsg" class="text-xs text-slate-500"></p>
+            <div class="flex items-center justify-between gap-2 flex-wrap">
+                <button type="button" id="capGenerate"
+                        class="text-sm bg-sky-600 hover:bg-sky-700 text-white rounded-lg px-4 py-2">✨ Generate with AI</button>
+                <div class="flex gap-2">
+                    <button type="button" id="capCancel" class="text-sm text-slate-500 hover:underline px-3 py-2">Cancel</button>
+                    <button type="button" id="capSave" class="text-sm bg-rose-600 hover:bg-rose-700 text-white rounded-lg px-4 py-2">Save</button>
+                </div>
+            </div>
+        </div>
+    </div>
 </div>
 
 @push('scripts')
@@ -273,9 +341,10 @@
     if (![...igTabs].some(t => t.dataset.tab === igInitial)) igInitial = 'manual';
     showIgTab(igInitial);
 
-    // ---------- Auto-post time windows ----------
-    const savedWindows = @json($settings['ig_auto_windows']);
+    // ---------- Auto-post time windows (sirf admin ke settings panel me) ----------
     const wrap = document.getElementById('windows');
+    if (wrap) {
+    const savedWindows = @json($settings['ig_auto_windows']);
     const tpl = document.getElementById('windowTemplate');
     let idx = 0;
 
@@ -337,12 +406,87 @@
     // init
     (savedWindows && savedWindows.length ? savedWindows : []).forEach(addRow);
     updateStatus();
+    } // end if (wrap) — auto-post JS sirf admin ke liye
 
     // manual post buttons -> loading
     document.querySelectorAll('.ig-form').forEach(form => form.addEventListener('submit', () => {
         const btn = form.querySelector('button');
         if (btn) { btn.disabled = true; btn.textContent = '⏳...'; }
     }));
+
+    // ---------- AI Caption modal ----------
+    (function () {
+        const modal = document.getElementById('capModal');
+        if (!modal) return;
+        const txt = document.getElementById('capText');
+        const msg = document.getElementById('capMsg');
+        const csrf = document.querySelector('meta[name=csrf-token]')?.content;
+        let cur = null; // { get, generate, save, btn }
+
+        const open  = () => { modal.classList.remove('hidden'); modal.classList.add('flex'); };
+        const close = () => { modal.classList.add('hidden'); modal.classList.remove('flex'); cur = null; };
+
+        document.getElementById('capClose').addEventListener('click', close);
+        document.getElementById('capCancel').addEventListener('click', close);
+        modal.addEventListener('click', e => { if (e.target === modal) close(); });
+
+        function markHas() {
+            if (!cur) return;
+            const has = txt.value.trim() !== '';
+            cur.btn.classList.toggle('bg-amber-50', has);
+            cur.btn.classList.toggle('text-amber-700', has);
+            cur.btn.classList.toggle('border-amber-200', has);
+            cur.btn.classList.toggle('text-slate-500', !has);
+            cur.btn.classList.toggle('border-slate-200', !has);
+            cur.btn.textContent = has ? '📝 Caption' : '✨ Caption';
+        }
+
+        document.querySelectorAll('.caption-btn').forEach(b => b.addEventListener('click', async () => {
+            cur = { get: b.dataset.get, generate: b.dataset.generate, save: b.dataset.save, btn: b };
+            txt.value = '';
+            msg.textContent = 'Loading…';
+            open();
+            try {
+                const r = await fetch(cur.get, { headers: { 'Accept': 'application/json' } });
+                const d = await r.json();
+                txt.value = d.caption || '';
+                msg.textContent = d.caption ? '' : 'Abhi koi caption nahi — ✨ AI se banao ya khud likho.';
+            } catch (e) { msg.textContent = 'Caption load nahi hui.'; }
+        }));
+
+        document.getElementById('capGenerate').addEventListener('click', async () => {
+            if (!cur) return;
+            const gb = document.getElementById('capGenerate');
+            gb.disabled = true; gb.textContent = '⏳ Ban rahi hai…'; msg.textContent = '';
+            try {
+                const r = await fetch(cur.generate, {
+                    method: 'POST',
+                    headers: { 'X-CSRF-TOKEN': csrf, 'Accept': 'application/json' },
+                });
+                const d = await r.json();
+                if (d.ok) { txt.value = d.caption; msg.textContent = '✓ AI caption ban gayi — Save karna na bhoolein.'; markHas(); }
+                else { msg.textContent = '⚠ ' + (d.error || 'Caption nahi bani.'); }
+            } catch (e) { msg.textContent = '⚠ Error aaya, dobara try karein.'; }
+            gb.disabled = false; gb.textContent = '✨ Generate with AI';
+        });
+
+        document.getElementById('capSave').addEventListener('click', async () => {
+            if (!cur) return;
+            const sb = document.getElementById('capSave');
+            sb.disabled = true; sb.textContent = 'Saving…';
+            try {
+                const r = await fetch(cur.save, {
+                    method: 'PUT',
+                    headers: { 'X-CSRF-TOKEN': csrf, 'Accept': 'application/json', 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ caption: txt.value }),
+                });
+                const d = await r.json();
+                if (d.ok) { markHas(); close(); }
+                else { msg.textContent = '⚠ Save nahi hui.'; }
+            } catch (e) { msg.textContent = '⚠ Save me error.'; }
+            sb.disabled = false; sb.textContent = 'Save';
+        });
+    })();
 </script>
 @endpush
 @endsection

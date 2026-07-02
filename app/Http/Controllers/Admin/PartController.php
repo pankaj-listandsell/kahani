@@ -16,6 +16,8 @@ class PartController extends Controller
 
     public function create(Story $story)
     {
+        $this->authorize('update', $story);
+
         $nextOrder = ($story->parts()->max('sort_order') ?? 0) + 1;
 
         return view('admin.parts.create', compact('story', 'nextOrder'));
@@ -23,6 +25,8 @@ class PartController extends Controller
 
     public function store(Request $request, Story $story)
     {
+        $this->authorize('update', $story);
+
         $data = $this->validated($request);
         $data['story_id'] = $story->id;
 
@@ -36,11 +40,15 @@ class PartController extends Controller
 
     public function edit(Part $part)
     {
+        $this->authorize('update', $part->story);
+
         return view('admin.parts.edit', compact('part'));
     }
 
     public function update(Request $request, Part $part)
     {
+        $this->authorize('update', $part->story);
+
         $data = $this->validated($request);
         $part->update($data);
 
@@ -51,6 +59,8 @@ class PartController extends Controller
 
     public function destroy(Part $part)
     {
+        $this->authorize('update', $part->story);
+
         $story = $part->story;
         $this->imageService->delete($part->image_path);
         $part->delete();
@@ -65,6 +75,8 @@ class PartController extends Controller
      */
     public function generateImage(Request $request, Part $part)
     {
+        $this->authorize('update', $part->story);
+
         $request->validate([
             'image_prompt' => ['required', 'string', 'max:1000'],
         ]);

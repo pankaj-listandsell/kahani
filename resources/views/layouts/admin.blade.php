@@ -22,10 +22,14 @@
     $nav = [
         ['route' => 'admin.dashboard',      'active' => 'admin.dashboard',   'icon' => '🏠', 'label' => 'Dashboard'],
         ['route' => 'admin.stories.index',  'active' => 'admin.stories.*',   'icon' => '📚', 'label' => 'Stories'],
-        ['route' => 'admin.stories.create', 'active' => 'admin.stories.create', 'icon' => '➕', 'label' => 'New Story'],
         ['route' => 'admin.instagram.index','active' => 'admin.instagram.*', 'icon' => '📸', 'label' => 'Instagram'],
         ['route' => 'admin.settings.index', 'active' => 'admin.settings.*', 'icon' => '⚙️', 'label' => 'Settings'],
     ];
+
+    // Users menu sirf admin ko dikhe
+    if (auth()->user()?->isAdmin()) {
+        $nav[] = ['route' => 'admin.users.index', 'active' => 'admin.users.*', 'icon' => '👥', 'label' => 'Users'];
+    }
 @endphp
 
 <div class="min-h-screen flex">
@@ -82,6 +86,15 @@
         </header>
 
         <main class="flex-1 p-4 sm:p-6 max-w-6xl w-full mx-auto">
+            @if (session()->has('impersonator_id'))
+                <div class="mb-4 rounded-lg bg-amber-100 border border-amber-300 text-amber-800 px-4 py-3 flex items-center justify-between gap-3 flex-wrap">
+                    <span>👤 Aap <b>{{ auth()->user()->name }}</b> ki tarah logged-in ho (impersonation).</span>
+                    <form method="POST" action="{{ route('admin.users.returnToAdmin') }}">
+                        @csrf
+                        <button class="text-sm bg-amber-600 hover:bg-amber-700 text-white rounded-lg px-3 py-1.5">↩ Admin par wapas</button>
+                    </form>
+                </div>
+            @endif
             @if (session('success'))
                 <div class="mb-4 rounded-lg bg-green-100 border border-green-300 text-green-800 px-4 py-3">{{ session('success') }}</div>
             @endif

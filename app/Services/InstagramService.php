@@ -23,14 +23,40 @@ use Illuminate\Support\Str;
  */
 class InstagramService
 {
+    /**
+     * Kis user ki IG settings use karni hain. null = abhi ka logged-in user
+     * (request context). Har user ka apna alag Instagram account hota hai.
+     */
+    protected ?int $settingsUserId = null;
+
+    /**
+     * Is service instance ko ek particular user ki settings par set karo.
+     */
+    public function forUser(?int $userId): static
+    {
+        $this->settingsUserId = $userId;
+
+        return $this;
+    }
+
+    /**
+     * Setting fetch — agar user set hai to uski, warna current logged-in user ki.
+     */
+    protected function setting(string $key, mixed $default = null): mixed
+    {
+        return $this->settingsUserId !== null
+            ? Setting::getFor($this->settingsUserId, $key, $default)
+            : Setting::get($key, $default);
+    }
+
     public function userId(): ?string
     {
-        return Setting::get('ig_user_id');
+        return $this->setting('ig_user_id');
     }
 
     public function token(): ?string
     {
-        return Setting::get('ig_access_token');
+        return $this->setting('ig_access_token');
     }
 
     /**
@@ -97,6 +123,9 @@ class InstagramService
      */
     public function postCard(PartCard $card, ?string $caption = null): string
     {
+        // Card apne story-owner ke Instagram account par jaata hai
+        $this->forUser($card->part?->story?->user_id);
+
         if (! $this->isConfigured()) {
             throw new \RuntimeException('Instagram is not configured. Fill the settings first.');
         }
@@ -126,6 +155,9 @@ class InstagramService
             $mediaId = $this->publishContainer($create->json('id'));
             $this->markPosted($card, $mediaId);
 
+            // Upload safal — local image/video files delete karke jagah khaali karo
+            $this->deleteMediaFiles($card);
+
             return $mediaId;
         } catch (\Throwable $e) {
             $this->markFailed($card, $e->getMessage());
@@ -142,6 +174,9 @@ class InstagramService
      */
     public function postReel(PartCard $card, ?string $caption = null): string
     {
+        // Card apne story-owner ke Instagram account par jaata hai
+        $this->forUser($card->part?->story?->user_id);
+
         if (! $this->isConfigured()) {
             throw new \RuntimeException('Instagram is not configured. Fill the settings first.');
         }
@@ -188,10 +223,47 @@ class InstagramService
             $mediaId = $this->publishContainer($containerId, retry: true);
             $this->markPosted($card, $mediaId);
 
+            // Upload safal — local image/video files delete karke jagah khaali karo
+            $this->deleteMediaFiles($card);
+
             return $mediaId;
         } catch (\Throwable $e) {
             $this->markFailed($card, $e->getMessage());
             throw $e;
+        }
+    }
+
+    /**
+     * Ek card se juda saara local media delete karo:
+     *  - asli card image (PNG/JPG)
+     *  - Instagram ke liye bana JPEG version
+     *  - reel ke liye bana MP4 (reels/ folder me)
+     *
+     * Story ki cover image yahan JAAN-BUJHKAR nahi hatti — wo poori story ki
+     * hai aur baaki cards ke reel-cover me kaam aati hai.
+     */
+    public function deleteMediaFiles(PartCard $card): void
+    {
+        $path = $card->image_path;
+        if (! $path) {
+            return;
+        }
+
+        $disk = Storage::disk('public');
+
+        // 1) Asli card image
+        $disk->delete($path);
+
+        // 2) Instagram JPEG version (agar alag file hai)
+        $jpeg = preg_replace('/\.[a-z0-9]+$/i', '.jpg', $path);
+        if ($jpeg && $jpeg !== $path) {
+            $disk->delete($jpeg);
+        }
+
+        // 3) Reel MP4 (cards/foo.png -> reels/foo.mp4)
+        $mp4 = preg_replace('/\.[a-z0-9]+$/i', '.mp4', str_replace('cards/', 'reels/', $path));
+        if ($mp4) {
+            $disk->delete($mp4);
         }
     }
 
@@ -357,6 +429,17 @@ class InstagramService
     }
 
     /**
+     * Saari cached reel MP4 files delete karo (music badalne par naya lag jaaye).
+     */
+    public function clearReelCache(): void
+    {
+        $disk = Storage::disk('public');
+        foreach ($disk->files('reels') as $file) {
+            $disk->delete($file);
+        }
+    }
+
+    /**
      * Card image se ek 1080x1920 reel MP4 banao (ffmpeg). Cache ho jaata hai.
      */
     public function mp4PathFor(PartCard $card, int $seconds = 6): string
@@ -382,10 +465,20 @@ class InstagramService
             . '[0:v]scale=1080:1920:force_original_aspect_ratio=decrease[fg];'
             . '[bg][fg]overlay=(W-w)/2:(H-h)/2,format=yuv420p[v]';
 
-        $result = Process::timeout(180)->run([
-            $ffmpeg, '-y',
-            '-loop', '1', '-i', $in,
-            '-f', 'lavfi', '-i', 'anullsrc=channel_layout=stereo:sample_rate=44100',
+        // Audio: default reel music (agar set hai) warna silent
+        $cmd = [$ffmpeg, '-y', '-loop', '1', '-i', $in];
+
+        $music = $this->setting('ig_reel_music');
+        $musicPath = ($music && $disk->exists($music)) ? $disk->path($music) : null;
+
+        if ($musicPath) {
+            // Music loop karo taaki video ki poori length bhar jaye
+            $cmd = array_merge($cmd, ['-stream_loop', '-1', '-i', $musicPath]);
+        } else {
+            $cmd = array_merge($cmd, ['-f', 'lavfi', '-i', 'anullsrc=channel_layout=stereo:sample_rate=44100']);
+        }
+
+        $cmd = array_merge($cmd, [
             '-t', (string) $seconds,
             '-filter_complex', $filter,
             '-map', '[v]', '-map', '1:a',
@@ -393,6 +486,8 @@ class InstagramService
             '-c:a', 'aac', '-b:a', '128k', '-shortest', '-movflags', '+faststart',
             $out,
         ]);
+
+        $result = Process::timeout(180)->run($cmd);
 
         if (! $result->successful() || ! $disk->exists($mp4Path)) {
             Log::error('ffmpeg reel conversion failed', ['err' => $result->errorOutput()]);
@@ -503,10 +598,16 @@ class InstagramService
     }
 
     /**
-     * Default caption: story title + part/card info + optional suffix (hashtags).
+     * Caption: agar card par saved (AI/manual) caption hai to wahi, warna
+     * default (story title + part/card info + optional suffix).
      */
     public function buildCaption(PartCard $card): string
     {
+        // Saved caption ho to sabse pehle wahi
+        if (filled($card->ig_caption)) {
+            return $card->ig_caption;
+        }
+
         $part  = $card->part;
         $story = $part->story;
         $total = $part->cards()->count();
@@ -514,7 +615,7 @@ class InstagramService
         $lines = [$story->title];
         $lines[] = 'Part ' . $part->sort_order . ' (' . $card->sort_order . '/' . $total . ')';
 
-        if ($suffix = Setting::get('ig_caption_suffix')) {
+        if ($suffix = $this->setting('ig_caption_suffix')) {
             $lines[] = '';
             $lines[] = $suffix;
         }

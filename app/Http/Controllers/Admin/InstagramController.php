@@ -7,13 +7,58 @@ use App\Models\Part;
 use App\Models\PartCard;
 use App\Models\Setting;
 use App\Models\Story;
+use App\Services\AiCaptionService;
 use App\Services\InstagramService;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Storage;
 
 class InstagramController extends Controller
 {
     public function __construct(private InstagramService $instagram)
     {
+    }
+
+    /**
+     * Card ki saved caption laao (modal me dikhane ke liye).
+     */
+    public function getCaption(PartCard $card)
+    {
+        $this->authorize('update', $card->part->story);
+
+        return response()->json(['caption' => $card->ig_caption]);
+    }
+
+    /**
+     * AI se caption + hashtags generate karke card par save karo.
+     */
+    public function generateCaption(PartCard $card, AiCaptionService $ai)
+    {
+        $this->authorize('update', $card->part->story);
+
+        try {
+            $caption = $ai->forCard($card);
+            $card->update(['ig_caption' => $caption]);
+
+            return response()->json(['ok' => true, 'caption' => $caption]);
+        } catch (\Throwable $e) {
+            return response()->json(['ok' => false, 'error' => $e->getMessage()], 422);
+        }
+    }
+
+    /**
+     * Haath se edit ki hui caption save karo (khaali = default caption use hogi).
+     */
+    public function saveCaption(Request $request, PartCard $card)
+    {
+        $this->authorize('update', $card->part->story);
+
+        $data = $request->validate([
+            'caption' => ['nullable', 'string', 'max:2200'], // IG caption limit
+        ]);
+
+        $card->update(['ig_caption' => $data['caption'] !== '' ? $data['caption'] : null]);
+
+        return response()->json(['ok' => true]);
     }
 
     public function index()
@@ -25,9 +70,17 @@ class InstagramController extends Controller
             'ig_auto_enabled'   => Setting::get('ig_auto_enabled', '0'),
             'ig_post_type'      => Setting::get('ig_post_type', 'image'),
             'ig_auto_windows'   => json_decode((string) Setting::get('ig_auto_windows', '[]'), true) ?: [],
+            'ig_reel_music'     => Setting::get('ig_reel_music'),
         ];
 
-        $stories = Story::with(['parts.cards'])->latest()->get();
+        $storiesQuery = Story::with(['parts.cards'])->latest();
+
+        // Regular user sirf apni stories post kar sake
+        if (! auth()->user()->isAdmin()) {
+            $storiesQuery->where('user_id', auth()->id());
+        }
+
+        $stories = $storiesQuery->get();
 
         return view('admin.instagram.index', [
             'settings'   => $settings,
@@ -83,7 +136,7 @@ class InstagramController extends Controller
         return back()->with('success', 'Auto-post settings saved.');
     }
 
-    public function test()
+    public function test(Request $request)
     {
         $result = $this->instagram->testConnection();
 
@@ -91,29 +144,72 @@ class InstagramController extends Controller
     }
 
     /**
-     * Ek card ko Instagram par post karo.
+     * Reel ke liye default music (mp3) upload karo — sabhi reels par bajega.
      */
-    public function postCard(PartCard $card)
+    public function saveReelMusic(Request $request)
     {
-        try {
-            $this->instagram->postCard($card);
-            return back()->with('success', 'Card posted to Instagram. 🎉');
-        } catch (\Throwable $e) {
-            return back()->with('error', 'Post failed: ' . $e->getMessage());
+        $request->validate([
+            'reel_music' => ['required', 'file', 'mimes:mp3,m4a,aac,wav,ogg', 'max:20480'],
+        ]);
+
+        // Purana music hata do
+        if ($old = Setting::get('ig_reel_music')) {
+            Storage::disk('public')->delete($old);
         }
+
+        $path = $request->file('reel_music')->store('audio', 'public');
+        Setting::put('ig_reel_music', $path);
+
+        // Purani cached reel videos delete — taaki naya music lag jaye
+        $this->instagram->clearReelCache();
+
+        return back()->with('success', 'Reel music save ho gaya. 🎵');
     }
 
     /**
-     * Ek card ko REEL (video) ki tarah post karo.
+     * Reel music hata do.
+     */
+    public function removeReelMusic(Request $request)
+    {
+        if ($old = Setting::get('ig_reel_music')) {
+            Storage::disk('public')->delete($old);
+        }
+        Setting::put('ig_reel_music', null);
+        $this->instagram->clearReelCache();
+
+        return back()->with('success', 'Reel music hata diya.');
+    }
+
+    /**
+     * Ek card ko Instagram par post karo (turant, seedhe).
+     */
+    public function postCard(PartCard $card)
+    {
+        $this->authorize('update', $card->part->story);
+
+        try {
+            $this->instagram->postCard($card);
+        } catch (\Throwable $e) {
+            return back()->with('error', 'Card post nahi hua: ' . $e->getMessage());
+        }
+
+        return back()->with('success', 'Card Instagram par post ho gaya. ✅');
+    }
+
+    /**
+     * Ek card ko REEL (video) ki tarah post karo (turant, seedhe).
      */
     public function postReel(PartCard $card)
     {
+        $this->authorize('update', $card->part->story);
+
         try {
             $this->instagram->postReel($card);
-            return back()->with('success', 'Reel posted to Instagram. 🎬');
         } catch (\Throwable $e) {
-            return back()->with('error', 'Reel failed: ' . $e->getMessage());
+            return back()->with('error', 'Reel post nahi hua: ' . $e->getMessage());
         }
+
+        return back()->with('success', 'Reel Instagram par post ho gaya. ✅');
     }
 
     /**
@@ -121,7 +217,9 @@ class InstagramController extends Controller
      */
     public function postPart(Part $part)
     {
-        return $this->bulk($part, 'postCard', 'card');
+        $this->authorize('update', $part->story);
+
+        return $this->bulk($part, 'image', 'card');
     }
 
     /**
@@ -129,29 +227,36 @@ class InstagramController extends Controller
      */
     public function postPartReels(Part $part)
     {
-        return $this->bulk($part, 'postReel', 'reel');
+        $this->authorize('update', $part->story);
+
+        return $this->bulk($part, 'reel', 'reel');
     }
 
-    private function bulk(Part $part, string $method, string $noun)
+    private function bulk(Part $part, string $type, string $noun)
     {
         $part->load('cards');
-        $ok = 0;
-        $fail = 0;
+        $count = 0;
+        $failed = 0;
 
         foreach ($part->cards as $card) {
+            // Jo post ho chuke, unhe chhod do
             if ($card->isPosted()) {
                 continue;
             }
+
             try {
-                $this->instagram->{$method}($card);
-                $ok++;
+                $type === 'reel' ? $this->instagram->postReel($card) : $this->instagram->postCard($card);
+                $count++;
             } catch (\Throwable $e) {
-                $fail++;
+                $failed++;
             }
         }
 
-        $msg = "Posted {$ok} {$noun}(s)." . ($fail ? " {$fail} failed." : '');
+        $msg = "{$count} {$noun}(s) Instagram par post ho gaye. ✅";
+        if ($failed) {
+            $msg .= " ({$failed} fail hue — dobara try karein.)";
+        }
 
-        return back()->with($fail ? 'error' : 'success', $msg);
+        return back()->with('success', $msg);
     }
 }

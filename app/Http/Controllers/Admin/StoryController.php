@@ -5,13 +5,16 @@ namespace App\Http\Controllers\Admin;
 use App\Http\Controllers\Controller;
 use App\Models\Story;
 use App\Services\ImageService;
+use App\Services\InstagramService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Storage;
 
 class StoryController extends Controller
 {
-    public function __construct(private ImageService $imageService)
-    {
+    public function __construct(
+        private ImageService $imageService,
+        private InstagramService $instagram,
+    ) {
     }
 
     /**
@@ -19,7 +22,14 @@ class StoryController extends Controller
      */
     public function index()
     {
-        $stories = Story::withCount('parts')->latest()->get();
+        $query = Story::withCount('parts')->latest();
+
+        // Regular user sirf apni stories dekhe; admin sabki
+        if (! auth()->user()->isAdmin()) {
+            $query->where('user_id', auth()->id());
+        }
+
+        $stories = $query->get();
 
         return view('admin.stories.index', compact('stories'));
     }
@@ -53,6 +63,8 @@ class StoryController extends Controller
      */
     public function show(Story $story)
     {
+        $this->authorize('view', $story);
+
         $story->load('parts.cards');
 
         return view('admin.stories.show', compact('story'));
@@ -60,11 +72,15 @@ class StoryController extends Controller
 
     public function edit(Story $story)
     {
+        $this->authorize('update', $story);
+
         return view('admin.stories.edit', compact('story'));
     }
 
     public function update(Request $request, Story $story)
     {
+        $this->authorize('update', $story);
+
         $data = $this->validated($request);
         $body = $data['body'];
         unset($data['body']);
@@ -90,6 +106,8 @@ class StoryController extends Controller
      */
     public function generateCover(Request $request, Story $story)
     {
+        $this->authorize('update', $story);
+
         $request->validate([
             'cover_prompt' => ['required', 'string', 'max:1000'],
         ]);
@@ -121,6 +139,8 @@ class StoryController extends Controller
      */
     public function uploadCover(Request $request, Story $story)
     {
+        $this->authorize('update', $story);
+
         $request->validate([
             'cover_file' => ['required', 'image', 'max:5120'],
         ]);
@@ -138,15 +158,30 @@ class StoryController extends Controller
 
     public function destroy(Story $story)
     {
-        // Parts ki images bhi delete karo
+        $this->authorize('delete', $story);
+
+        $story->load('parts.cards');
+
+        // Har part ki AI image + uske saare cards ki image/JPEG/reel MP4 delete karo
         foreach ($story->parts as $part) {
             $this->imageService->delete($part->image_path);
-        }
-        if ($story->cover_image) {
-            Storage::disk('public')->delete($story->cover_image);
+
+            foreach ($part->cards as $card) {
+                $this->instagram->deleteMediaFiles($card);
+            }
         }
 
-        $story->delete(); // parts cascade delete ho jaenge
+        // Cover image + uska JPEG cache (reel cover ke liye banaya gaya)
+        if ($story->cover_image) {
+            Storage::disk('public')->delete($story->cover_image);
+
+            $coverJpeg = preg_replace('/\.[a-z0-9]+$/i', '.jpg', $story->cover_image);
+            if ($coverJpeg && $coverJpeg !== $story->cover_image) {
+                Storage::disk('public')->delete($coverJpeg);
+            }
+        }
+
+        $story->delete(); // parts + cards cascade delete ho jaenge
 
         return redirect()
             ->route('admin.stories.index')

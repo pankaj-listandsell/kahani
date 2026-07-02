@@ -115,7 +115,19 @@
             </div>
             <div class="grid grid-cols-3 sm:grid-cols-5 gap-3">
                 @foreach($part->cards as $card)
-                    <img src="{{ asset('storage/' . $card->image_path) }}" class="rounded-lg border border-slate-200 w-full" alt="Card {{ $card->sort_order }}">
+                    <div class="relative group">
+                        <img src="{{ asset('storage/' . $card->image_path) }}" class="rounded-lg border border-slate-200 w-full" alt="Card {{ $card->sort_order }}">
+                        <span class="absolute top-1 left-1 bg-black/60 text-white text-[11px] rounded px-1.5 py-0.5">#{{ $card->sort_order }}</span>
+                        <form method="POST" action="{{ route('admin.cards.destroy', $card) }}"
+                              onsubmit="return confirm('Delete card #{{ $card->sort_order }}?')"
+                              class="absolute top-1 right-1 opacity-0 group-hover:opacity-100 transition">
+                            @csrf @method('DELETE')
+                            <button type="submit" title="Delete this card"
+                                    class="bg-red-600 hover:bg-red-700 text-white rounded-full w-6 h-6 flex items-center justify-center text-xs shadow">
+                                ✕
+                            </button>
+                        </form>
+                    </div>
                 @endforeach
             </div>
         </div>
