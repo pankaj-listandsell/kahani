@@ -232,6 +232,10 @@
                                         <div class="flex items-center justify-between mb-2 gap-2 flex-wrap">
                                             <span class="text-sm font-medium">Part {{ $part->sort_order }} · {{ $part->cards->count() }} cards</span>
                                             <div class="flex gap-2">
+                                                <form method="POST" action="{{ route('admin.instagram.part.captions', $part) }}" class="ig-form" onsubmit="return confirm('Is part ke sabhi cards ke liye AI caption banayein?')">
+                                                    @csrf
+                                                    <button class="text-xs bg-sky-600 hover:bg-sky-700 text-white rounded-lg px-3 py-1.5">✨ All Captions</button>
+                                                </form>
                                                 <form method="POST" action="{{ route('admin.instagram.part.post', $part) }}" class="ig-form" onsubmit="return confirm('Post all cards as IMAGE posts?')">
                                                     @csrf
                                                     <button @disabled(!$configured) class="text-xs bg-rose-600 hover:bg-rose-700 disabled:bg-slate-300 text-white rounded-lg px-3 py-1.5">All as Posts</button>
@@ -252,6 +256,11 @@
                                                             <span class="text-[10px] mt-1">Uploaded</span>
                                                         </div>
                                                         <span class="block text-[11px] text-green-600 mt-1">✓ Posted</span>
+                                                        @if ($card->ig_posted_at)
+                                                            <span class="block text-[10px] text-slate-400 leading-tight" title="{{ $card->ig_posted_at->format('d M Y, h:i A') }}">
+                                                                🕒 {{ $card->ig_posted_at->format('d M, h:i A') }}
+                                                            </span>
+                                                        @endif
                                                     @else
                                                         <img src="{{ asset('storage/' . $card->image_path) }}" class="h-28 w-28 object-cover rounded-lg border border-slate-200" alt="">
                                                         <div class="flex gap-1 mt-1 justify-center">

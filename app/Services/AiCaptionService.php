@@ -13,6 +13,18 @@ use Illuminate\Support\Str;
 class AiCaptionService
 {
     /**
+     * Har caption ke saath jodne wale trending/viral hashtags (reels + Hindi
+     * kahani niche). AI ke relevant hashtags ke saath merge hote hain —
+     * duplicates hat jaate hain aur Instagram ki 30-hashtag limit ka dhyan
+     * rakha jaata hai.
+     */
+    private const TRENDING_HASHTAGS = [
+        '#reels', '#reelsinstagram', '#trending', '#viral', '#explore',
+        '#explorepage', '#foryou', '#fyp', '#instareels', '#trendingreels',
+        '#viralvideo', '#reelitfeelit', '#storytime', '#hindikahani', '#kahani',
+    ];
+
+    /**
      * Ek card ke liye Hindi caption + hashtags generate karo.
      *
      * @throws \RuntimeException agar AI se caption na bane.
@@ -32,7 +44,7 @@ class AiCaptionService
         Rules:
         - 2-3 chhoti aakarshak lines Hindi (Devanagari) me jo curiosity badhaye.
         - Emojis ka halka use karo.
-        - Uske baad ek khaali line, phir 10-12 relevant hashtags (Hindi + English mix, sab # ke saath, ek hi line me).
+        - Uske baad ek khaali line, phir 10-12 relevant + trending/viral hashtags (Hindi + English mix, sab # ke saath, ek hi line me).
         - Sirf caption do — koi explanation, quotes ya "Caption:" jaisa label mat likho.
 
         Kahani ka title: {$title}
@@ -60,6 +72,34 @@ class AiCaptionService
         }
 
         // Aage/peeche ke quote marks hata do agar AI ne laga diye
-        return trim($caption, "\"' \n\r\t");
+        $caption = trim($caption, "\"' \n\r\t");
+
+        return $this->appendTrendingHashtags($caption);
+    }
+
+    /**
+     * Caption ke ant me trending hashtags jodo — jo pehle se present nahi hain
+     * sirf wahi, aur Instagram ki 30-hashtag limit ke andar rehte hue.
+     */
+    private function appendTrendingHashtags(string $caption): string
+    {
+        // Caption me pehle se maujood hashtags (case-insensitive)
+        preg_match_all('/#[\p{L}\p{N}_]+/u', $caption, $matches);
+        $existing = array_map(fn ($h) => Str::lower($h), $matches[0]);
+
+        $toAdd = array_values(array_filter(
+            self::TRENDING_HASHTAGS,
+            fn ($tag) => ! in_array(Str::lower($tag), $existing, true)
+        ));
+
+        // Instagram max 30 hashtags — total safe rakho
+        $room = max(0, 28 - count($existing));
+        $toAdd = array_slice($toAdd, 0, $room);
+
+        if (empty($toAdd)) {
+            return $caption;
+        }
+
+        return rtrim($caption) . "\n" . implode(' ', $toAdd);
     }
 }

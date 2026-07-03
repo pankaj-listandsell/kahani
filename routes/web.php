@@ -59,6 +59,7 @@ Route::middleware('auth')->prefix('admin')->name('admin.')->group(function () {
     Route::post('instagram/cards/{card}/reel', [InstagramController::class, 'postReel'])->name('instagram.card.reel');
     Route::post('instagram/parts/{part}/post', [InstagramController::class, 'postPart'])->name('instagram.part.post');
     Route::post('instagram/parts/{part}/reels', [InstagramController::class, 'postPartReels'])->name('instagram.part.reels');
+    Route::post('instagram/parts/{part}/captions', [InstagramController::class, 'generatePartCaptions'])->name('instagram.part.captions');
 
     // Story CRUD
     Route::resource('stories', StoryController::class);

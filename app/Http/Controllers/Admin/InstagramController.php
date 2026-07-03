@@ -232,6 +232,37 @@ class InstagramController extends Controller
         return $this->bulk($part, 'reel', 'reel');
     }
 
+    /**
+     * Ek part ke saare cards (jinke paas abhi caption nahi) me AI caption add karo.
+     * Ek hi caption poore part ke liye banti hai — fast aur consistent.
+     */
+    public function generatePartCaptions(Part $part, AiCaptionService $ai)
+    {
+        $this->authorize('update', $part->story);
+        $part->load('cards');
+
+        // Jo post ho chuke ya jinke paas pehle se caption hai, unhe chhod do
+        $targets = $part->cards->filter(
+            fn (PartCard $c) => blank($c->ig_caption) && ! $c->isPosted()
+        );
+
+        if ($targets->isEmpty()) {
+            return back()->with('success', 'Sabhi cards ke paas pehle se caption hai. 👍');
+        }
+
+        try {
+            $caption = $ai->forCard($targets->first());
+        } catch (\Throwable $e) {
+            return back()->with('error', 'Caption nahi bani: ' . $e->getMessage());
+        }
+
+        foreach ($targets as $card) {
+            $card->update(['ig_caption' => $caption]);
+        }
+
+        return back()->with('success', $targets->count() . ' card(s) me AI caption add ho gaya. ✨ (chahein to har card me alag edit kar sakte hain.)');
+    }
+
     private function bulk(Part $part, string $type, string $noun)
     {
         $part->load('cards');
