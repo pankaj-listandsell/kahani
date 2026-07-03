@@ -132,9 +132,11 @@ class InstagramService
 
         $caption ??= $this->buildCaption($card);
 
-        // Instagram sirf JPEG leta hai → JPEG banao → temp host par upload karo
+        // Instagram sirf JPEG leta hai → JPEG banao → public URL do
+        // (pehle apna hosting URL, warna temp host).
         $jpeg = $this->jpegPathFor($card);
-        $imageUrl = $this->uploadToTempHost(Storage::disk('public')->path($jpeg));
+        $imageUrl = $this->publicMediaUrl($jpeg)
+            ?? $this->uploadToTempHost(Storage::disk('public')->path($jpeg));
 
         if (! $imageUrl) {
             $this->markFailed($card, 'Could not upload image to a public host.');
@@ -149,6 +151,7 @@ class InstagramService
             ]);
 
             if (! $create->successful() || ! $create->json('id')) {
+                Log::error('IG image container create failed', ['card' => $card->id, 'image_url' => $imageUrl, 'body' => $create->json()]);
                 throw new \RuntimeException($create->json('error.message') ?? 'Media container create failed.');
             }
 
@@ -160,6 +163,7 @@ class InstagramService
 
             return $mediaId;
         } catch (\Throwable $e) {
+            Log::error('IG image post failed', ['card' => $card->id, 'error' => $e->getMessage()]);
             $this->markFailed($card, $e->getMessage());
             throw $e;
         }
@@ -188,11 +192,15 @@ class InstagramService
             // 1) Card image → MP4 video
             $mp4 = $this->mp4PathFor($card);
 
-            // 2) Video ko temp public host par upload
-            $videoUrl = $this->uploadToTempHost(Storage::disk('public')->path($mp4));
+            // 2) Video ka public URL (pehle apna hosting URL, warna temp host)
+            $videoUrl = $this->publicMediaUrl($mp4)
+                ?? $this->uploadToTempHost(Storage::disk('public')->path($mp4));
             if (! $videoUrl) {
                 throw new \RuntimeException('Could not upload video to a public host.');
             }
+
+            // Diagnostics: exact video URL log karo (browser me khol kar test kar sakte hain)
+            Log::info('IG reel video_url', ['card' => $card->id, 'url' => $videoUrl]);
 
             // 2b) Story ki AI cover image → reel ka cover (thumbnail)
             $params = [
@@ -228,6 +236,7 @@ class InstagramService
 
             return $mediaId;
         } catch (\Throwable $e) {
+            Log::error('IG reel post failed', ['card' => $card->id, 'error' => $e->getMessage()]);
             $this->markFailed($card, $e->getMessage());
             throw $e;
         }
@@ -286,7 +295,13 @@ class InstagramService
                 return;
             }
             if ($code === 'ERROR') {
-                throw new \RuntimeException($status->json('status') ?? 'Instagram rejected the video.');
+                // Instagram ka poora jawab log karo taaki asli wajah (sub-code) pata chale
+                Log::error('IG reel container ERROR', ['container' => $containerId, 'body' => $status->json()]);
+
+                $detail = $status->json('status')
+                    ?: ($status->json('error.message') ?: json_encode($status->json()));
+
+                throw new \RuntimeException('Instagram ne video reject ki: ' . $detail);
             }
         }
 
@@ -382,7 +397,7 @@ class InstagramService
             // Instagram reel cover sirf JPEG reliably leta hai — PNG/WebP ko convert karo
             $jpeg = $this->ensureCoverJpeg($cover);
 
-            return $this->uploadToTempHost($disk->path($jpeg));
+            return $this->publicMediaUrl($jpeg) ?? $this->uploadToTempHost($disk->path($jpeg));
         } catch (\Throwable $e) {
             Log::warning('Reel cover upload failed', ['error' => $e->getMessage()]);
 
@@ -458,12 +473,15 @@ class InstagramService
         $in  = $disk->path($jpeg);
         $out = $disk->path($mp4Path);
 
-        // Reel frame 1080x1920 (9:16). Black bars ki jagah card ka blur kiya
-        // hua bada version background me bharo, aur asli card upar center me.
-        // Agar card khud 9:16 hai to wo poora frame bhar dega (blur nahi dikhega).
-        $filter = '[0:v]scale=1080:1920:force_original_aspect_ratio=increase,crop=1080:1920,boxblur=24:3[bg];'
-            . '[0:v]scale=1080:1920:force_original_aspect_ratio=decrease[fg];'
-            . '[bg][fg]overlay=(W-w)/2:(H-h)/2,format=yuv420p[v]';
+        // Reel frame 720x1280 (9:16). Card ko fit karke black background par
+        // center me pad karo. (Pehle blur-background + 1080p use hota tha, par
+        // wo shared hosting par bahut heavy tha — ffmpeg OOM/CPU-limit par kill
+        // ho jaata tha, signal 9. 720p + simple pad kaafi halka aur reliable hai;
+        // Instagram 720p reels accept karta hai.)
+        // in_range=full:out_range=tv → JPEG ke full-range ko TV/limited range me
+        // badlo, warna output yuvj420p ban jaata hai jise Instagram reject karta hai.
+        $filter = '[0:v]scale=720:1280:force_original_aspect_ratio=decrease:in_range=full:out_range=tv,'
+            . 'pad=720:1280:(ow-iw)/2:(oh-ih)/2:color=black,format=yuv420p[v]';
 
         // Audio: default reel music (agar set hai) warna silent
         $cmd = [$ffmpeg, '-y', '-loop', '1', '-i', $in];
@@ -478,16 +496,26 @@ class InstagramService
             $cmd = array_merge($cmd, ['-f', 'lavfi', '-i', 'anullsrc=channel_layout=stereo:sample_rate=44100']);
         }
 
+        // Instagram Reels spec: H.264 High profile, closed GOP (keyframe har ~2s),
+        // 4:2:0 (yuv420p), progressive, AAC 44.1kHz stereo. In flags ke bina
+        // kuch ffmpeg builds ka output IG "ERROR" (reject) de deta hai.
         $cmd = array_merge($cmd, [
             '-t', (string) $seconds,
             '-filter_complex', $filter,
             '-map', '[v]', '-map', '1:a',
-            '-c:v', 'libx264', '-pix_fmt', 'yuv420p', '-r', '30',
-            '-c:a', 'aac', '-b:a', '128k', '-shortest', '-movflags', '+faststart',
+            // ultrafast + stillimage + single thread + kam ref/lookahead → sabse
+            // kam RAM/CPU (shared host ffmpeg ko signal 9 se kill na kare)
+            '-c:v', 'libx264', '-preset', 'ultrafast', '-tune', 'stillimage', '-threads', '1',
+            '-x264-params', 'ref=1:bframes=0:rc-lookahead=10:sync-lookahead=0',
+            '-profile:v', 'high', '-level', '3.1',
+            '-pix_fmt', 'yuv420p', '-color_range', 'tv', '-r', '25',
+            '-g', '50', '-keyint_min', '50', '-sc_threshold', '0', '-flags', '+cgop',
+            '-c:a', 'aac', '-b:a', '128k', '-ar', '44100', '-ac', '2',
+            '-shortest', '-movflags', '+faststart',
             $out,
         ]);
 
-        $result = Process::timeout(180)->run($cmd);
+        $result = Process::timeout(240)->run($cmd);
 
         if (! $result->successful() || ! $disk->exists($mp4Path)) {
             Log::error('ffmpeg reel conversion failed', ['err' => $result->errorOutput()]);
@@ -500,6 +528,25 @@ class InstagramService
     /* ===================================================================
      |  TEMP PUBLIC HOST (tunnel ki jagah)
      * =================================================================== */
+
+    /**
+     * Agar app ek asli public host par chal raha hai (APP_URL sahi set hai),
+     * to media ko seedhe apne domain se serve karo — Instagram yahi se fetch
+     * kar lega. Ye 0x0.st jaise flaky temp hosts se zyada reliable hai.
+     *
+     * localhost / http (dev) par null return hota hai → temp host fallback.
+     */
+    protected function publicMediaUrl(string $storageRelativePath): ?string
+    {
+        $url = Storage::disk('public')->url($storageRelativePath);
+
+        // Instagram sirf public HTTPS URL fetch kar sakta hai
+        if (! Str::startsWith($url, 'https://') || Str::contains($url, ['localhost', '127.0.0.1'])) {
+            return null;
+        }
+
+        return $url;
+    }
 
     /**
      * Local file ko ek temporary public host par upload karke direct URL do.

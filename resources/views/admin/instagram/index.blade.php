@@ -272,7 +272,10 @@
                                                             {{ filled($card->ig_caption) ? '📝 Caption' : '✨ Caption' }}
                                                         </button>
                                                         @if ($card->ig_status === 'failed')
-                                                            <span class="block text-[10px] text-red-500 mt-0.5" title="{{ $card->ig_error }}">failed</span>
+                                                            <span class="block text-[10px] font-semibold text-red-500 mt-0.5">failed</span>
+                                                            @if (filled($card->ig_error))
+                                                                <span class="block text-[9px] text-red-400 leading-tight mt-0.5" title="{{ $card->ig_error }}">{{ Str::limit($card->ig_error, 90) }}</span>
+                                                            @endif
                                                         @endif
                                                     @endif
                                                 </div>

@@ -26,12 +26,13 @@
             <div>
                 <label class="block text-sm font-medium mb-1">Background Style</label>
                 <select id="style" class="w-full rounded-lg border border-slate-300 px-3 py-2">
+                    <option value="storybook" selected>Storybook (cream + maroon title) — recommended</option>
                     <option value="gradient">Gradient (two colors)</option>
                     <option value="solid">Solid (one color)</option>
                 </select>
             </div>
 
-            <div class="grid grid-cols-2 gap-3">
+            <div id="colorGrid" class="grid grid-cols-2 gap-3">
                 <div>
                     <label class="block text-sm font-medium mb-1">Color 1</label>
                     <input type="color" id="color1" value="#7c3aed" class="w-full h-10 rounded-lg border border-slate-300">
@@ -51,7 +52,7 @@
                 </select>
             </div>
 
-            <div>
+            <div id="quickColors">
                 <label class="block text-sm font-medium mb-1">Quick colors</label>
                 <div class="flex gap-2 flex-wrap">
                     @php($presets = [['#7c3aed','#db2777'],['#0f766e','#14b8a6'],['#b91c1c','#f59e0b'],['#1e3a8a','#3b82f6'],['#111827','#374151'],['#9d174d','#f43f5e']])
@@ -60,6 +61,52 @@
                                 data-c1="{{ $p[0] }}" data-c2="{{ $p[1] }}"
                                 style="background:linear-gradient(135deg,{{ $p[0] }},{{ $p[1] }})"></button>
                     @endforeach
+                </div>
+            </div>
+
+            {{-- Storybook colors + bold (only for the storybook style) --}}
+            <div id="storybookControls" class="space-y-3 border-t border-slate-200 pt-4">
+                <label class="block text-sm font-medium">🎨 Storybook Colors</label>
+                <div class="grid grid-cols-2 gap-3">
+                    <div>
+                        <label class="block text-xs text-slate-500 mb-1">Background</label>
+                        <input type="color" id="sbBg" value="#f3e7cf" class="w-full h-10 rounded-lg border border-slate-300">
+                    </div>
+                    <div>
+                        <label class="block text-xs text-slate-500 mb-1">Title Box</label>
+                        <input type="color" id="sbBox" value="#6d181c" class="w-full h-10 rounded-lg border border-slate-300">
+                    </div>
+                    <div>
+                        <label class="block text-xs text-slate-500 mb-1">Title Text</label>
+                        <input type="color" id="sbTitle" value="#f0c65a" class="w-full h-10 rounded-lg border border-slate-300">
+                    </div>
+                    <div>
+                        <label class="block text-xs text-slate-500 mb-1">Body Text</label>
+                        <input type="color" id="sbBody" value="#2b211a" class="w-full h-10 rounded-lg border border-slate-300">
+                    </div>
+                </div>
+
+                <label class="flex items-center gap-2 text-sm font-medium cursor-pointer">
+                    <input type="checkbox" id="sbBold" class="rounded border-slate-300">
+                    <b>Bold</b> body text
+                </label>
+
+                <div>
+                    <label class="block text-xs text-slate-500 mb-1">Ready-made themes</label>
+                    <div class="flex gap-2 flex-wrap">
+                        @php($sbThemes = [
+                            ['bg'=>'#f3e7cf','box'=>'#6d181c','title'=>'#f0c65a','body'=>'#2b211a'],
+                            ['bg'=>'#eef3e2','box'=>'#234d2e','title'=>'#e7c15b','body'=>'#1f2a1c'],
+                            ['bg'=>'#e6eef5','box'=>'#123a5e','title'=>'#ecd08a','body'=>'#16222e'],
+                            ['bg'=>'#fbeef0','box'=>'#7a1733','title'=>'#f2c2a0','body'=>'#2a1720'],
+                            ['bg'=>'#201b17','box'=>'#3a1518','title'=>'#e7b84f','body'=>'#f1e6d2'],
+                        ])
+                        @foreach($sbThemes as $t)
+                            <button type="button" class="sbtheme w-8 h-8 rounded-full border-2 border-white shadow"
+                                    data-bg="{{ $t['bg'] }}" data-box="{{ $t['box'] }}" data-title="{{ $t['title'] }}" data-body="{{ $t['body'] }}"
+                                    style="background:{{ $t['box'] }}"></button>
+                        @endforeach
+                    </div>
                 </div>
             </div>
 
@@ -159,6 +206,41 @@ function luminance(hex) {
     return 0.299 * c.r + 0.587 * c.g + 0.114 * c.b;
 }
 
+// ---------- Storybook style (cream background + maroon title box) ----------
+const SB = {
+    bg:        '#f3e7cf',   // warm cream paper
+    box:       '#6d181c',   // deep maroon title box
+    boxBorder: '#e7c15b',   // thin gold frame inside the box
+    title:     '#f0c65a',   // gold title text
+    sub:       '#fbf1dc',   // cream-white "भाग N"
+    body:      '#2b211a',   // dark brown body text
+};
+
+function titleFont(s) { return `700 ${s.titleSize}px "Noto Sans Devanagari"`; }
+function subFont(s)   { return `600 ${s.headerSize}px "Noto Sans Devanagari"`; }
+// Body font — bold only when the storybook "Bold body text" option is on
+function bodyFont(s) {
+    const w = (s.style === 'storybook' && s.sbBold) ? '700 ' : '';
+    return `${w}${s.bodySize}px "Noto Serif Devanagari"`;
+}
+
+// Layout the maroon title box for the storybook style.
+// storyTitle is same on every card, so the box height is constant.
+function storyHeader(ctx, s) {
+    const boxX  = s.pad - 30;
+    const boxW  = s.W - boxX * 2;
+    const innerW = boxW - 80;
+    const titlePad = 44;
+    const titleLH  = Math.round(s.titleSize * 1.3);
+    const subLH    = Math.round(s.headerSize * 1.25);
+
+    ctx.font = titleFont(s);
+    const titleLines = wrapText(ctx, PART.storyTitle, innerW);
+
+    const boxH = titlePad * 2 + titleLines.length * titleLH + 8 + subLH;
+    return { boxX, boxY: s.pad, boxW, boxH, titleLines, titlePad, titleLH, subLH };
+}
+
 function settings() {
     const [w, h] = el('size').value.split('x').map(Number);
     const bodySize = parseInt(el('fontSize').value, 10);
@@ -167,6 +249,12 @@ function settings() {
         style: el('style').value,
         c1: el('color1').value,
         c2: el('color2').value,
+        // Storybook-specific colors + bold body text
+        sbBg:    el('sbBg').value,
+        sbBox:   el('sbBox').value,
+        sbTitle: el('sbTitle').value,
+        sbBody:  el('sbBody').value,
+        sbBold:  el('sbBold').checked,
         bodySize,
         lineHeight: Math.round(bodySize * 1.7),
         titleSize: Math.round(bodySize * 1.35),
@@ -203,10 +291,13 @@ function computePages(ctx, s) {
     // Footer/dots nahi hai — bas neeche thoda margin
     const bottomLimit = s.H - s.pad - 30;
 
-    // Top header (har card): "story title (भाग N)" ek line + divider
-    const headerBlock = Math.round(s.headerSize * 1.25) + 26;
+    // Top header (har card). Storybook = maroon title box (tall), warna
+    // "story title (भाग N)" ek line + divider.
+    const headerBlock = s.style === 'storybook'
+        ? storyHeader(ctx, s).boxH + 46
+        : Math.round(s.headerSize * 1.25) + 26;
 
-    ctx.font = `${s.bodySize}px "Noto Serif Devanagari"`;
+    ctx.font = bodyFont(s);
     const allLines = wrapText(ctx, PART.body, contentW);
 
     const firstCap = Math.floor((bottomLimit - (s.pad + headerBlock)) / s.lineHeight);
@@ -253,6 +344,47 @@ function renderPage(canvas, pageLines, pageIndex, total, titleLines, titleBlock,
     canvas.height = s.H;
     const ctx = canvas.getContext('2d');
     const contentW = s.W - s.pad * 2;
+
+    // ---------- Storybook style (reference design) ----------
+    if (s.style === 'storybook') {
+        // Paper background (customizable)
+        ctx.fillStyle = s.sbBg;
+        ctx.fillRect(0, 0, s.W, s.H);
+
+        const h = storyHeader(ctx, s);
+
+        // Title box
+        roundRectPath(ctx, h.boxX, h.boxY, h.boxW, h.boxH, 30);
+        ctx.fillStyle = s.sbBox;
+        ctx.fill();
+
+        // Thin frame inside the box (matches the title color)
+        roundRectPath(ctx, h.boxX + 12, h.boxY + 12, h.boxW - 24, h.boxH - 24, 20);
+        ctx.lineWidth = 2.5;
+        ctx.strokeStyle = s.sbTitle;
+        ctx.stroke();
+
+        // Title (centered, wraps)
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'top';
+        ctx.font = titleFont(s);
+        ctx.fillStyle = s.sbTitle;
+        let ty = h.boxY + h.titlePad;
+        h.titleLines.forEach(line => { ctx.fillText(line, s.W / 2, ty); ty += h.titleLH; });
+
+        // Subtitle "भाग N" (cream-white, centered)
+        ctx.font = subFont(s);
+        ctx.fillStyle = SB.sub;
+        ctx.fillText(`भाग ${pageIndex + 1}`, s.W / 2, ty + 8);
+
+        // Body text (left aligned, optional bold)
+        ctx.textAlign = 'left';
+        ctx.fillStyle = s.sbBody;
+        ctx.font = bodyFont(s);
+        let by = h.boxY + h.boxH + 46;
+        pageLines.forEach(line => { ctx.fillText(line, s.pad, by); by += s.lineHeight; });
+        return;
+    }
 
     // 1) Background gradient / solid
     if (s.style === 'gradient') {
@@ -327,7 +459,7 @@ function renderPage(canvas, pageLines, pageIndex, total, titleLines, titleBlock,
 
     // 5) Body text
     ctx.fillStyle = textColor;
-    ctx.font = `${s.bodySize}px "Noto Serif Devanagari"`;
+    ctx.font = bodyFont(s);
     applyShadow();
     pageLines.forEach(line => { ctx.fillText(line, s.pad, y); y += s.lineHeight; });
     clearShadow();
@@ -342,7 +474,9 @@ async function reflow() {
     off.width = s.W; off.height = s.H;
     const ctx = off.getContext('2d');
     await document.fonts.load(`${s.bodySize}px "Noto Serif Devanagari"`);
+    await document.fonts.load(`700 ${s.bodySize}px "Noto Serif Devanagari"`);
     await document.fonts.load(`700 ${s.titleSize}px "Noto Sans Devanagari"`);
+    await document.fonts.load(`600 ${s.headerSize}px "Noto Sans Devanagari"`);
     await document.fonts.ready;
 
     const c = computePages(ctx, s);
@@ -400,10 +534,27 @@ el('reflow').addEventListener('click', reflow);
 el('generate').addEventListener('click', generateAll);
 el('prev').addEventListener('click', () => { if (currentPage > 0) { currentPage--; drawPreview(); } });
 el('next').addEventListener('click', () => { if (currentPage < pages.length - 1) { currentPage++; drawPreview(); } });
-['size', 'style', 'color1', 'color2', 'fontSize'].forEach(id => el(id).addEventListener('change', reflow));
-el('style').addEventListener('change', () => {
-    el('color2Wrap').style.display = el('style').value === 'gradient' ? '' : 'none';
-});
+['size', 'style', 'color1', 'color2', 'fontSize',
+ 'sbBg', 'sbBox', 'sbTitle', 'sbBody', 'sbBold'].forEach(id => el(id).addEventListener('change', reflow));
+
+// Storybook ready-made themes
+document.querySelectorAll('.sbtheme').forEach(b => b.addEventListener('click', () => {
+    el('sbBg').value    = b.dataset.bg;
+    el('sbBox').value   = b.dataset.box;
+    el('sbTitle').value = b.dataset.title;
+    el('sbBody').value  = b.dataset.body;
+    reflow();
+}));
+function updateStyleUI() {
+    const v = el('style').value;
+    const usesColors = (v === 'gradient' || v === 'solid');
+    el('colorGrid').style.display  = usesColors ? '' : 'none';
+    el('quickColors').style.display = usesColors ? '' : 'none';
+    el('color2Wrap').style.display = (v === 'gradient') ? '' : 'none';
+    el('storybookControls').style.display = (v === 'storybook') ? '' : 'none';
+}
+el('style').addEventListener('change', updateStyleUI);
+updateStyleUI();
 document.querySelectorAll('.preset').forEach(b => b.addEventListener('click', () => {
     el('color1').value = b.dataset.c1;
     el('color2').value = b.dataset.c2;
