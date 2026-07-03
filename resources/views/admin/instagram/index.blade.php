@@ -381,7 +381,8 @@
         const e = toMin(node.querySelector('[data-k=end]').value);
         const iv = parseInt(node.querySelector('[data-k=interval]').value, 10) || 30;
         let n = 0;
-        if (s !== null && e !== null && e > s) n = Math.floor((e - s) / iv);
+        // Slots start se end tak, dono inclusive (jaise 2:00 … 3:00 @10min = 7)
+        if (s !== null && e !== null && e >= s) n = Math.floor((e - s) / iv) + 1;
         node.querySelector('.est').textContent = '~' + n + ' posts';
         updateStatus();
     }

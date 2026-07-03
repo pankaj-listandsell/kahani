@@ -67,13 +67,21 @@ class InstagramAutoPost extends Command
                 return; // is user ke window ke bahar
             }
 
-            // Interval respect karo (per-user last post time)
+            // Post sirf FIXED clock-slots par ho: window start se interval ke
+            // exact multiples (jaise 2:00, 2:10, 2:20 … 3:00). "Jab bhi mauka
+            // mila" wali approach nahi.
+            $slot = $this->currentSlot($window, $now);
+            if ($slot === null) {
+                return;
+            }
+
+            // Aaj ke is slot ka asli time. Agar last post is slot ke time par
+            // ya uske baad hua hai, matlab ye slot pehle hi serve ho chuka —
+            // dobara mat post karo. (Ek slot = ek post.)
+            $slotTime = $now->copy()->startOfDay()->addMinutes($slot);
             $last = Setting::getFor($uid, 'ig_auto_last_post_at');
-            if ($last) {
-                $mins = Carbon::parse($last)->diffInMinutes($now);
-                if ($mins < (int) $window['interval']) {
-                    return;
-                }
+            if ($last && Carbon::parse($last)->greaterThanOrEqualTo($slotTime)) {
+                return;
             }
         }
 
@@ -117,6 +125,36 @@ class InstagramAutoPost extends Command
         }
 
         return null;
+    }
+
+    /**
+     * Abhi ke time par is window ka current fixed slot (minutes-from-midnight),
+     * ya null agar koi slot due nahi.
+     *
+     * Slots = start, start+interval, start+2·interval, … (<= end).
+     * Return karta hai sabse recent slot jo `now` par ya usse pehle aa chuka
+     * — isse ek tick miss hone par bhi catch-up ho jaata hai, par post hamesha
+     * slot-time se align rehta hai.
+     */
+    protected function currentSlot(array $window, Carbon $now): ?int
+    {
+        $start = $this->toMinutes($window['start']);
+        $end   = $this->toMinutes($window['end']);
+        $iv    = max(5, (int) $window['interval']);
+
+        if ($start === null || $end === null) {
+            return null;
+        }
+
+        $nowMin = $now->hour * 60 + $now->minute;
+        if ($nowMin < $start || $nowMin > $end) {
+            return null; // window ke bahar
+        }
+
+        // now par ya usse pehle aane wala sabse recent slot
+        $slot = $start + intdiv($nowMin - $start, $iv) * $iv;
+
+        return $slot <= $end ? $slot : null;
     }
 
     protected function toMinutes(string $hhmm): ?int
