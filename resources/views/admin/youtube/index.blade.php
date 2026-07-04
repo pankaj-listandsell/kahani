@@ -258,10 +258,16 @@
                                     <div class="mt-2 border border-slate-200 rounded-lg p-3">
                                         <div class="flex items-center justify-between mb-2 gap-2 flex-wrap">
                                             <span class="text-sm font-medium">Part {{ $part->sort_order }} · {{ $part->cards->count() }} cards</span>
-                                            <form method="POST" action="{{ route('admin.youtube.part.short', $part) }}" class="yt-form" onsubmit="return confirm('Poore part ka ek slideshow Short banayein aur upload karein?')">
-                                                @csrf
-                                                <button @disabled(!$configured) class="text-xs bg-red-600 hover:bg-red-700 disabled:bg-slate-300 text-white rounded-lg px-3 py-1.5">▶ Part Short (slideshow)</button>
-                                            </form>
+                                            <div class="flex gap-2">
+                                                <form method="POST" action="{{ route('admin.youtube.part.captions', $part) }}" class="yt-form" onsubmit="return confirm('Is part ke sabhi cards ke liye AI caption banayein?')">
+                                                    @csrf
+                                                    <button class="text-xs bg-sky-600 hover:bg-sky-700 text-white rounded-lg px-3 py-1.5">✨ All Captions</button>
+                                                </form>
+                                                <form method="POST" action="{{ route('admin.youtube.part.short', $part) }}" class="yt-form" onsubmit="return confirm('Poore part ka ek slideshow Short banayein aur upload karein?')">
+                                                    @csrf
+                                                    <button @disabled(!$configured) class="text-xs bg-red-600 hover:bg-red-700 disabled:bg-slate-300 text-white rounded-lg px-3 py-1.5">▶ Part Short (slideshow)</button>
+                                                </form>
+                                            </div>
                                         </div>
                                         <div class="flex gap-3 overflow-x-auto pb-1">
                                             @foreach ($part->cards as $card)

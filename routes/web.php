@@ -76,6 +76,7 @@ Route::middleware('auth')->prefix('admin')->name('admin.')->group(function () {
     Route::put('youtube/cards/{card}/caption', [YoutubeController::class, 'saveCaption'])->name('youtube.card.caption.save');
     Route::post('youtube/cards/{card}/short', [YoutubeController::class, 'postCard'])->name('youtube.card.short');
     Route::post('youtube/parts/{part}/short', [YoutubeController::class, 'postPart'])->name('youtube.part.short');
+    Route::post('youtube/parts/{part}/captions', [YoutubeController::class, 'generatePartCaptions'])->name('youtube.part.captions');
 
     // Topic se AI kahani generate (create form bharne ke liye) — resource se pehle
     Route::post('stories/generate', [StoryController::class, 'generateFromTopic'])->name('stories.generate');

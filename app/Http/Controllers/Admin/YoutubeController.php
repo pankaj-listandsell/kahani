@@ -223,6 +223,37 @@ class YoutubeController extends Controller
         return response()->json(['ok' => true]);
     }
 
+    /**
+     * Ek part ke saare cards (jinke paas abhi caption nahi + jo YouTube par post
+     * nahi hue) me ek AI YouTube caption add karo — ek hi caption poore part ke
+     * liye (fast + consistent). Instagram ke "All Captions" jaisa.
+     */
+    public function generatePartCaptions(Part $part, AiCaptionService $ai)
+    {
+        $this->authorize('update', $part->story);
+        $part->load('cards');
+
+        $targets = $part->cards->filter(
+            fn (PartCard $c) => blank($c->yt_caption) && ! $c->isYtPosted()
+        );
+
+        if ($targets->isEmpty()) {
+            return back()->with('success', 'Sabhi cards ke paas pehle se caption hai. 👍');
+        }
+
+        try {
+            $caption = $ai->forYoutube($targets->first());
+        } catch (\Throwable $e) {
+            return back()->with('error', 'Caption nahi bani: ' . $e->getMessage());
+        }
+
+        foreach ($targets as $card) {
+            $card->update(['yt_caption' => $caption]);
+        }
+
+        return back()->with('success', $targets->count() . ' card(s) me AI caption add ho gaya. ✨ (chahein to har card me alag edit kar sakte hain.)');
+    }
+
     /* ================= Manual post ================= */
 
     /** Ek card → single-card Short. */
