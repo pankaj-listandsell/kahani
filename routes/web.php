@@ -3,6 +3,7 @@
 use App\Http\Controllers\Admin\AuthController;
 use App\Http\Controllers\Admin\CardController;
 use App\Http\Controllers\Admin\DashboardController;
+use App\Http\Controllers\Admin\FacebookController;
 use App\Http\Controllers\Admin\InstagramController;
 use App\Http\Controllers\Admin\PartController;
 use App\Http\Controllers\Admin\SettingsController;
@@ -77,6 +78,16 @@ Route::middleware('auth')->prefix('admin')->name('admin.')->group(function () {
     Route::post('youtube/cards/{card}/short', [YoutubeController::class, 'postCard'])->name('youtube.card.short');
     Route::post('youtube/parts/{part}/short', [YoutubeController::class, 'postPart'])->name('youtube.part.short');
     Route::post('youtube/parts/{part}/captions', [YoutubeController::class, 'generatePartCaptions'])->name('youtube.part.captions');
+
+    // Facebook (Page photo + Reel)
+    Route::get('facebook', [FacebookController::class, 'index'])->name('facebook.index');
+    Route::put('facebook/settings', [FacebookController::class, 'saveSettings'])->name('facebook.settings');
+    Route::put('facebook/auto-post', [FacebookController::class, 'saveAutoPost'])->name('facebook.autopost');
+    Route::post('facebook/test', [FacebookController::class, 'test'])->name('facebook.test');
+    Route::post('facebook/cards/{card}/photo', [FacebookController::class, 'postCard'])->name('facebook.card.photo');
+    Route::post('facebook/cards/{card}/reel', [FacebookController::class, 'postReel'])->name('facebook.card.reel');
+    Route::post('facebook/parts/{part}/photos', [FacebookController::class, 'postPart'])->name('facebook.part.photos');
+    Route::post('facebook/parts/{part}/reels', [FacebookController::class, 'postPartReels'])->name('facebook.part.reels');
 
     // Topic se AI kahani generate (create form bharne ke liye) — resource se pehle
     Route::post('stories/generate', [StoryController::class, 'generateFromTopic'])->name('stories.generate');

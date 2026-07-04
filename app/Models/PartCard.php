@@ -22,11 +22,16 @@ class PartCard extends Model
         'yt_posted_at',
         'yt_error',
         'yt_caption',
+        'fb_status',
+        'fb_post_id',
+        'fb_posted_at',
+        'fb_error',
     ];
 
     protected $casts = [
         'ig_posted_at' => 'datetime',
         'yt_posted_at' => 'datetime',
+        'fb_posted_at' => 'datetime',
     ];
 
     public function part(): BelongsTo
@@ -42,5 +47,10 @@ class PartCard extends Model
     public function isYtPosted(): bool
     {
         return $this->yt_status === 'posted';
+    }
+
+    public function isFbPosted(): bool
+    {
+        return $this->fb_status === 'posted';
     }
 }

@@ -16,3 +16,6 @@ Schedule::command('instagram:auto-post')->everyMinute()->withoutOverlapping();
 // YouTube Shorts auto-post — IG jaisa hi. Command khud check karta hai ki
 // auto-post ON hai, time-window me hai, aur slot due hai.
 Schedule::command('youtube:auto-post')->everyMinute()->withoutOverlapping();
+
+// Facebook Page auto-post (photo/reel) — IG jaisa hi.
+Schedule::command('facebook:auto-post')->everyMinute()->withoutOverlapping();

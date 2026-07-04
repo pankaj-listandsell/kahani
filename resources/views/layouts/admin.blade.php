@@ -24,6 +24,7 @@
         ['route' => 'admin.stories.index',  'active' => 'admin.stories.*',   'icon' => '📚', 'label' => 'Stories'],
         ['route' => 'admin.instagram.index','active' => 'admin.instagram.*', 'icon' => '📸', 'label' => 'Instagram'],
         ['route' => 'admin.youtube.index',  'active' => 'admin.youtube.*',   'icon' => '▶️', 'label' => 'YouTube'],
+        ['route' => 'admin.facebook.index', 'active' => 'admin.facebook.*',  'icon' => '📘', 'label' => 'Facebook'],
         ['route' => 'admin.settings.index', 'active' => 'admin.settings.*', 'icon' => '⚙️', 'label' => 'Settings'],
     ];
 
