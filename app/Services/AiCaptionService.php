@@ -25,6 +25,16 @@ class AiCaptionService
     ];
 
     /**
+     * YouTube Shorts ke liye trending hashtags (Hindi kahani niche).
+     * #Shorts sabse zaroori — isi se YouTube video ko Short maanta hai.
+     */
+    private const YOUTUBE_TRENDING_HASHTAGS = [
+        '#shorts', '#youtubeshorts', '#ytshorts', '#shortsfeed', '#shortvideo',
+        '#viral', '#trending', '#trendingshorts', '#viralshorts', '#storytime',
+        '#hindikahani', '#kahani', '#moralstory', '#story', '#hindistory',
+    ];
+
+    /**
      * Ek card ke liye Hindi caption + hashtags generate karo.
      *
      * @throws \RuntimeException agar AI se caption na bane.
@@ -52,6 +62,48 @@ class AiCaptionService
         Details: {$desc}
         TXT;
 
+        return $this->appendHashtags($this->callAi($prompt), self::TRENDING_HASHTAGS, 28);
+    }
+
+    /**
+     * Ek card ke liye YouTube Shorts caption (title-line + description + YouTube
+     * trending hashtags) generate karo.
+     *
+     * @throws \RuntimeException agar AI se caption na bane.
+     */
+    public function forYoutube(PartCard $card): string
+    {
+        $part  = $card->part;
+        $story = $part?->story;
+
+        $title  = $story?->title ?: 'Hindi Kahani';
+        $desc   = $story?->description ? Str::limit(strip_tags($story->description), 300) : '';
+        $partNo = $part?->sort_order ?? 1;
+
+        $prompt = <<<TXT
+        Tum ek expert YouTube Shorts creator ho. Neeche di gayi Hindi kahani ke liye ek YouTube Short ka caption likho.
+
+        Rules:
+        - Pehli line: ek chhota, curiosity-driven TITLE Hindi (Devanagari) me (max 80 characters, halka emoji chalega).
+        - Uske baad 1-2 lines ka chhota description jo viewer ko dekhne par majboor kare.
+        - Phir ek khaali line, phir 8-10 relevant YouTube Shorts hashtags (Hindi + English mix, sab # ke saath, ek hi line me, #Shorts zaroor ho).
+        - Sirf caption do — koi explanation, quotes ya "Title:"/"Caption:" jaisa label mat likho.
+
+        Kahani ka title: {$title}
+        Part number: {$partNo}
+        Details: {$desc}
+        TXT;
+
+        return $this->appendHashtags($this->callAi($prompt), self::YOUTUBE_TRENDING_HASHTAGS, 15);
+    }
+
+    /**
+     * Pollinations text API ko prompt bhejo aur saaf caption text wapas lao.
+     *
+     * @throws \RuntimeException
+     */
+    private function callAi(string $prompt): string
+    {
         $url = 'https://text.pollinations.ai/' . rawurlencode($prompt);
 
         $response = Http::timeout(60)
@@ -72,28 +124,25 @@ class AiCaptionService
         }
 
         // Aage/peeche ke quote marks hata do agar AI ne laga diye
-        $caption = trim($caption, "\"' \n\r\t");
-
-        return $this->appendTrendingHashtags($caption);
+        return trim($caption, "\"' \n\r\t");
     }
 
     /**
      * Caption ke ant me trending hashtags jodo — jo pehle se present nahi hain
-     * sirf wahi, aur Instagram ki 30-hashtag limit ke andar rehte hue.
+     * sirf wahi, aur `$maxTotal` hashtag limit ke andar rehte hue.
      */
-    private function appendTrendingHashtags(string $caption): string
+    private function appendHashtags(string $caption, array $tags, int $maxTotal): string
     {
         // Caption me pehle se maujood hashtags (case-insensitive)
         preg_match_all('/#[\p{L}\p{N}_]+/u', $caption, $matches);
         $existing = array_map(fn ($h) => Str::lower($h), $matches[0]);
 
         $toAdd = array_values(array_filter(
-            self::TRENDING_HASHTAGS,
+            $tags,
             fn ($tag) => ! in_array(Str::lower($tag), $existing, true)
         ));
 
-        // Instagram max 30 hashtags — total safe rakho
-        $room = max(0, 28 - count($existing));
+        $room = max(0, $maxTotal - count($existing));
         $toAdd = array_slice($toAdd, 0, $room);
 
         if (empty($toAdd)) {

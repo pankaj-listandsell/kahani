@@ -8,6 +8,7 @@ use App\Http\Controllers\Admin\PartController;
 use App\Http\Controllers\Admin\SettingsController;
 use App\Http\Controllers\Admin\StoryController;
 use App\Http\Controllers\Admin\UserManagementController;
+use App\Http\Controllers\Admin\YoutubeController;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Route;
 
@@ -60,6 +61,21 @@ Route::middleware('auth')->prefix('admin')->name('admin.')->group(function () {
     Route::post('instagram/parts/{part}/post', [InstagramController::class, 'postPart'])->name('instagram.part.post');
     Route::post('instagram/parts/{part}/reels', [InstagramController::class, 'postPartReels'])->name('instagram.part.reels');
     Route::post('instagram/parts/{part}/captions', [InstagramController::class, 'generatePartCaptions'])->name('instagram.part.captions');
+
+    // YouTube (Shorts)
+    Route::get('youtube', [YoutubeController::class, 'index'])->name('youtube.index');
+    Route::get('youtube/connect', [YoutubeController::class, 'connect'])->name('youtube.connect');
+    Route::get('youtube/callback', [YoutubeController::class, 'callback'])->name('youtube.callback');
+    Route::post('youtube/disconnect', [YoutubeController::class, 'disconnect'])->name('youtube.disconnect');
+    Route::post('youtube/test', [YoutubeController::class, 'test'])->name('youtube.test');
+    Route::put('youtube/auto-post', [YoutubeController::class, 'saveAutoPost'])->name('youtube.autopost');
+    Route::post('youtube/music', [YoutubeController::class, 'saveMusic'])->name('youtube.music');
+    Route::delete('youtube/music', [YoutubeController::class, 'removeMusic'])->name('youtube.music.remove');
+    Route::get('youtube/cards/{card}/caption', [YoutubeController::class, 'getCaption'])->name('youtube.card.caption.get');
+    Route::post('youtube/cards/{card}/caption/generate', [YoutubeController::class, 'generateCaption'])->name('youtube.card.caption.generate');
+    Route::put('youtube/cards/{card}/caption', [YoutubeController::class, 'saveCaption'])->name('youtube.card.caption.save');
+    Route::post('youtube/cards/{card}/short', [YoutubeController::class, 'postCard'])->name('youtube.card.short');
+    Route::post('youtube/parts/{part}/short', [YoutubeController::class, 'postPart'])->name('youtube.part.short');
 
     // Story CRUD
     Route::resource('stories', StoryController::class);

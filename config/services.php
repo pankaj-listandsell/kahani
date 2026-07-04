@@ -40,4 +40,14 @@ return [
         'path' => env('FFMPEG_PATH', 'ffmpeg'),
     ],
 
+    // Google / YouTube Data API v3 (OAuth) — Shorts auto-upload
+    // client id/secret Google Cloud Console se aate hain (app-level, sabhi users share karte hain).
+    // Har user apna channel OAuth se connect karta hai (refresh token per-user settings me).
+    'youtube' => [
+        'client_id'     => env('GOOGLE_CLIENT_ID'),
+        'client_secret' => env('GOOGLE_CLIENT_SECRET'),
+        // Google Console me isi exact URL ko "Authorized redirect URI" me daalna hai.
+        'redirect'      => env('GOOGLE_REDIRECT_URI'),
+    ],
+
 ];

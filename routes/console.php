@@ -12,3 +12,7 @@ Artisan::command('inspire', function () {
 // auto-post ON hai, abhi kisi time-window me hai, aur interval beet gaya.
 // Chalane ke liye ye background me chahiye:  php artisan schedule:work
 Schedule::command('instagram:auto-post')->everyMinute()->withoutOverlapping();
+
+// YouTube Shorts auto-post — IG jaisa hi. Command khud check karta hai ki
+// auto-post ON hai, time-window me hai, aur slot due hai.
+Schedule::command('youtube:auto-post')->everyMinute()->withoutOverlapping();
