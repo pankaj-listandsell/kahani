@@ -43,6 +43,7 @@ class ImageService
                 'height'  => $height,
                 'nologo'  => 'true',
                 'model'   => 'flux',
+                'enhance' => 'true', // Pollinations LLM prompt ko aur behtar/cinematic banata hai
                 'seed'    => $seed,
             ]);
 

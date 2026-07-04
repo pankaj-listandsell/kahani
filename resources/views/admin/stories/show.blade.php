@@ -34,11 +34,26 @@
             @endif
         </div>
         <div class="flex-1 space-y-4">
-            {{-- Option A: AI se banao --}}
+            {{-- Option A1: Kahani ke hisab se (ek click, Gemini) --}}
+            <form method="POST" action="{{ route('admin.stories.cover.ai', $story) }}"
+                  onsubmit="this.querySelector('button').disabled=true;this.querySelector('button').textContent='⏳ Ban rahi hai…';">
+                @csrf
+                <label class="block text-sm font-medium mb-1">✨ Kahani ke hisab se (auto)</label>
+                <p class="text-xs text-slate-500 mb-2">AI khud kahani padhega, uske hisab se ek 9:16 cover banayega. Koi prompt likhne ki zaroorat nahi.</p>
+                <button class="bg-violet-600 hover:bg-violet-700 text-white font-medium rounded-lg px-5 py-2.5 text-sm">
+                    ✨ Generate AI Cover (kahani se)
+                </button>
+            </form>
+
+            <div class="flex items-center gap-3 text-xs text-slate-400">
+                <span class="flex-1 h-px bg-slate-200"></span> YA khud prompt do <span class="flex-1 h-px bg-slate-200"></span>
+            </div>
+
+            {{-- Option A2: khud prompt likho --}}
             <form method="POST" action="{{ route('admin.stories.cover.generate', $story) }}" class="space-y-3">
                 @csrf
                 <div>
-                    <label class="block text-sm font-medium mb-1">🎨 AI se banao — image describe karein (English me behtar result)</label>
+                    <label class="block text-sm font-medium mb-1">🎨 Ya khud describe karein (English me behtar result)</label>
                     <textarea name="cover_prompt" rows="3" required
                               class="w-full rounded-lg border border-slate-300 px-3 py-2 focus:ring-2 focus:ring-rose-400 focus:outline-none"
                               placeholder="e.g. magical dark forest at night, glowing fireflies, cinematic, vertical poster">{{ old('cover_prompt', $story->title) }}</textarea>

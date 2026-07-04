@@ -4,9 +4,12 @@ namespace App\Http\Controllers\Admin;
 
 use App\Http\Controllers\Controller;
 use App\Models\Story;
+use App\Services\GeminiImageService;
 use App\Services\ImageService;
 use App\Services\InstagramService;
+use App\Services\StoryAiService;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Storage;
 
 class StoryController extends Controller
@@ -37,6 +40,27 @@ class StoryController extends Controller
     public function create()
     {
         return view('admin.stories.create');
+    }
+
+    /**
+     * Ek topic se AI (Gemini/Pollinations) se poori Hindi kahani generate karo.
+     * JSON return karta hai — create form ke title/description/body fields bharne
+     * ke liye (user review karke Save karta hai).
+     */
+    public function generateFromTopic(Request $request, StoryAiService $ai)
+    {
+        $data = $request->validate([
+            'topic'  => ['required', 'string', 'max:500'],
+            'length' => ['nullable', 'in:short,medium,long'],
+        ]);
+
+        try {
+            $story = $ai->generate($data['topic'], $data['length'] ?? 'short');
+
+            return response()->json(['ok' => true] + $story);
+        } catch (\Throwable $e) {
+            return response()->json(['ok' => false, 'error' => $e->getMessage()], 422);
+        }
     }
 
     public function store(Request $request)
@@ -131,6 +155,44 @@ class StoryController extends Controller
             return back()->with('success', 'AI cover image ban gayi! 🎨');
         } catch (\Throwable $e) {
             return back()->with('error', 'Cover image nahi bani: ' . $e->getMessage());
+        }
+    }
+
+    /**
+     * Kahani ke hisab se AI cover — ek click. Gemini text se image-prompt banao,
+     * phir Gemini image se cover (fail ho to Pollinations par fallback).
+     */
+    public function generateCoverAi(Story $story, StoryAiService $ai, GeminiImageService $gemini)
+    {
+        $this->authorize('update', $story);
+
+        $part = $story->parts()->orderBy('sort_order')->first();
+        $body = $part?->body ?: ($story->description ?: $story->title);
+
+        try {
+            // 1) Kahani se image prompt
+            $prompt = $ai->coverPrompt($story->title, $body);
+
+            // Purani cover hata do
+            if ($story->cover_image) {
+                Storage::disk('public')->delete($story->cover_image);
+            }
+
+            // 2) Gemini image, warna Pollinations fallback
+            try {
+                $path = $gemini->isConfigured()
+                    ? $gemini->generate($prompt, 'covers')
+                    : $this->imageService->generate($prompt, 720, 1280, 'covers');
+            } catch (\Throwable $e) {
+                Log::warning('Gemini cover fail, Pollinations fallback', ['error' => $e->getMessage()]);
+                $path = $this->imageService->generate($prompt, 720, 1280, 'covers');
+            }
+
+            $story->update(['cover_image' => $path]);
+
+            return back()->with('success', 'AI cover kahani ke hisab se ban gayi! 🎨');
+        } catch (\Throwable $e) {
+            return back()->with('error', 'Cover nahi bani: ' . $e->getMessage());
         }
     }
 

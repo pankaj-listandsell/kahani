@@ -43,9 +43,10 @@ return [
     // Google AI Studio (Gemini) — TTS voice-over for reels/shorts.
     // Free API key: https://aistudio.google.com/apikey
     'gemini' => [
-        'key'       => env('GEMINI_API_KEY'),
-        'tts_model' => env('GEMINI_TTS_MODEL', 'gemini-2.5-flash-preview-tts'),
-        'tts_voice' => env('GEMINI_TTS_VOICE', 'Kore'), // default voice (Hindi supported)
+        'key'         => env('GEMINI_API_KEY'),
+        'tts_model'   => env('GEMINI_TTS_MODEL', 'gemini-2.5-flash-preview-tts'),
+        'tts_voice'   => env('GEMINI_TTS_VOICE', 'Kore'), // default voice (Hindi supported)
+        'image_model' => env('GEMINI_IMAGE_MODEL', 'gemini-2.5-flash-image'), // "Nano Banana"
     ],
 
     // Google / YouTube Data API v3 (OAuth) — Shorts auto-upload

@@ -158,8 +158,8 @@ class InstagramService
             $mediaId = $this->publishContainer($create->json('id'));
             $this->markPosted($card, $mediaId);
 
-            // Upload safal — local image/video files delete karke jagah khaali karo
-            $this->deleteMediaFiles($card);
+            // NOTE: upload ke baad media files JAAN-BUJHKAR delete NAHI karte —
+            // same card doosre platform (YouTube/Instagram) par bhi post ho sake.
 
             return $mediaId;
         } catch (\Throwable $e) {
@@ -231,8 +231,8 @@ class InstagramService
             $mediaId = $this->publishContainer($containerId, retry: true);
             $this->markPosted($card, $mediaId);
 
-            // Upload safal — local image/video files delete karke jagah khaali karo
-            $this->deleteMediaFiles($card);
+            // NOTE: upload ke baad media files JAAN-BUJHKAR delete NAHI karte —
+            // same card doosre platform (YouTube/Instagram) par bhi post ho sake.
 
             return $mediaId;
         } catch (\Throwable $e) {

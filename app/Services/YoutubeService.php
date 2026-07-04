@@ -378,12 +378,20 @@ class YoutubeService
         $n        = count($segments);
         $hasVoice = collect($segments)->contains(fn ($s) => ! empty($s['voice']));
 
+        // Shared hosting par 1080p ffmpeg ko OOM/CPU-limit signal-9 se kill kar deta
+        // hai. 720x1280 (9:16) + ultrafast + single-thread + kam ref/lookahead =
+        // sabse halka aur reliable (YouTube 720p Shorts accept karta hai). Yahi
+        // settings Instagram reel me proven hain.
+        $w = 720;
+        $h = 1280;
+
         $enc = [
-            '-c:v', 'libx264', '-preset', 'veryfast', '-threads', '2',
-            '-profile:v', 'high', '-level', '4.0',
-            '-pix_fmt', 'yuv420p', '-color_range', 'tv', '-r', '30',
-            '-g', '60', '-keyint_min', '60', '-sc_threshold', '0',
-            '-c:a', 'aac', '-b:a', '160k', '-ar', '44100', '-ac', '2',
+            '-c:v', 'libx264', '-preset', 'ultrafast', '-tune', 'stillimage', '-threads', '1',
+            '-x264-params', 'ref=1:bframes=0:rc-lookahead=10:sync-lookahead=0',
+            '-profile:v', 'high', '-level', '3.1',
+            '-pix_fmt', 'yuv420p', '-color_range', 'tv', '-r', '25',
+            '-g', '50', '-keyint_min', '50', '-sc_threshold', '0', '-flags', '+cgop',
+            '-c:a', 'aac', '-b:a', '128k', '-ar', '44100', '-ac', '2',
             '-movflags', '+faststart',
         ];
 
@@ -397,8 +405,8 @@ class YoutubeService
         $chain = '';
         $vlabels = '';
         foreach ($segments as $i => $_) {
-            $chain .= "[{$i}:v]scale=1080:1920:force_original_aspect_ratio=decrease:in_range=full:out_range=tv,"
-                . "pad=1080:1920:(ow-iw)/2:(oh-ih)/2:color=black,setsar=1,format=yuv420p[v{$i}];";
+            $chain .= "[{$i}:v]scale={$w}:{$h}:force_original_aspect_ratio=decrease:in_range=full:out_range=tv,"
+                . "pad={$w}:{$h}:(ow-iw)/2:(oh-ih)/2:color=black,setsar=1,format=yuv420p[v{$i}];";
             $vlabels .= "[v{$i}]";
         }
         $chain .= $vlabels . "concat=n={$n}:v=1:a=0[v]";
@@ -582,7 +590,8 @@ class YoutubeService
             );
 
             $this->markCardPosted($card, $id);
-            Storage::disk('public')->delete($mp4);
+            // Video file rakhi jaati hai (delete nahi) — same card/part doosre
+            // platform par bhi post ho sake, aur dobara upload ho sake.
 
             return $id;
         } catch (\Throwable $e) {
@@ -619,7 +628,8 @@ class YoutubeService
             foreach ($part->cards as $c) {
                 $this->markCardPosted($c, $id);
             }
-            Storage::disk('public')->delete($mp4);
+            // Video file rakhi jaati hai (delete nahi) — same card/part doosre
+            // platform par bhi post ho sake, aur dobara upload ho sake.
 
             return $id;
         } catch (\Throwable $e) {

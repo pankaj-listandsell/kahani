@@ -77,11 +77,16 @@ Route::middleware('auth')->prefix('admin')->name('admin.')->group(function () {
     Route::post('youtube/cards/{card}/short', [YoutubeController::class, 'postCard'])->name('youtube.card.short');
     Route::post('youtube/parts/{part}/short', [YoutubeController::class, 'postPart'])->name('youtube.part.short');
 
+    // Topic se AI kahani generate (create form bharne ke liye) — resource se pehle
+    Route::post('stories/generate', [StoryController::class, 'generateFromTopic'])->name('stories.generate');
+
     // Story CRUD
     Route::resource('stories', StoryController::class);
 
     // Story ke liye AI (Pollinations) se 9:16 cover image banao
     Route::post('stories/{story}/cover', [StoryController::class, 'generateCover'])->name('stories.cover.generate');
+    // Kahani ke hisab se AI cover (Gemini image, ek click)
+    Route::post('stories/{story}/cover/ai', [StoryController::class, 'generateCoverAi'])->name('stories.cover.ai');
     // Ya khud se cover image file upload karo
     Route::post('stories/{story}/cover/upload', [StoryController::class, 'uploadCover'])->name('stories.cover.upload');
 
