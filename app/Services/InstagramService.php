@@ -463,7 +463,11 @@ class InstagramService
         $mp4Path = preg_replace('/\.[a-z0-9]+$/i', '.mp4', str_replace('cards/', 'reels/', $jpeg));
         $disk = Storage::disk('public');
 
-        if ($disk->exists($mp4Path)) {
+        // Voice mode ON + card text ho to voice-over reel; warna music/silent.
+        $voice = $this->voiceFor($card);
+
+        // Music-mode: cache reuse. Voice-mode: hamesha regenerate (mode/voice/text badal sakta hai).
+        if (! $voice && $disk->exists($mp4Path)) {
             return $mp4Path;
         }
 
@@ -474,48 +478,70 @@ class InstagramService
         $out = $disk->path($mp4Path);
 
         // Reel frame 720x1280 (9:16). Card ko fit karke black background par
-        // center me pad karo. (Pehle blur-background + 1080p use hota tha, par
-        // wo shared hosting par bahut heavy tha — ffmpeg OOM/CPU-limit par kill
-        // ho jaata tha, signal 9. 720p + simple pad kaafi halka aur reliable hai;
-        // Instagram 720p reels accept karta hai.)
-        // in_range=full:out_range=tv → JPEG ke full-range ko TV/limited range me
-        // badlo, warna output yuvj420p ban jaata hai jise Instagram reject karta hai.
-        $filter = '[0:v]scale=720:1280:force_original_aspect_ratio=decrease:in_range=full:out_range=tv,'
+        // center me pad karo. in_range=full:out_range=tv → JPEG ke full-range ko
+        // TV/limited range me badlo, warna output yuvj420p ban jaata hai jise
+        // Instagram reject karta hai.
+        $vfilter = '[0:v]scale=720:1280:force_original_aspect_ratio=decrease:in_range=full:out_range=tv,'
             . 'pad=720:1280:(ow-iw)/2:(oh-ih)/2:color=black,format=yuv420p[v]';
 
-        // Audio: default reel music (agar set hai) warna silent
-        $cmd = [$ffmpeg, '-y', '-loop', '1', '-i', $in];
-
-        $music = $this->setting('ig_reel_music');
-        $musicPath = ($music && $disk->exists($music)) ? $disk->path($music) : null;
-
-        if ($musicPath) {
-            // Music loop karo taaki video ki poori length bhar jaye
-            $cmd = array_merge($cmd, ['-stream_loop', '-1', '-i', $musicPath]);
-        } else {
-            $cmd = array_merge($cmd, ['-f', 'lavfi', '-i', 'anullsrc=channel_layout=stereo:sample_rate=44100']);
-        }
-
-        // Instagram Reels spec: H.264 High profile, closed GOP (keyframe har ~2s),
-        // 4:2:0 (yuv420p), progressive, AAC 44.1kHz stereo. In flags ke bina
-        // kuch ffmpeg builds ka output IG "ERROR" (reject) de deta hai.
-        $cmd = array_merge($cmd, [
-            '-t', (string) $seconds,
-            '-filter_complex', $filter,
-            '-map', '[v]', '-map', '1:a',
-            // ultrafast + stillimage + single thread + kam ref/lookahead → sabse
-            // kam RAM/CPU (shared host ffmpeg ko signal 9 se kill na kare)
+        // Instagram Reels spec: H.264 High profile, closed GOP, yuv420p, AAC 44.1k stereo.
+        // ultrafast + stillimage + single thread → sabse kam RAM/CPU (shared host safe).
+        $enc = [
             '-c:v', 'libx264', '-preset', 'ultrafast', '-tune', 'stillimage', '-threads', '1',
             '-x264-params', 'ref=1:bframes=0:rc-lookahead=10:sync-lookahead=0',
             '-profile:v', 'high', '-level', '3.1',
             '-pix_fmt', 'yuv420p', '-color_range', 'tv', '-r', '25',
             '-g', '50', '-keyint_min', '50', '-sc_threshold', '0', '-flags', '+cgop',
             '-c:a', 'aac', '-b:a', '128k', '-ar', '44100', '-ac', '2',
-            '-shortest', '-movflags', '+faststart',
-            $out,
-        ]);
+            '-movflags', '+faststart',
+        ];
 
-        $result = Process::timeout(240)->run($cmd);
+        if ($voice) {
+            // Reel kam se kam 3 sec (IG chhote reels reject karta hai)
+            $dur = $this->fnum(max(3.0, $voice['seconds'] + 0.6));
+            $cmd = [$ffmpeg, '-y', '-loop', '1', '-i', $in, '-i', $disk->path($voice['path'])];
+
+            $music     = $this->setting('ig_reel_music');
+            $withMusic = $this->ttsMode() === 'voice_music' && $music && $disk->exists($music);
+
+            $filter = $vfilter . ';[1:a]aresample=44100,apad,atrim=duration=' . $dur . ','
+                . 'aformat=sample_rates=44100:channel_layouts=stereo[sp]';
+
+            if ($withMusic) {
+                $cmd = array_merge($cmd, ['-stream_loop', '-1', '-i', $disk->path($music)]);
+                $filter .= ';[2:a]volume=0.15[mus];[sp][mus]amix=inputs=2:duration=first:normalize=0[a]';
+            } else {
+                $filter .= ';[sp]anull[a]';
+            }
+
+            $cmd = array_merge($cmd, [
+                '-t', $dur,
+                '-filter_complex', $filter,
+                '-map', '[v]', '-map', '[a]',
+                ...$enc,
+                $out,
+            ]);
+        } else {
+            // Music (loop) ya silent — pehle jaisa
+            $cmd = [$ffmpeg, '-y', '-loop', '1', '-i', $in];
+            $music = $this->setting('ig_reel_music');
+            $musicPath = ($music && $disk->exists($music)) ? $disk->path($music) : null;
+            if ($musicPath) {
+                $cmd = array_merge($cmd, ['-stream_loop', '-1', '-i', $musicPath]);
+            } else {
+                $cmd = array_merge($cmd, ['-f', 'lavfi', '-i', 'anullsrc=channel_layout=stereo:sample_rate=44100']);
+            }
+
+            $cmd = array_merge($cmd, [
+                '-t', (string) $seconds,
+                '-filter_complex', $vfilter,
+                '-map', '[v]', '-map', '1:a',
+                ...$enc, '-shortest',
+                $out,
+            ]);
+        }
+
+        $result = Process::timeout(300)->run($cmd);
 
         if (! $result->successful() || ! $disk->exists($mp4Path)) {
             Log::error('ffmpeg reel conversion failed', ['err' => $result->errorOutput()]);
@@ -523,6 +549,48 @@ class InstagramService
         }
 
         return $mp4Path;
+    }
+
+    /* ===================================================================
+     |  VOICE-OVER (Gemini TTS) helpers
+     * =================================================================== */
+
+    protected function ttsMode(): string
+    {
+        $m = (string) $this->setting('tts_audio_mode', 'music');
+
+        return in_array($m, ['music', 'voice', 'voice_music'], true) ? $m : 'music';
+    }
+
+    /**
+     * Card text → voice audio (agar voice mode ON aur TTS configured). Warna null.
+     *
+     * @return array{path:string,seconds:float}|null
+     */
+    protected function voiceFor(PartCard $card): ?array
+    {
+        if ($this->ttsMode() === 'music' || blank($card->text)) {
+            return null;
+        }
+
+        $tts = new GeminiTtsService();
+        if (! $tts->isConfigured()) {
+            return null;
+        }
+
+        try {
+            return $tts->speak($card->text, $this->setting('tts_voice') ?: null);
+        } catch (\Throwable $e) {
+            Log::warning('IG voice-over skip', ['card' => $card->id, 'error' => $e->getMessage()]);
+
+            return null;
+        }
+    }
+
+    /** Float ko locale-safe ffmpeg string me. */
+    protected function fnum(float $x): string
+    {
+        return rtrim(rtrim(sprintf('%.3f', $x), '0'), '.') ?: '0';
     }
 
     /* ===================================================================

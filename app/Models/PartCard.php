@@ -11,6 +11,7 @@ class PartCard extends Model
         'part_id',
         'sort_order',
         'image_path',
+        'text',
         'ig_caption',
         'ig_status',
         'ig_media_id',

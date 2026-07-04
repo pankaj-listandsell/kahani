@@ -115,6 +115,9 @@
                     </select>
                 </div>
 
+                {{-- Voice-over (AI TTS) — sirf reel par lagta hai --}}
+                @include('admin.partials._voiceover')
+
                 {{-- Time windows --}}
                 <div class="border-t pt-4">
                     <div class="flex items-center justify-between mb-2">

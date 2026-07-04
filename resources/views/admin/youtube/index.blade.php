@@ -144,6 +144,9 @@
                            class="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm" placeholder="#Shorts #hindi #kahani #story">
                 </div>
 
+                {{-- Voice-over (AI TTS) --}}
+                @include('admin.partials._voiceover')
+
                 {{-- Time windows --}}
                 <div class="border-t pt-4">
                     <div class="flex items-center justify-between mb-2">

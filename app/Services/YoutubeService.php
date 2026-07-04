@@ -247,10 +247,10 @@ class YoutubeService
         $disk->makeDirectory('yt');
         $mp4 = 'yt/card-' . $card->id . '.mp4';
 
-        // Cover intro (agar on hai) + card
+        // Cover intro (agar on hai) + card (voice-aware)
         $segments = array_merge(
             $this->coverSegments($card->part),
-            [['path' => $disk->path($src), 'dur' => $seconds]],
+            [$this->cardSegment($card, $seconds)],
         );
 
         $this->runFfmpeg($this->videoCommand($segments, $disk->path($mp4)), $mp4);
@@ -268,7 +268,7 @@ class YoutubeService
 
         $cardSegments = $part->cards->sortBy('sort_order')
             ->filter(fn (PartCard $c) => $c->image_path && $disk->exists($c->image_path))
-            ->map(fn (PartCard $c) => ['path' => $disk->path($c->image_path), 'dur' => $secondsPerCard])
+            ->map(fn (PartCard $c) => $this->cardSegment($c, $secondsPerCard))
             ->values()
             ->all();
 
@@ -312,54 +312,169 @@ class YoutubeService
     }
 
     /**
-     * Segments (har ek {path, dur}) → ek 1080x1920 video command. Har segment
-     * apne duration tak dikhta hai, hard-cut se joti jaati hai, upar se music
-     * (ya silent) loop hota hai.
+     * Ek card ke liye video segment. Voice mode ON + card ka text ho to voice
+     * attach hoti hai aur duration = voice-length + gap; warna fixed seconds.
      *
-     * @param  list<array{path:string,dur:int}>  $segments
+     * @return array{path:string,dur:float,voice?:string}
+     */
+    protected function cardSegment(PartCard $card, int $fallbackSeconds): array
+    {
+        $disk = Storage::disk('public');
+        $seg  = ['path' => $disk->path($card->image_path), 'dur' => (float) $fallbackSeconds];
+
+        if ($voice = $this->voiceFor($card)) {
+            $seg['voice'] = $disk->path($voice['path']);
+            $seg['dur']   = $voice['seconds'] + 0.6; // narration + chhota tail
+        }
+
+        return $seg;
+    }
+
+    /**
+     * Card text → voice audio (agar voice mode ON aur TTS configured). Warna null.
+     *
+     * @return array{path:string,seconds:float}|null
+     */
+    protected function voiceFor(PartCard $card): ?array
+    {
+        if ($this->ttsMode() === 'music' || blank($card->text)) {
+            return null;
+        }
+
+        $tts = new GeminiTtsService();
+        if (! $tts->isConfigured()) {
+            return null;
+        }
+
+        try {
+            return $tts->speak($card->text, $this->setting('tts_voice') ?: null);
+        } catch (\Throwable $e) {
+            Log::warning('YT voice-over skip', ['card' => $card->id, 'error' => $e->getMessage()]);
+
+            return null; // voice fail → chup-chaap music/silent par gir jao
+        }
+    }
+
+    protected function ttsMode(): string
+    {
+        $m = (string) $this->setting('tts_audio_mode', 'music');
+
+        return in_array($m, ['music', 'voice', 'voice_music'], true) ? $m : 'music';
+    }
+
+    /**
+     * Segments (har ek {path, dur, voice?}) → ek 1080x1920 video command.
+     *
+     * Agar kisi segment me voice hai → audio track per-segment banti hai (voice
+     * segment = us card ki narration, warna silence), phir mode voice_music me
+     * music dheemi (15%) mix hoti hai. Voice na ho to pehle jaisa music/silent.
+     *
+     * @param  list<array{path:string,dur:float,voice?:string}>  $segments
      */
     protected function videoCommand(array $segments, string $outAbs): array
     {
-        $ffmpeg = config('services.ffmpeg.path', 'ffmpeg');
-        $disk   = Storage::disk('public');
+        $ffmpeg   = config('services.ffmpeg.path', 'ffmpeg');
+        $disk     = Storage::disk('public');
+        $n        = count($segments);
+        $hasVoice = collect($segments)->contains(fn ($s) => ! empty($s['voice']));
 
-        $cmd = [$ffmpeg, '-y'];
-        foreach ($segments as $seg) {
-            $cmd = array_merge($cmd, ['-loop', '1', '-t', (string) $seg['dur'], '-i', $seg['path']]);
-        }
-
-        // Music input (loop) ya silent
-        $music     = $this->setting('yt_music');
-        $musicPath = ($music && $disk->exists($music)) ? $disk->path($music) : null;
-        if ($musicPath) {
-            $cmd = array_merge($cmd, ['-stream_loop', '-1', '-i', $musicPath]);
-        } else {
-            $cmd = array_merge($cmd, ['-f', 'lavfi', '-i', 'anullsrc=channel_layout=stereo:sample_rate=44100']);
-        }
-        $audioIdx = count($segments); // music = last input
-
-        // Har image ko 1080x1920 me fit + pad + yuv420p, phir sabko concat
-        $chain  = '';
-        $labels = '';
-        foreach ($segments as $i => $_) {
-            $chain .= "[{$i}:v]scale=1080:1920:force_original_aspect_ratio=decrease:in_range=full:out_range=tv,"
-                . "pad=1080:1920:(ow-iw)/2:(oh-ih)/2:color=black,setsar=1,format=yuv420p[v{$i}];";
-            $labels .= "[v{$i}]";
-        }
-        $n = count($segments);
-        $filter = $chain . $labels . "concat=n={$n}:v=1:a=0[v]";
-
-        return array_merge($cmd, [
-            '-filter_complex', $filter,
-            '-map', '[v]', '-map', "{$audioIdx}:a",
+        $enc = [
             '-c:v', 'libx264', '-preset', 'veryfast', '-threads', '2',
             '-profile:v', 'high', '-level', '4.0',
             '-pix_fmt', 'yuv420p', '-color_range', 'tv', '-r', '30',
             '-g', '60', '-keyint_min', '60', '-sc_threshold', '0',
-            '-c:a', 'aac', '-b:a', '128k', '-ar', '44100', '-ac', '2',
-            '-shortest', '-movflags', '+faststart',
-            $outAbs,
+            '-c:a', 'aac', '-b:a', '160k', '-ar', '44100', '-ac', '2',
+            '-movflags', '+faststart',
+        ];
+
+        // Image inputs
+        $cmd = [$ffmpeg, '-y'];
+        foreach ($segments as $seg) {
+            $cmd = array_merge($cmd, ['-loop', '1', '-t', $this->fnum((float) $seg['dur']), '-i', $seg['path']]);
+        }
+
+        // Video chain (dono cases me same)
+        $chain = '';
+        $vlabels = '';
+        foreach ($segments as $i => $_) {
+            $chain .= "[{$i}:v]scale=1080:1920:force_original_aspect_ratio=decrease:in_range=full:out_range=tv,"
+                . "pad=1080:1920:(ow-iw)/2:(oh-ih)/2:color=black,setsar=1,format=yuv420p[v{$i}];";
+            $vlabels .= "[v{$i}]";
+        }
+        $chain .= $vlabels . "concat=n={$n}:v=1:a=0[v]";
+
+        // ---- No voice: pehle jaisa (music loop ya silent, -shortest) ----
+        if (! $hasVoice) {
+            $music     = $this->setting('yt_music');
+            $musicPath = ($music && $disk->exists($music)) ? $disk->path($music) : null;
+            if ($musicPath) {
+                $cmd = array_merge($cmd, ['-stream_loop', '-1', '-i', $musicPath]);
+            } else {
+                $cmd = array_merge($cmd, ['-f', 'lavfi', '-i', 'anullsrc=channel_layout=stereo:sample_rate=44100']);
+            }
+
+            return array_merge($cmd, [
+                '-filter_complex', $chain,
+                '-map', '[v]', '-map', $n . ':a',
+                ...$enc, '-shortest', $outAbs,
+            ]);
+        }
+
+        // ---- Voice path ----
+        // Voice inputs (sirf voice-wale segments), input index track karo
+        $vInput = [];
+        $k = 0;
+        foreach ($segments as $i => $seg) {
+            if (! empty($seg['voice'])) {
+                $cmd = array_merge($cmd, ['-i', $seg['voice']]);
+                $vInput[$i] = $n + $k;
+                $k++;
+            }
+        }
+
+        // Music (optional, sirf voice_music mode)
+        $music     = $this->setting('yt_music');
+        $withMusic = $this->ttsMode() === 'voice_music' && $music && $disk->exists($music);
+        $musicIdx  = null;
+        if ($withMusic) {
+            $cmd = array_merge($cmd, ['-stream_loop', '-1', '-i', $disk->path($music)]);
+            $musicIdx = $n + $k;
+        }
+
+        // Per-segment audio: voice (padded to dur) ya silence (dur tak)
+        $chain .= ';';
+        $alabels = '';
+        foreach ($segments as $i => $seg) {
+            $dur = $this->fnum((float) $seg['dur']);
+            if (isset($vInput[$i])) {
+                $vi = $vInput[$i];
+                $chain .= "[{$vi}:a]aresample=44100,apad,atrim=duration={$dur},"
+                    . "aformat=sample_rates=44100:channel_layouts=stereo,asetpts=N/SR/TB[a{$i}];";
+            } else {
+                $chain .= "anullsrc=r=44100:cl=stereo,atrim=duration={$dur},asetpts=N/SR/TB[a{$i}];";
+            }
+            $alabels .= "[a{$i}]";
+        }
+        $chain .= $alabels . "concat=n={$n}:v=0:a=1[speech]";
+
+        if ($withMusic) {
+            $chain .= ";[{$musicIdx}:a]volume=0.15[mus];[speech][mus]amix=inputs=2:duration=first:normalize=0[a]";
+            $audioOut = '[a]';
+        } else {
+            $audioOut = '[speech]';
+        }
+
+        return array_merge($cmd, [
+            '-filter_complex', $chain,
+            '-map', '[v]', '-map', $audioOut,
+            ...$enc, $outAbs,
         ]);
+    }
+
+    /** Float ko locale-safe ffmpeg string me. */
+    protected function fnum(float $x): string
+    {
+        return rtrim(rtrim(sprintf('%.3f', $x), '0'), '.') ?: '0';
     }
 
     protected function runFfmpeg(array $cmd, string $expectRelPath): void

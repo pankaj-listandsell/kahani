@@ -40,6 +40,7 @@ class CardController extends Controller
             'image'  => ['required', 'string'],   // data:image/png;base64,....
             'order'  => ['required', 'integer', 'min:1'],
             'reset'  => ['nullable', 'boolean'],
+            'text'   => ['nullable', 'string'],   // card ka raw text (voice-over ke liye)
         ]);
 
         // Naya set shuru — purane cards + unki saari files (image/JPEG/MP4) hata do
@@ -61,6 +62,7 @@ class CardController extends Controller
         $part->cards()->create([
             'sort_order' => $data['order'],
             'image_path' => $path,
+            'text'       => $data['text'] ?? null,
         ]);
 
         return response()->json([

@@ -493,11 +493,11 @@ function drawPreview() {
     el('pageLabel').textContent = `Card ${currentPage + 1} / ${pages.length}`;
 }
 
-async function postCard(dataUrl, order, reset) {
+async function postCard(dataUrl, order, reset, text) {
     const res = await fetch(SAVE_URL, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'X-CSRF-TOKEN': CSRF, 'Accept': 'application/json' },
-        body: JSON.stringify({ image: dataUrl, order, reset }),
+        body: JSON.stringify({ image: dataUrl, order, reset, text }),
     });
     if (!res.ok) throw new Error('Card ' + order + ' failed to save (HTTP ' + res.status + ')');
     return res.json();
@@ -516,7 +516,9 @@ async function generateAll() {
         for (let i = 0; i < pages.length; i++) {
             renderPage(off, pages[i], i, pages.length, cache.titleLines, cache.titleBlock, s);
             const dataUrl = off.toDataURL('image/png');
-            await postCard(dataUrl, i + 1, i === 0);
+            // Card ka text (voice-over ke liye) — lines ko ek paragraph me jodo
+            const cardText = pages[i].join(' ').replace(/\s+/g, ' ').trim();
+            await postCard(dataUrl, i + 1, i === 0, cardText);
             const pct = Math.round(((i + 1) / pages.length) * 100);
             el('bar').style.width = pct + '%';
             el('progressText').textContent = `${i + 1} / ${pages.length} cards saved...`;

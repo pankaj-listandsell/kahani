@@ -32,6 +32,9 @@ class YoutubeController extends Controller
             'yt_title_suffix'  => Setting::get('yt_title_suffix'),
             'yt_auto_windows'  => json_decode((string) Setting::get('yt_auto_windows', '[]'), true) ?: [],
             'yt_music'         => Setting::get('yt_music'),
+            'tts_audio_mode'   => Setting::get('tts_audio_mode', 'music'),
+            'tts_voice'        => Setting::get('tts_voice', 'Kore'),
+            'tts_configured'   => filled(config('services.gemini.key')),
         ];
 
         $storiesQuery = Story::with(['parts.cards'])->latest();
@@ -114,6 +117,8 @@ class YoutubeController extends Controller
             'yt_slide_seconds'   => ['nullable', 'integer', 'min:2', 'max:15'],
             'yt_cover_seconds'   => ['nullable', 'integer', 'min:1', 'max:10'],
             'yt_title_suffix'    => ['nullable', 'string', 'max:500'],
+            'tts_audio_mode'     => ['nullable', 'in:music,voice,voice_music'],
+            'tts_voice'          => ['nullable', 'string', 'max:50'],
             'windows'            => ['nullable', 'array'],
             'windows.*.start'    => ['required', 'date_format:H:i'],
             'windows.*.end'      => ['required', 'date_format:H:i'],
@@ -137,6 +142,16 @@ class YoutubeController extends Controller
         Setting::put('yt_cover_seconds', (string) ($data['yt_cover_seconds'] ?? 2));
         Setting::put('yt_title_suffix', $data['yt_title_suffix'] ?? null);
         Setting::put('yt_auto_windows', json_encode($windows));
+
+        // Voice-over (shared IG + YouTube ke beech)
+        $prevVoice = Setting::get('tts_voice');
+        Setting::put('tts_audio_mode', $data['tts_audio_mode'] ?? 'music');
+        Setting::put('tts_voice', $data['tts_voice'] ?? null);
+        // Voice badla to purani cached voice audio + videos hata do
+        if (($data['tts_voice'] ?? null) !== $prevVoice) {
+            (new \App\Services\GeminiTtsService())->clearCache();
+            $this->youtube->clearVideoCache();
+        }
 
         return back()->with('success', 'YouTube auto-post settings save ho gayi.');
     }

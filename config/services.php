@@ -40,6 +40,14 @@ return [
         'path' => env('FFMPEG_PATH', 'ffmpeg'),
     ],
 
+    // Google AI Studio (Gemini) — TTS voice-over for reels/shorts.
+    // Free API key: https://aistudio.google.com/apikey
+    'gemini' => [
+        'key'       => env('GEMINI_API_KEY'),
+        'tts_model' => env('GEMINI_TTS_MODEL', 'gemini-2.5-flash-preview-tts'),
+        'tts_voice' => env('GEMINI_TTS_VOICE', 'Kore'), // default voice (Hindi supported)
+    ],
+
     // Google / YouTube Data API v3 (OAuth) — Shorts auto-upload
     // client id/secret Google Cloud Console se aate hain (app-level, sabhi users share karte hain).
     // Har user apna channel OAuth se connect karta hai (refresh token per-user settings me).

@@ -71,6 +71,9 @@ class InstagramController extends Controller
             'ig_post_type'      => Setting::get('ig_post_type', 'image'),
             'ig_auto_windows'   => json_decode((string) Setting::get('ig_auto_windows', '[]'), true) ?: [],
             'ig_reel_music'     => Setting::get('ig_reel_music'),
+            'tts_audio_mode'    => Setting::get('tts_audio_mode', 'music'),
+            'tts_voice'         => Setting::get('tts_voice', 'Kore'),
+            'tts_configured'    => filled(config('services.gemini.key')),
         ];
 
         $storiesQuery = Story::with(['parts.cards'])->latest();
@@ -114,6 +117,8 @@ class InstagramController extends Controller
     {
         $data = $request->validate([
             'ig_post_type'          => ['nullable', 'in:image,reel'],
+            'tts_audio_mode'        => ['nullable', 'in:music,voice,voice_music'],
+            'tts_voice'             => ['nullable', 'string', 'max:50'],
             'windows'               => ['nullable', 'array'],
             'windows.*.start'       => ['required', 'date_format:H:i'],
             'windows.*.end'         => ['required', 'date_format:H:i'],
@@ -132,6 +137,15 @@ class InstagramController extends Controller
         Setting::put('ig_auto_enabled', $request->boolean('ig_auto_enabled') ? '1' : '0');
         Setting::put('ig_post_type', $data['ig_post_type'] ?? 'image');
         Setting::put('ig_auto_windows', json_encode($windows));
+
+        // Voice-over (shared IG + YouTube ke beech)
+        $prevVoice = Setting::get('tts_voice');
+        Setting::put('tts_audio_mode', $data['tts_audio_mode'] ?? 'music');
+        Setting::put('tts_voice', $data['tts_voice'] ?? null);
+        if (($data['tts_voice'] ?? null) !== $prevVoice) {
+            (new \App\Services\GeminiTtsService())->clearCache();
+            $this->instagram->clearReelCache();
+        }
 
         return back()->with('success', 'Auto-post settings saved.');
     }
