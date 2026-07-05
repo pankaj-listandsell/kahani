@@ -51,7 +51,7 @@ class StoryController extends Controller
     {
         $data = $request->validate([
             'topic'  => ['required', 'string', 'max:500'],
-            'length' => ['nullable', 'in:short,medium,long'],
+            'length' => ['nullable', 'in:short,medium,long,1000,1500,8000,20000'],
         ]);
 
         try {

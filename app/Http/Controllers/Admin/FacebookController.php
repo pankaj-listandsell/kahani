@@ -63,7 +63,7 @@ class FacebookController extends Controller
             'windows'               => ['nullable', 'array'],
             'windows.*.start'       => ['required', 'date_format:H:i'],
             'windows.*.end'         => ['required', 'date_format:H:i'],
-            'windows.*.interval'    => ['required', 'integer', 'min:5', 'max:1440'],
+            'windows.*.interval'    => ['required', 'integer', 'min:15', 'max:1440'],
         ]);
 
         $windows = collect($data['windows'] ?? [])
@@ -131,26 +131,41 @@ class FacebookController extends Controller
 
     private function bulk(Part $part, string $type, string $noun)
     {
+        @set_time_limit(0);
         $part->load('cards');
+
+        $pending = $part->cards->reject(fn (PartCard $c) => $c->isFbPosted())->values();
         $count = 0;
         $failed = 0;
+        $rateLimited = false;
 
-        foreach ($part->cards as $card) {
-            if ($card->isFbPosted()) {
-                continue;
-            }
-
+        foreach ($pending as $i => $card) {
             try {
                 $type === 'reel' ? $this->facebook->postReel($card) : $this->facebook->postPhoto($card);
                 $count++;
+            } catch (\App\Exceptions\FacebookRateLimitException $e) {
+                // FB ne rate-limit laga di — aur post mat karo warna block barhega.
+                $rateLimited = true;
+                break;
             } catch (\Throwable $e) {
                 $failed++;
+            }
+
+            // FB rapid-fire posting ko spam maanta hai — posts ke beech thoda gap.
+            if ($i < $pending->count() - 1) {
+                sleep(5);
             }
         }
 
         $msg = "{$count} {$noun}(s) Facebook par post ho gaye. ✅";
         if ($failed) {
             $msg .= " ({$failed} fail hue — dobara try karein.)";
+        }
+
+        if ($rateLimited) {
+            return back()->with('error', $msg
+                . " ⚠️ Facebook ne rate-limit laga di ('We limit how often you can post…') — baaki cards abhi post nahi hue."
+                . ' Kuch ghante baad dobara try karein.');
         }
 
         return back()->with('success', $msg);

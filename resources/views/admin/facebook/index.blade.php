@@ -142,7 +142,6 @@
                 <div class="col-span-4 sm:col-span-3">
                     <label class="block text-xs text-slate-500 mb-1">Interval</label>
                     <select data-k="interval" class="w-full rounded-lg border border-slate-300 px-2 py-2 text-sm">
-                        <option value="10">10 min</option>
                         <option value="15">15 min</option>
                         <option value="30" selected>30 min</option>
                         <option value="60">60 min</option>

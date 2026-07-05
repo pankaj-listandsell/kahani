@@ -64,7 +64,7 @@
                 <li>Client ID &amp; secret ko <code class="bg-white px-1 rounded">.env</code> me <code>GOOGLE_CLIENT_ID</code> / <code>GOOGLE_CLIENT_SECRET</code> me daalo, phir <code class="bg-white px-1 rounded">php artisan config:clear</code>.</li>
                 <li>Upar <b>Connect YouTube</b> dabao.</li>
             </ol>
-            <p class="mt-3 text-amber-800">⚠️ Free quota: <b>10,000 units/din</b>, aur har upload <b>1600 units</b> — yaani ~<b>6 Shorts/din</b>. Slideshow mode kam upload use karta hai (ek part = ek Short).</p>
+            <p class="mt-3 text-amber-800">⚠️ Free quota: <b>10,000 units/din</b>, aur har upload <b>1600 units</b> — yaani ~<b>6 Shorts/din</b>.</p>
         </details>
     </div>
 
@@ -96,20 +96,8 @@
                     <div id="ytAutoStatus" class="rounded-lg border px-4 py-2 text-sm"></div>
                 </div>
 
-                {{-- Post mode --}}
-                <div class="grid sm:grid-cols-3 gap-4 border-t pt-4">
-                    <div>
-                        <label class="block text-sm font-medium mb-1">Post Mode</label>
-                        <select name="yt_post_mode" id="ytPostMode" class="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm">
-                            <option value="single" @selected($settings['yt_post_mode'] === 'single')>Single Card (har card = ek Short)</option>
-                            <option value="slideshow" @selected($settings['yt_post_mode'] === 'slideshow')>Slideshow (poora part = ek Short)</option>
-                        </select>
-                    </div>
-                    <div id="slideSecondsWrap">
-                        <label class="block text-sm font-medium mb-1">Slideshow: sec/card</label>
-                        <input type="number" name="yt_slide_seconds" min="2" max="15" value="{{ $settings['yt_slide_seconds'] }}"
-                               class="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm">
-                    </div>
+                {{-- Privacy (YouTube par har card = ek alag Short) --}}
+                <div class="grid sm:grid-cols-2 gap-4 border-t pt-4">
                     <div>
                         <label class="block text-sm font-medium mb-1">Privacy</label>
                         <select name="yt_privacy" class="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm">
@@ -117,6 +105,9 @@
                             <option value="unlisted" @selected($settings['yt_privacy'] === 'unlisted')>Unlisted</option>
                             <option value="private" @selected($settings['yt_privacy'] === 'private')>Private</option>
                         </select>
+                    </div>
+                    <div class="flex items-end">
+                        <p class="text-xs text-slate-500">Har card ek alag YouTube Short ban ke upload hoga.</p>
                     </div>
                 </div>
 
@@ -238,8 +229,7 @@
         <div class="bg-white rounded-xl border border-slate-200 p-6">
             <h3 class="font-semibold mb-1">🚀 Post Manually</h3>
             <p class="text-sm text-slate-500 mb-4">
-                <b>Part Short</b> = poore part ka slideshow ek Short me · <b>Short</b> (per card) = us card ka apna Short.
-                Button dabate hi video ban ke YouTube par upload hota hai — thoda time lag sakta hai.
+                <b>Short</b> (per card) = us card ka apna YouTube Short. Button dabate hi video ban ke upload hota hai — thoda time lag sakta hai.
             </p>
 
             @if (! $configured)
@@ -262,10 +252,6 @@
                                                 <form method="POST" action="{{ route('admin.youtube.part.captions', $part) }}" class="yt-form" onsubmit="return confirm('Is part ke sabhi cards ke liye AI caption banayein?')">
                                                     @csrf
                                                     <button class="text-xs bg-sky-600 hover:bg-sky-700 text-white rounded-lg px-3 py-1.5">✨ All Captions</button>
-                                                </form>
-                                                <form method="POST" action="{{ route('admin.youtube.part.short', $part) }}" class="yt-form" onsubmit="return confirm('Poore part ka ek slideshow Short banayein aur upload karein?')">
-                                                    @csrf
-                                                    <button @disabled(!$configured) class="text-xs bg-red-600 hover:bg-red-700 disabled:bg-slate-300 text-white rounded-lg px-3 py-1.5">▶ Part Short (slideshow)</button>
                                                 </form>
                                             </div>
                                         </div>
@@ -364,12 +350,6 @@
     try { ytInitial = localStorage.getItem('ytTab') || 'manual'; } catch (e) {}
     if (![...ytTabs].some(t => t.dataset.tab === ytInitial)) ytInitial = 'manual';
     showYtTab(ytInitial);
-
-    // ---------- Slideshow seconds sirf slideshow mode me dikhe ----------
-    const modeSel = document.getElementById('ytPostMode');
-    const slideWrap = document.getElementById('slideSecondsWrap');
-    function syncMode() { if (slideWrap) slideWrap.style.opacity = (modeSel.value === 'slideshow') ? '1' : '0.4'; }
-    modeSel?.addEventListener('change', syncMode); syncMode();
 
     // ---------- Time windows ----------
     const wrap = document.getElementById('windows');

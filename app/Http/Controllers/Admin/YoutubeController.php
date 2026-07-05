@@ -24,8 +24,6 @@ class YoutubeController extends Controller
         $settings = [
             'yt_channel_title' => Setting::get('yt_channel_title'),
             'yt_auto_enabled'  => Setting::get('yt_auto_enabled', '0'),
-            'yt_post_mode'     => Setting::get('yt_post_mode', 'single'),
-            'yt_slide_seconds' => (int) Setting::get('yt_slide_seconds', 4),
             'yt_cover_enabled' => Setting::get('yt_cover_enabled', '1'),
             'yt_cover_seconds' => (int) Setting::get('yt_cover_seconds', 2),
             'yt_privacy'       => Setting::get('yt_privacy', 'public'),
@@ -112,9 +110,7 @@ class YoutubeController extends Controller
     public function saveAutoPost(Request $request)
     {
         $data = $request->validate([
-            'yt_post_mode'       => ['nullable', 'in:single,slideshow'],
             'yt_privacy'         => ['nullable', 'in:public,unlisted,private'],
-            'yt_slide_seconds'   => ['nullable', 'integer', 'min:2', 'max:15'],
             'yt_cover_seconds'   => ['nullable', 'integer', 'min:1', 'max:10'],
             'yt_title_suffix'    => ['nullable', 'string', 'max:500'],
             'tts_audio_mode'     => ['nullable', 'in:music,voice,voice_music'],
@@ -135,9 +131,7 @@ class YoutubeController extends Controller
             ->all();
 
         Setting::put('yt_auto_enabled', $request->boolean('yt_auto_enabled') ? '1' : '0');
-        Setting::put('yt_post_mode', $data['yt_post_mode'] ?? 'single');
         Setting::put('yt_privacy', $data['yt_privacy'] ?? 'public');
-        Setting::put('yt_slide_seconds', (string) ($data['yt_slide_seconds'] ?? 4));
         Setting::put('yt_cover_enabled', $request->boolean('yt_cover_enabled') ? '1' : '0');
         Setting::put('yt_cover_seconds', (string) ($data['yt_cover_seconds'] ?? 2));
         Setting::put('yt_title_suffix', $data['yt_title_suffix'] ?? null);
@@ -268,19 +262,5 @@ class YoutubeController extends Controller
         }
 
         return back()->with('success', 'Card YouTube Short ban ke upload ho gaya. ✅');
-    }
-
-    /** Poora part → ek slideshow Short. */
-    public function postPart(Part $part)
-    {
-        $this->authorize('update', $part->story);
-
-        try {
-            $this->youtube->postPart($part);
-        } catch (\Throwable $e) {
-            return back()->with('error', 'Slideshow Short upload nahi hua: ' . $e->getMessage());
-        }
-
-        return back()->with('success', 'Part ka slideshow Short upload ho gaya. ✅');
     }
 }

@@ -2,6 +2,7 @@
 
 namespace App\Services;
 
+use App\Exceptions\FacebookRateLimitException;
 use App\Models\PartCard;
 use App\Models\Setting;
 use Illuminate\Support\Facades\Http;
@@ -118,7 +119,7 @@ class FacebookService
 
             if (! $res->successful() || ! $res->json('id')) {
                 Log::error('FB photo post failed', ['card' => $card->id, 'body' => $res->json()]);
-                throw new \RuntimeException($res->json('error.message') ?? 'Photo post fail.');
+                throw $this->graphException($res->json('error'), 'Photo post fail.');
             }
 
             $postId = $res->json('post_id') ?? $res->json('id');
@@ -127,7 +128,10 @@ class FacebookService
             return $postId;
         } catch (\Throwable $e) {
             Log::error('FB photo post error', ['card' => $card->id, 'error' => $e->getMessage()]);
-            $this->markFailed($card, $e->getMessage());
+            // Rate-limit (FB block) par card ko pending rehne do — baad me retry ho.
+            if (! $e instanceof FacebookRateLimitException) {
+                $this->markFailed($card, $e->getMessage());
+            }
             throw $e;
         }
     }
@@ -166,7 +170,7 @@ class FacebookService
             $videoId = $start->json('video_id');
             if (! $videoId) {
                 Log::error('FB reel start failed', ['card' => $card->id, 'body' => $start->json()]);
-                throw new \RuntimeException($start->json('error.message') ?? 'Reel start fail.');
+                throw $this->graphException($start->json('error'), 'Reel start fail.');
             }
 
             // 3) Hosted file se upload (rupload) — file_url header
@@ -177,7 +181,7 @@ class FacebookService
 
             if (! $upload->successful()) {
                 Log::error('FB reel upload failed', ['card' => $card->id, 'body' => $upload->json() ?: $upload->body()]);
-                throw new \RuntimeException($upload->json('error.message') ?? 'Reel upload fail.');
+                throw $this->graphException($upload->json('error'), 'Reel upload fail.');
             }
 
             // 4) Finish + publish
@@ -191,7 +195,7 @@ class FacebookService
 
             if (! $finish->successful() || ! ($finish->json('success') || $finish->json('post_id'))) {
                 Log::error('FB reel finish failed', ['card' => $card->id, 'body' => $finish->json()]);
-                throw new \RuntimeException($finish->json('error.message') ?? 'Reel publish fail.');
+                throw $this->graphException($finish->json('error'), 'Reel publish fail.');
             }
 
             $this->markPosted($card, $videoId);
@@ -199,7 +203,10 @@ class FacebookService
             return $videoId;
         } catch (\Throwable $e) {
             Log::error('FB reel post error', ['card' => $card->id, 'error' => $e->getMessage()]);
-            $this->markFailed($card, $e->getMessage());
+            // Rate-limit (FB block) par card ko pending rehne do — baad me retry ho.
+            if (! $e instanceof FacebookRateLimitException) {
+                $this->markFailed($card, $e->getMessage());
+            }
             throw $e;
         }
     }
@@ -207,6 +214,36 @@ class FacebookService
     /* ===================================================================
      |  Helpers
      * =================================================================== */
+
+    /**
+     * Graph API error → sahi exception. Rate-limit / spam-block ("We limit how
+     * often you can post…") ko FacebookRateLimitException me convert karta hai
+     * taaki caller back-off kare (card ko permanently fail na kare).
+     */
+    protected function graphException(mixed $error, string $fallback): \RuntimeException
+    {
+        $error   = is_array($error) ? $error : [];
+        $code    = (int) ($error['code'] ?? 0);
+        $subcode = (int) ($error['error_subcode'] ?? 0);
+        $message = (string) ($error['message'] ?? '') ?: $fallback;
+
+        // FB rate-limit / temporary-block codes:
+        //  4=app limit, 17=user limit, 32=page limit, 341=app temp block,
+        //  368=policy block ("We limit how often…"), 613=API rate limit.
+        $rateCodes    = [4, 17, 32, 341, 368, 613];
+        $rateSubcodes = [1390008, 1390019, 1404006, 2207051];
+
+        $looksRate = in_array($code, $rateCodes, true)
+            || in_array($subcode, $rateSubcodes, true)
+            || Str::contains(Str::lower($message), [
+                'limit how often', 'rate limit', 'temporarily blocked',
+                'too many', 'try again later',
+            ]);
+
+        return $looksRate
+            ? new FacebookRateLimitException($message)
+            : new \RuntimeException($message);
+    }
 
     /**
      * Apne domain ka public HTTPS URL (localhost/http par null → temp host).

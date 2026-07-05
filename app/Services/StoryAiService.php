@@ -27,14 +27,30 @@ class StoryAiService
         $words = match ($length) {
             'long'   => '500-700',
             'medium' => '250-350',
+            '1000'   => '900-1100',
+            '1500'   => '1400-1600',
+            '8000'   => '7500-8500',
+            '20000'  => '19000-21000',
             default  => '120-200',
         };
 
+        // Chhoti kahaniyan Shorts/Reel ke liye; badi (1000+ shabd) full-length
+        // kahani ke andaaz me — warna framing ulti pad jaati hai.
+        $isLong = ! in_array($length, ['short', 'medium', 'long'], true);
+
+        $framing = $isLong
+            ? 'ek dilchasp, emotional, detailed Hindi (Devanagari) kahani likho — ek complete full-length story jismein proper shuruaat, madhya aur ant ho.'
+            : 'ek dilchasp, emotional Hindi (Devanagari) kahani likho jo YouTube Shorts / Instagram Reel ke liye perfect ho.';
+
+        $lengthRule = $isLong
+            ? "Kahani lagभग {$words} shabd ki ho — itni lambi zaroor ho, jaldi mat khatam karo. Kai paragraphs me detail, samvaad (dialogue) aur scene-building ke saath."
+            : "Kahani lagभग {$words} shabd ki ho — engaging aur curiosity-driven.";
+
         $prompt = <<<TXT
-        Tum ek expert Hindi kahani-lekhak ho. Neeche diye gaye topic par ek dilchasp, emotional Hindi (Devanagari) kahani likho jo YouTube Shorts / Instagram Reel ke liye perfect ho.
+        Tum ek expert Hindi kahani-lekhak ho. Neeche diye gaye topic par {$framing}
 
         Rules:
-        - Kahani lगभग {$words} shabd ki ho — engaging aur curiosity-driven.
+        - {$lengthRule}
         - Chhote paragraphs, saral Hindi, natural kahani-sunane wala andaaz.
         - Ek strong hook se shuru karo, aur ek satisfying moral ya twist ending do.
         - SIRF ek valid JSON object return karo (koi markdown, koi backticks nahi), bilkul is format me:
@@ -133,6 +149,9 @@ class StoryAiService
                 'generationConfig' => [
                     'responseMimeType' => 'application/json', // saaf JSON force karo
                     'temperature'      => 1.0,
+                    // Lambi kahaniyan (8000/20000 shabd) beech me na katein — zyada
+                    // output tokens allow karo (gemini-2.5-flash max 65536).
+                    'maxOutputTokens'  => 65536,
                 ],
             ]);
 
@@ -176,18 +195,32 @@ class StoryAiService
         // ```json ... ``` fences hatao
         $clean = preg_replace('/^```(?:json)?|```$/mi', '', trim($raw));
 
-        // Pehla { se aakhri } tak (JSON block)
-        $json = null;
+        // Pehla { se aakhri } tak (poora JSON block). Truncated response me
+        // closing } na ho to pehle { se aage sab kuch le lo.
+        $block = null;
         if (preg_match('/\{.*\}/s', $clean, $m)) {
-            $json = json_decode($m[0], true);
+            $block = $m[0];
+        } elseif (($pos = strpos($clean, '{')) !== false) {
+            $block = substr($clean, $pos);
         }
 
-        if (is_array($json) && filled($json['body'] ?? null)) {
-            return [
-                'title'       => trim((string) ($json['title'] ?? '')) ?: 'Nayi Kahani',
-                'description' => trim((string) ($json['description'] ?? '')),
-                'body'        => trim((string) $json['body']),
-            ];
+        if ($block !== null) {
+            // 1) Seedha decode. 2) Agar fail (lambi kahaniyon me aksar body ke
+            //    andar raw newlines hote hain jo JSON me invalid hain) to string
+            //    ke andar ke control-chars escape karke dobara decode karo.
+            foreach ([$block, $this->repairJsonControlChars($block)] as $candidate) {
+                $json = json_decode($candidate, true);
+                if (is_array($json) && filled($json['body'] ?? null)) {
+                    return $this->pack($json['title'] ?? '', $json['description'] ?? '', $json['body']);
+                }
+            }
+
+            // 3) JSON truncated/malformed — fields regex se seedhe nikaalo taaki
+            //    poora raw JSON textarea me na dikhe.
+            $fields = $this->extractFields($this->repairJsonControlChars($block));
+            if ($fields !== null) {
+                return $fields;
+            }
         }
 
         // JSON nahi mila — poore text ko kahani maan lo, pehli line = title
@@ -203,5 +236,98 @@ class StoryAiService
             'description' => '',
             'body'        => $text,
         ];
+    }
+
+    /**
+     * {title, description, body} ko normalize karke return karo.
+     */
+    protected function pack(mixed $title, mixed $description, mixed $body): array
+    {
+        return [
+            'title'       => trim((string) $title) ?: 'Nayi Kahani',
+            'description' => trim((string) $description),
+            'body'        => trim((string) $body),
+        ];
+    }
+
+    /**
+     * JSON string values ke andar ke raw control-characters (newline, tab, etc.)
+     * ko escape karo. AI aksar body ke andar seedhe newlines daal deta hai jo
+     * standard JSON me invalid hai — isse json_decode fail ho jaata tha.
+     * Bytes-wise safe hai: UTF-8 (Devanagari) ke saare bytes >= 0x80 hote hain,
+     * kabhi control-char (< 0x20) ya quote/backslash se match nahi karte.
+     */
+    protected function repairJsonControlChars(string $s): string
+    {
+        $out = '';
+        $inStr = false;
+        $esc = false;
+        $len = strlen($s);
+
+        for ($i = 0; $i < $len; $i++) {
+            $c = $s[$i];
+
+            if ($esc) {
+                $out .= $c;
+                $esc = false;
+                continue;
+            }
+            if ($c === '\\') {
+                $out .= $c;
+                $esc = true;
+                continue;
+            }
+            if ($c === '"') {
+                $inStr = ! $inStr;
+                $out .= $c;
+                continue;
+            }
+            if ($inStr && $c < ' ') {
+                $out .= match ($c) {
+                    "\n"    => '\\n',
+                    "\r"    => '\\r',
+                    "\t"    => '\\t',
+                    default => sprintf('\\u%04x', ord($c)),
+                };
+                continue;
+            }
+            $out .= $c;
+        }
+
+        return $out;
+    }
+
+    /**
+     * Repaired (control-chars escaped) JSON block se title/description/body
+     * regex se nikaalo — truncated JSON (body ka closing quote missing) bhi
+     * handle karta hai.
+     */
+    protected function extractFields(string $s): ?array
+    {
+        $val = static function (string $key) use ($s): ?string {
+            // "key": "....."  (escaped quotes \" ko allow karo)
+            if (preg_match('/"' . $key . '"\s*:\s*"((?:\\\\.|[^"\\\\])*)"/s', $s, $m)) {
+                $decoded = json_decode('"' . $m[1] . '"');
+                return is_string($decoded) ? $decoded : stripcslashes($m[1]);
+            }
+            return null;
+        };
+
+        $title = $val('title');
+        $description = $val('description');
+        $body = $val('body');
+
+        // Body ka closing quote na mila (truncated) — "body":" ke baad sab kuch lo
+        if ($body === null && preg_match('/"body"\s*:\s*"(.*)$/s', $s, $m)) {
+            $tail = preg_replace('/"\s*\}?\s*$/', '', $m[1]); // trailing "}" / quote saaf
+            $decoded = json_decode('"' . $tail . '"');
+            $body = is_string($decoded) ? $decoded : stripcslashes($tail);
+        }
+
+        if ($body === null || trim($body) === '') {
+            return null;
+        }
+
+        return $this->pack($title ?? '', $description ?? '', $body);
     }
 }

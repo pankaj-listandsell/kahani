@@ -2,7 +2,6 @@
 
 namespace App\Console\Commands;
 
-use App\Models\Part;
 use App\Models\PartCard;
 use App\Models\Setting;
 use App\Models\Story;
@@ -79,24 +78,13 @@ class YoutubeAutoPost extends Command
             }
         }
 
-        $mode = Setting::getFor($uid, 'yt_post_mode', 'single') === 'slideshow' ? 'slideshow' : 'single';
-
         try {
-            if ($mode === 'slideshow') {
-                $part = $this->nextPendingPart($uid);
-                if (! $part) {
-                    return;
-                }
-                $id = $youtube->postPart($part);
-                $this->info("User #{$uid}: uploaded slideshow Short (part #{$part->id}) → {$id}");
-            } else {
-                $card = $this->nextPendingCard($uid);
-                if (! $card) {
-                    return;
-                }
-                $id = $youtube->postCard($card);
-                $this->info("User #{$uid}: uploaded Short (card #{$card->id}) → {$id}");
+            $card = $this->nextPendingCard($uid);
+            if (! $card) {
+                return;
             }
+            $id = $youtube->postCard($card);
+            $this->info("User #{$uid}: uploaded Short (card #{$card->id}) → {$id}");
 
             Setting::putFor($uid, 'yt_auto_last_post_at', $now->toIso8601String());
         } catch (\Throwable $e) {
@@ -158,9 +146,9 @@ class YoutubeAutoPost extends Command
         return ((int) $m[1]) * 60 + (int) $m[2];
     }
 
-    /* ================= next pending (single / slideshow) ================= */
+    /* ================= next pending card ================= */
 
-    /** Single mode: pehla card jise abhi tak YouTube par post nahi kiya. */
+    /** Pehla card jise abhi tak YouTube par post nahi kiya. */
     protected function nextPendingCard(int $userId): ?PartCard
     {
         foreach ($this->publishedStories($userId) as $story) {
@@ -169,24 +157,6 @@ class YoutubeAutoPost extends Command
                     if ($card->yt_status === null) {
                         return $card;
                     }
-                }
-            }
-        }
-
-        return null;
-    }
-
-    /** Slideshow mode: pehla part jiska koi bhi card abhi tak post nahi hua. */
-    protected function nextPendingPart(int $userId): ?Part
-    {
-        foreach ($this->publishedStories($userId) as $story) {
-            foreach ($story->parts as $part) {
-                if ($part->cards->isEmpty()) {
-                    continue;
-                }
-                // Poora part fresh ho (koi card posted/failed nahi) tabhi slideshow banao
-                if ($part->cards->every(fn (PartCard $c) => $c->yt_status === null)) {
-                    return $part;
                 }
             }
         }

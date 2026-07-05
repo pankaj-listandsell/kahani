@@ -12,11 +12,8 @@ use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
 
 /**
- * Card image(s) ko YouTube Short (vertical video) ki tarah upload karta hai.
- *
- * 2 modes:
- *  - single    : ek card = ek Short
- *  - slideshow : poore part ke saare cards jodkar ek Short
+ * Ek card ko YouTube Short (vertical video) ki tarah upload karta hai —
+ * har card = ek alag Short.
  *
  * Auth: Google OAuth (per-user refresh token). Instagram jaisa "token paste"
  * nahi — user apna channel connect karta hai, refresh token settings me save
@@ -25,8 +22,6 @@ use Illuminate\Support\Str;
  * Settings (per-user, Settings::putFor):
  *  - yt_refresh_token / yt_access_token / yt_token_expires  (OAuth)
  *  - yt_channel_title   : connected channel ka naam (display)
- *  - yt_post_mode       : single | slideshow
- *  - yt_slide_seconds   : slideshow me har card kitne second dikhe
  *  - yt_privacy         : public | unlisted | private
  *  - yt_music           : (path) background music (optional)
  *  - yt_title_suffix    : description me hashtags (e.g. "#Shorts #hindi")
@@ -253,36 +248,7 @@ class YoutubeService
             [$this->cardSegment($card, $seconds)],
         );
 
-        $this->runFfmpeg($this->videoCommand($segments, $disk->path($mp4)), $mp4);
-
-        return $mp4;
-    }
-
-    /** Poore part ke cards → ek slideshow Short mp4. */
-    public function mp4ForPart(Part $part, ?int $secondsPerCard = null): string
-    {
-        $secondsPerCard = $secondsPerCard ?: max(2, (int) $this->setting('yt_slide_seconds', 4));
-
-        $disk  = Storage::disk('public');
-        $part->loadMissing('cards');
-
-        $cardSegments = $part->cards->sortBy('sort_order')
-            ->filter(fn (PartCard $c) => $c->image_path && $disk->exists($c->image_path))
-            ->map(fn (PartCard $c) => $this->cardSegment($c, $secondsPerCard))
-            ->values()
-            ->all();
-
-        if (empty($cardSegments)) {
-            throw new \RuntimeException('Is part me koi card image nahi mili.');
-        }
-
-        $disk->makeDirectory('yt');
-        $mp4 = 'yt/part-' . $part->id . '.mp4';
-
-        // Cover intro (agar on hai) + saare cards
-        $segments = array_merge($this->coverSegments($part), $cardSegments);
-
-        $this->runFfmpeg($this->videoCommand($segments, $disk->path($mp4)), $mp4);
+        $this->encodeSegments($segments, $mp4);
 
         return $mp4;
     }
@@ -371,7 +337,7 @@ class YoutubeService
      *
      * @param  list<array{path:string,dur:float,voice?:string}>  $segments
      */
-    protected function videoCommand(array $segments, string $outAbs): array
+    protected function videoCommand(array $segments, string $outAbs, int $w = 720, int $h = 1280): array
     {
         $ffmpeg   = config('services.ffmpeg.path', 'ffmpeg');
         $disk     = Storage::disk('public');
@@ -380,11 +346,8 @@ class YoutubeService
 
         // Shared hosting par 1080p ffmpeg ko OOM/CPU-limit signal-9 se kill kar deta
         // hai. 720x1280 (9:16) + ultrafast + single-thread + kam ref/lookahead =
-        // sabse halka aur reliable (YouTube 720p Shorts accept karta hai). Yahi
-        // settings Instagram reel me proven hain.
-        $w = 720;
-        $h = 1280;
-
+        // sabse halka aur reliable (YouTube 720p Shorts accept karta hai). OOM
+        // (signal 9) par encodeSegments() chhoti res (540/480) par retry karta hai.
         $enc = [
             '-c:v', 'libx264', '-preset', 'ultrafast', '-tune', 'stillimage', '-threads', '1',
             '-x264-params', 'ref=1:bframes=0:rc-lookahead=10:sync-lookahead=0',
@@ -485,14 +448,47 @@ class YoutubeService
         return rtrim(rtrim(sprintf('%.3f', $x), '0'), '.') ?: '0';
     }
 
-    protected function runFfmpeg(array $cmd, string $expectRelPath): void
+    /**
+     * Segments ko video me encode karo. Shared hosting par ffmpeg ko OOM par
+     * signal 9 (SIGKILL) se kill kar diya jaata hai — Laravel Process tab
+     * ProcessSignaledException throw karta hai. Is case me (aur kisi bhi ffmpeg
+     * fail par) progressively chhoti resolution par retry karta hai taaki memory
+     * kam lage aur video ban jaaye.
+     */
+    protected function encodeSegments(array $segments, string $mp4): void
     {
-        $result = Process::timeout(600)->run($cmd);
+        $disk   = Storage::disk('public');
+        $absOut = $disk->path($mp4);
 
-        if (! $result->successful() || ! Storage::disk('public')->exists($expectRelPath)) {
-            Log::error('YT ffmpeg failed', ['err' => $result->errorOutput()]);
-            throw new \RuntimeException('Video banane me dikkat (ffmpeg). ' . Str::limit($result->errorOutput(), 200));
+        // Resolution tiers: pehle 720p, OOM/fail par halki res par retry.
+        $tiers   = [[720, 1280], [540, 960], [480, 854]];
+        $lastErr = '';
+
+        foreach ($tiers as [$w, $h]) {
+            $cmd = $this->videoCommand($segments, $absOut, $w, $h);
+
+            try {
+                $result = Process::timeout(600)->run($cmd);
+            } catch (\Throwable $e) {
+                // Signal 9 (OOM kill) / timeout / process crash — agli chhoti res try karo
+                $lastErr = $e->getMessage();
+                Log::warning('YT ffmpeg process crash, lower-res retry', ['res' => "{$w}x{$h}", 'error' => $lastErr]);
+                continue;
+            }
+
+            if ($result->successful() && $disk->exists($mp4)) {
+                return;
+            }
+
+            $lastErr = $result->errorOutput() ?: $result->output();
+            Log::warning('YT ffmpeg failed, lower-res retry', ['res' => "{$w}x{$h}", 'err' => Str::limit($lastErr, 300)]);
         }
+
+        Log::error('YT ffmpeg failed (all resolutions)', ['err' => $lastErr]);
+        throw new \RuntimeException(
+            'Video nahi ban paayi — server ne memory/CPU limit cross ki (ffmpeg signal 9 / OOM). '
+            . 'Slideshow me kam cards rakho ya slide-seconds ghatao. ' . Str::limit($lastErr, 150)
+        );
     }
 
     /** yt/ folder ke saare cached videos delete karo (music badalne par). */
@@ -597,46 +593,6 @@ class YoutubeService
         } catch (\Throwable $e) {
             Log::error('YT card post failed', ['card' => $card->id, 'error' => $e->getMessage()]);
             $this->markCardFailed($card, $e->getMessage());
-            throw $e;
-        }
-    }
-
-    /** Poore part ko ek slideshow Short ki tarah upload karo. */
-    public function postPart(Part $part): string
-    {
-        $this->forUser($part->story?->user_id);
-
-        if (! $this->isConfigured()) {
-            throw new \RuntimeException('YouTube configured nahi. Pehle channel connect karo.');
-        }
-
-        @set_time_limit(1200);
-        $part->loadMissing('cards');
-
-        try {
-            $mp4   = $this->mp4ForPart($part);
-            $first = $part->cards->sortBy('sort_order')->first();
-
-            $id = $this->uploadShort(
-                Storage::disk('public')->path($mp4),
-                $this->buildTitle($first, $part),
-                $this->buildDescription($first, $part),
-                (string) $this->setting('yt_privacy', 'public'),
-            );
-
-            // Ek part = ek Short. Saare cards ko posted maan lo (dobara post na hon).
-            foreach ($part->cards as $c) {
-                $this->markCardPosted($c, $id);
-            }
-            // Video file rakhi jaati hai (delete nahi) — same card/part doosre
-            // platform par bhi post ho sake, aur dobara upload ho sake.
-
-            return $id;
-        } catch (\Throwable $e) {
-            Log::error('YT part post failed', ['part' => $part->id, 'error' => $e->getMessage()]);
-            foreach ($part->cards as $c) {
-                $this->markCardFailed($c, $e->getMessage());
-            }
             throw $e;
         }
     }

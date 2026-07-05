@@ -58,6 +58,14 @@ class FacebookAutoPost extends Command
             return;
         }
 
+        // Rate-limit cooldown active hai? (FB ne "We limit how often…" diya tha)
+        $cooldown = Setting::getFor($uid, 'fb_auto_cooldown_until');
+        if ($cooldown && Carbon::parse($cooldown)->isFuture()) {
+            $this->warn("User #{$uid}: Facebook rate-limit cooldown (until {$cooldown}) — skip.");
+
+            return;
+        }
+
         if (! $force) {
             $window = $this->activeWindow($uid, $now);
             if (! $window) {
@@ -87,6 +95,12 @@ class FacebookAutoPost extends Command
             $id = $type === 'reel' ? $facebook->postReel($card) : $facebook->postPhoto($card);
             Setting::putFor($uid, 'fb_auto_last_post_at', $now->toIso8601String());
             $this->info("User #{$uid}: posted {$type} card #{$card->id} → {$id}");
+        } catch (\App\Exceptions\FacebookRateLimitException $e) {
+            // FB ne "We limit how often you can post…" diya — 2 ghante ruk jao.
+            // Card 'failed' nahi hua (pending hai), cooldown ke baad dobara try hoga.
+            $until = $now->copy()->addHours(2);
+            Setting::putFor($uid, 'fb_auto_cooldown_until', $until->toIso8601String());
+            $this->warn("User #{$uid}: Facebook rate-limit — {$e->getMessage()}. Cooldown {$until->format('d M H:i')} tak.");
         } catch (\Throwable $e) {
             $this->error("User #{$uid} card #{$card->id} failed: " . $e->getMessage());
         }
@@ -107,7 +121,7 @@ class FacebookAutoPost extends Command
                 return [
                     'start'    => $w['start'],
                     'end'      => $w['end'],
-                    'interval' => max(5, (int) ($w['interval'] ?? 30)),
+                    'interval' => max(15, (int) ($w['interval'] ?? 30)),
                 ];
             }
         }
@@ -119,7 +133,7 @@ class FacebookAutoPost extends Command
     {
         $start = $this->toMinutes($window['start']);
         $end   = $this->toMinutes($window['end']);
-        $iv    = max(5, (int) $window['interval']);
+        $iv    = max(15, (int) $window['interval']);
 
         if ($start === null || $end === null) {
             return null;

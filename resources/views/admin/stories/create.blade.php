@@ -20,6 +20,10 @@
                     <option value="short">Chhoti (Short/Reel ke liye — ~150 shabd)</option>
                     <option value="medium">Medium (~300 shabd)</option>
                     <option value="long">Lambi (~600 shabd)</option>
+                    <option value="1000">~1000 shabd</option>
+                    <option value="1500">~1500 shabd</option>
+                    <option value="8000">~8000 shabd (bahut lambi)</option>
+                    <option value="20000">~20000 shabd (novel-jaisi)</option>
                 </select>
                 <button type="button" id="aiGenerate"
                         class="bg-violet-600 hover:bg-violet-700 text-white font-medium rounded-lg px-5 py-2.5 text-sm">
