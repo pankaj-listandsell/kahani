@@ -28,6 +28,12 @@ class InstagramController extends Controller
         return response()->json(['caption' => $card->ig_caption]);
     }
 
+    /** Instagram ki content-publishing limit (X / 50 aaj) — AJAX se load hoti hai. */
+    public function limit()
+    {
+        return response()->json($this->instagram->publishingLimit());
+    }
+
     /**
      * AI se caption + hashtags generate karke card par save karo.
      */

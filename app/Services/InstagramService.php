@@ -92,6 +92,47 @@ class InstagramService
     }
 
     /**
+     * Instagram content-publishing rate limit (rolling 24-ghante).
+     *  - used  = pichhle 24h me kitne post publish hue
+     *  - total = account ka cap (aksar 50, kabhi 100)
+     * Ye GET quota consume NAHI karta (sirf read).
+     *
+     * @return array{ok:bool, used:int, total:int, error?:string}
+     */
+    public function publishingLimit(): array
+    {
+        if (! $this->isConfigured()) {
+            return ['ok' => false, 'used' => 0, 'total' => 50, 'error' => 'Instagram connected nahi.'];
+        }
+
+        try {
+            $res = Http::timeout(15)->get(
+                $this->apiBase() . '/' . $this->nodeId() . '/content_publishing_limit',
+                ['fields' => 'quota_usage,config', 'access_token' => $this->token()],
+            );
+
+            $data = $res->json();
+
+            if ($res->failed() || isset($data['error'])) {
+                $err = $data['error']['message'] ?? 'Limit fetch fail.';
+                Log::warning('IG publishing-limit fail', ['error' => $err]);
+
+                return ['ok' => false, 'used' => 0, 'total' => 50, 'error' => $err];
+            }
+
+            $row   = $data['data'][0] ?? [];
+            $used  = (int) ($row['quota_usage'] ?? 0);
+            $total = (int) ($row['config']['quota_total'] ?? 50);
+
+            return ['ok' => true, 'used' => $used, 'total' => $total > 0 ? $total : 50];
+        } catch (\Throwable $e) {
+            Log::warning('IG publishing-limit error', ['error' => $e->getMessage()]);
+
+            return ['ok' => false, 'used' => 0, 'total' => 50, 'error' => $e->getMessage()];
+        }
+    }
+
+    /**
      * Connection test — account ka username laao.
      *
      * @return array{ok:bool, message:string}
@@ -231,10 +272,10 @@ class InstagramService
             $mediaId = $this->publishContainer($containerId, retry: true);
             $this->markPosted($card, $mediaId);
 
-            // 6) Setting ON ho to wahi video Instagram Story me bhi daal do (bonus).
-            //    Story fail ho to reel post fir bhi safe — sirf log hota hai.
+            // 6) Setting ON ho to card ki IMAGE (text card) Instagram Story me bhi
+            //    daal do (video nahi). Story fail ho to reel post fir bhi safe.
             if ($this->alsoStory()) {
-                $this->postStoryVideo($videoUrl, $card->id);
+                $this->postStoryImage($card);
             }
 
             // NOTE: upload ke baad media files JAAN-BUJHKAR delete NAHI karte —
@@ -255,17 +296,26 @@ class InstagramService
     }
 
     /**
-     * Ek (already public) video URL ko Instagram Story (24h) ki tarah publish karo.
-     * Reel ke saath bonus — fail ho to sirf log (reel post par asar nahi).
+     * Ek card ki IMAGE (text card) ko Instagram Story (24h) ki tarah publish karo
+     * — reel video nahi, sirf card ki photo. Reel ke saath bonus — fail ho to
+     * sirf log (reel post par asar nahi).
      *
      * @return string|null  story media id, ya null agar fail
      */
-    public function postStoryVideo(string $videoUrl, ?int $cardId = null): ?string
+    public function postStoryImage(PartCard $card): ?string
     {
         try {
+            $jpeg = $this->jpegPathFor($card);
+            $imageUrl = $this->publicMediaUrl($jpeg)
+                ?? $this->uploadToTempHost(Storage::disk('public')->path($jpeg));
+
+            if (! $imageUrl) {
+                throw new \RuntimeException('Story image ka public URL nahi bana.');
+            }
+
             $create = Http::asForm()->post($this->apiBase() . '/' . $this->nodeId() . '/media', [
                 'media_type'   => 'STORIES',
-                'video_url'    => $videoUrl,
+                'image_url'    => $imageUrl,
                 'access_token' => $this->token(),
             ]);
 
@@ -273,15 +323,14 @@ class InstagramService
                 throw new \RuntimeException($create->json('error.message') ?? 'Story container create fail.');
             }
 
-            $containerId = $create->json('id');
-            $this->waitUntilFinished($containerId);
-            $storyId = $this->publishContainer($containerId, retry: true);
+            // Image container turant ready hota hai — seedha publish
+            $storyId = $this->publishContainer($create->json('id'), retry: true);
 
-            Log::info('IG Story bhi post ho gayi', ['card' => $cardId, 'story_media' => $storyId]);
+            Log::info('IG Story (card image) post ho gayi', ['card' => $card->id, 'story_media' => $storyId]);
 
             return $storyId;
         } catch (\Throwable $e) {
-            Log::warning('IG Story post skip (reel safe hai)', ['card' => $cardId, 'error' => $e->getMessage()]);
+            Log::warning('IG Story post skip (reel safe hai)', ['card' => $card->id, 'error' => $e->getMessage()]);
 
             return null;
         }

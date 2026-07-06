@@ -38,6 +38,43 @@
             </form>
         </div>
 
+        {{-- Publishing limit (rolling 24h) --}}
+        @if ($configured)
+            <div class="bg-white rounded-xl border border-slate-200 p-5">
+                <div class="flex items-center justify-between gap-3 mb-2">
+                    <h3 class="font-semibold text-sm flex items-center gap-2">📊 Posting Limit <span class="text-xs font-normal text-slate-400">(pichhle 24 ghante)</span></h3>
+                    <button type="button" id="igLimitRefresh" class="text-xs text-rose-600 hover:underline">↻ Refresh</button>
+                </div>
+                <div id="igLimitBody" class="text-sm text-slate-500">Loading…</div>
+            </div>
+            <script>
+            (function () {
+                const body = document.getElementById('igLimitBody');
+                const btn = document.getElementById('igLimitRefresh');
+                if (!body) return;
+
+                async function load() {
+                    body.textContent = 'Loading…';
+                    try {
+                        const r = await fetch(@json(route('admin.instagram.limit')), { headers: { 'Accept': 'application/json' } });
+                        const d = await r.json();
+                        if (!d.ok) { body.innerHTML = '<span class="text-amber-600">⚠️ ' + (d.error || 'Limit nahi mili') + '</span>'; return; }
+                        const pct = d.total ? Math.round((d.used / d.total) * 100) : 0;
+                        const left = Math.max(0, d.total - d.used);
+                        const color = pct >= 90 ? 'bg-red-500' : (pct >= 70 ? 'bg-amber-500' : 'bg-green-500');
+                        body.innerHTML =
+                            '<div class="flex items-center justify-between mb-1"><span class="font-medium text-slate-700">' + d.used + ' / ' + d.total + ' posts used</span>'
+                            + '<span class="text-xs text-slate-500">' + left + ' bache</span></div>'
+                            + '<div class="w-full bg-slate-200 rounded-full h-2.5"><div class="' + color + ' h-2.5 rounded-full" style="width:' + pct + '%"></div></div>'
+                            + '<p class="text-xs text-slate-400 mt-1">Rolling 24-ghante ki limit. Har post 24h baad apne-aap free ho jaata hai.</p>';
+                    } catch (e) { body.innerHTML = '<span class="text-amber-600">⚠️ Limit load nahi hui.</span>'; }
+                }
+                btn?.addEventListener('click', load);
+                load();
+            })();
+            </script>
+        @endif
+
         {{-- Setup guide --}}
         <details class="bg-blue-50 border border-blue-200 rounded-xl p-5 text-sm text-blue-900">
             <summary class="font-semibold cursor-pointer">📖 How to get the access token (setup guide)</summary>
@@ -120,7 +157,7 @@
                     <input type="checkbox" name="ig_also_story" value="1" class="mt-1 rounded border-slate-300" @checked($settings['ig_also_story'] === '1')>
                     <span>
                         <span class="text-sm font-medium">📲 Reel ke saath Instagram Story me bhi daalo</span>
-                        <span class="block text-xs text-slate-500">Jab bhi Reel post hoga, wahi video 24-ghante wali Story me bhi apne-aap chala jayega. (Plain video story — music/sticker API se nahi lagta. Story bhi daily limit me ginti hai.)</span>
+                        <span class="block text-xs text-slate-500">Jab bhi Reel post hoga, us card ki <b>image (text card)</b> 24-ghante wali Story me bhi apne-aap chali jayegi — reel video nahi. (Story bhi daily limit me ginti hai.)</span>
                     </span>
                 </label>
 

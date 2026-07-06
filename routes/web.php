@@ -53,6 +53,7 @@ Route::middleware('auth')->prefix('admin')->name('admin.')->group(function () {
     Route::put('instagram/settings', [InstagramController::class, 'saveSettings'])->name('instagram.settings');
     Route::put('instagram/auto-post', [InstagramController::class, 'saveAutoPost'])->name('instagram.autopost');
     Route::post('instagram/test', [InstagramController::class, 'test'])->name('instagram.test');
+    Route::get('instagram/limit', [InstagramController::class, 'limit'])->name('instagram.limit');
     Route::post('instagram/music', [InstagramController::class, 'saveReelMusic'])->name('instagram.music');
     Route::delete('instagram/music', [InstagramController::class, 'removeReelMusic'])->name('instagram.music.remove');
     Route::get('instagram/cards/{card}/caption', [InstagramController::class, 'getCaption'])->name('instagram.card.caption.get');
