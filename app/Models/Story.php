@@ -19,6 +19,7 @@ class Story extends Model
         'status',
         'type',       // story | shayari | joke | quote
         'category',   // topic/mood (love, sad, funny...)
+        'language',   // hindi | gujarati | hinglish
         'tts_mode',   // per-story audio override: voice | voice_music | music (null=global)
         'tts_voice',  // per-story voice (Kore, Puck...) — null=global
         'platforms',  // auto-post target platforms: ["instagram","youtube","facebook"] (null=sab)

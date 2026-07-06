@@ -22,14 +22,24 @@
 </div>
 
 <p class="text-xs text-slate-500 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2">
-    🖼️ Cover image AI se banti hai — story save karne ke baad uske page par
-    <b>"Generate Cover Image"</b> button se banao (9:16, reel ka cover).
+    🖼️ Cover image story save karne ke baad uske page par <b>"Upload Cover Image"</b> se daalo (9:16, reel ka cover).
 </p>
 
-<div>
-    <label class="block text-sm font-medium mb-1">Status</label>
-    <select name="status" class="rounded-lg border border-slate-300 px-3 py-2 focus:ring-2 focus:ring-rose-400 focus:outline-none">
-        <option value="published" @selected(old('status', $story?->status) === 'published')>Published</option>
-        <option value="draft" @selected(old('status', $story?->status ?? '') === 'draft')>Draft</option>
-    </select>
+<div class="grid sm:grid-cols-2 gap-4">
+    <div>
+        <label class="block text-sm font-medium mb-1">🌐 Language (bhasha)</label>
+        <select name="language" id="formLanguage" class="w-full rounded-lg border border-slate-300 px-3 py-2 focus:ring-2 focus:ring-rose-400 focus:outline-none">
+            <option value="hindi" @selected(old('language', $story?->language ?? 'hindi') === 'hindi')>हिंदी Hindi</option>
+            <option value="gujarati" @selected(old('language', $story?->language) === 'gujarati')>ગુજરાતી Gujarati</option>
+            <option value="hinglish" @selected(old('language', $story?->language) === 'hinglish')>Hindi-English (Roman)</option>
+        </select>
+        <p class="text-xs text-slate-500 mt-1">AI isi bhasha me kahani banayega; cards bhi isi me.</p>
+    </div>
+    <div>
+        <label class="block text-sm font-medium mb-1">Status</label>
+        <select name="status" class="w-full rounded-lg border border-slate-300 px-3 py-2 focus:ring-2 focus:ring-rose-400 focus:outline-none">
+            <option value="published" @selected(old('status', $story?->status) === 'published')>Published</option>
+            <option value="draft" @selected(old('status', $story?->status ?? '') === 'draft')>Draft</option>
+        </select>
+    </div>
 </div>

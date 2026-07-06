@@ -115,6 +115,15 @@
                     </select>
                 </div>
 
+                {{-- Reel ke saath Story me bhi --}}
+                <label class="flex items-start gap-3 cursor-pointer">
+                    <input type="checkbox" name="ig_also_story" value="1" class="mt-1 rounded border-slate-300" @checked($settings['ig_also_story'] === '1')>
+                    <span>
+                        <span class="text-sm font-medium">📲 Reel ke saath Instagram Story me bhi daalo</span>
+                        <span class="block text-xs text-slate-500">Jab bhi Reel post hoga, wahi video 24-ghante wali Story me bhi apne-aap chala jayega. (Plain video story — music/sticker API se nahi lagta. Story bhi daily limit me ginti hai.)</span>
+                    </span>
+                </label>
+
                 {{-- Voice-over (AI TTS) — sirf reel par lagta hai --}}
                 @include('admin.partials._voiceover')
 

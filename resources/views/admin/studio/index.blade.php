@@ -18,6 +18,14 @@
                 </select>
             </div>
             <div>
+                <label class="block text-sm font-medium mb-1">🌐 Language</label>
+                <select id="language" class="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm">
+                    <option value="hindi">हिंदी Hindi</option>
+                    <option value="gujarati">ગુજરાતી Gujarati</option>
+                    <option value="hinglish">Hindi-English (Roman)</option>
+                </select>
+            </div>
+            <div>
                 <label class="block text-sm font-medium mb-1">Topic / Mood</label>
                 <input type="text" id="category" list="catList" placeholder="e.g. Love"
                        class="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm">
@@ -108,6 +116,16 @@ const THEMES = {
     urdu:    { name: '🕌 Urdu Classic', bg: ['#3a0d12', '#6d181c'], text: '#f6e7c8', accent: '#e7c15b', serif: true,  deco: 'quotes' },
     minimal: { name: '⚡ Minimal',     bg: ['#0f172a', '#0f172a'], text: '#ffffff', accent: '#38bdf8', serif: false, deco: 'line'   },
     pop:     { name: '😂 Joke Pop',    bg: ['#fde68a', '#fca5a5'], text: '#1f2937', accent: '#dc2626', serif: false, deco: 'none'   },
+    sunset:  { name: '🌇 Sunset',      bg: ['#ff512f', '#dd2476'], text: '#fff7ed', accent: '#ffe08a', serif: true,  deco: 'glow'   },
+    ocean:   { name: '🌊 Ocean',       bg: ['#2193b0', '#6dd5ed'], text: '#ffffff', accent: '#e0fbfc', serif: true,  deco: 'line'   },
+    royal:   { name: '👑 Royal',       bg: ['#41295a', '#2f0743'], text: '#f3e8ff', accent: '#f0c65a', serif: true,  deco: 'quotes' },
+    rosegold:{ name: '🌹 Rose Gold',   bg: ['#f7cac9', '#f3e0dc'], text: '#7a3b47', accent: '#bd6b73', serif: true,  deco: 'corner' },
+    forest:  { name: '🌿 Forest',      bg: ['#0f2027', '#203a43'], text: '#eafff0', accent: '#a7e8bd', serif: true,  deco: 'corner' },
+    neon:    { name: '💫 Neon',        bg: ['#0d0d0d', '#1a1a2e'], text: '#ffffff', accent: '#00f5d4', serif: false, deco: 'glow'   },
+    peach:   { name: '🍑 Peach',       bg: ['#ffecd2', '#fcb69f'], text: '#7c3a2d', accent: '#e07a5f', serif: true,  deco: 'dots'   },
+    midnight:{ name: '🌌 Midnight',    bg: ['#232526', '#414345'], text: '#f5f5f5', accent: '#c0c0c0', serif: false, deco: 'stars'  },
+    candy:   { name: '🍭 Candy',       bg: ['#a18cd1', '#fbc2eb'], text: '#4a2c5a', accent: '#d6336c', serif: true,  deco: 'dots'   },
+    gold:    { name: '✨ Black Gold',  bg: ['#0a0a0a', '#1c1c1c'], text: '#f7e7b4', accent: '#d4af37', serif: true,  deco: 'frame'  },
 };
 
 // Theme dropdown fill
@@ -190,6 +208,28 @@ function drawDeco(ctx, theme) {
     } else if (theme.deco === 'line') {
         ctx.strokeStyle = theme.accent; ctx.lineWidth = 6;
         ctx.beginPath(); ctx.moveTo(W/2 - 70, 220); ctx.lineTo(W/2 + 70, 220); ctx.stroke();
+    } else if (theme.deco === 'glow') {
+        // Center-top se soft light glow (dark themes par bahut sundar)
+        const g = ctx.createRadialGradient(W/2, H*0.32, 0, W/2, H*0.32, W*0.9);
+        g.addColorStop(0, 'rgba(255,255,255,0.16)');
+        g.addColorStop(1, 'rgba(255,255,255,0)');
+        ctx.fillStyle = g; ctx.fillRect(0, 0, W, H);
+    } else if (theme.deco === 'dots') {
+        // Halka repeating dot pattern
+        ctx.fillStyle = theme.accent; ctx.globalAlpha = 0.12;
+        for (let y = 130; y < H - 130; y += 72) {
+            for (let x = 120; x < W - 90; x += 72) { ctx.beginPath(); ctx.arc(x, y, 4, 0, 7); ctx.fill(); }
+        }
+        ctx.globalAlpha = 1;
+    } else if (theme.deco === 'frame') {
+        // Elegant corner brackets (L-shaped)
+        ctx.strokeStyle = theme.accent; ctx.lineWidth = 5;
+        const m = 90, len = 110;
+        [[m, m, 1, 1], [W - m, m, -1, 1], [m, H - m, 1, -1], [W - m, H - m, -1, -1]].forEach(([x, y, dx, dy]) => {
+            ctx.beginPath();
+            ctx.moveTo(x, y + dy * len); ctx.lineTo(x, y); ctx.lineTo(x + dx * len, y);
+            ctx.stroke();
+        });
     }
     ctx.restore();
 }
@@ -206,9 +246,9 @@ function renderCard(canvas, item, themeKey, handle) {
     const t = THEMES[themeKey] || THEMES.night;
     canvas.width = W; canvas.height = H;
     const ctx = canvas.getContext('2d');
-    // Emoji font fallback taaki color emoji (❤️😂✨) sahi render ho
+    // Emoji + Gujarati font fallback (Devanagari/Gujarati/Roman + color emoji)
     const EMOJI = '"Segoe UI Emoji","Noto Color Emoji","Apple Color Emoji"';
-    const serif = `"Noto Serif Devanagari",${EMOJI}`, sans = `"Noto Sans Devanagari",${EMOJI}`;
+    const serif = `"Noto Serif Devanagari","Noto Serif Gujarati",${EMOJI}`, sans = `"Noto Sans Devanagari","Noto Sans Gujarati",${EMOJI}`;
     const fam = t.serif ? serif : sans;
 
     // Background gradient
@@ -269,9 +309,10 @@ function renderCard(canvas, item, themeKey, handle) {
 let items = [];
 
 async function ensureFonts() {
-    await document.fonts.load('700 78px "Noto Serif Devanagari"');
-    await document.fonts.load('600 78px "Noto Serif Devanagari"');
-    await document.fonts.load('700 78px "Noto Sans Devanagari"');
+    for (const f of [
+        '700 78px "Noto Serif Devanagari"', '600 78px "Noto Serif Devanagari"', '700 78px "Noto Sans Devanagari"',
+        '700 78px "Noto Serif Gujarati"', '600 78px "Noto Serif Gujarati"', '700 78px "Noto Sans Gujarati"',
+    ]) { try { await document.fonts.load(f); } catch (e) {} }
     await document.fonts.ready;
 }
 
@@ -301,6 +342,7 @@ el('genBtn').addEventListener('click', async () => {
         type: el('type').value,
         category: el('category').value.trim(),
         count: parseInt(el('count').value, 10) || 10,
+        language: el('language').value,
     };
     btn.disabled = true; const lbl = btn.textContent; btn.textContent = '⏳ Ban raha hai…';
     msg.textContent = 'AI likh raha hai, thoda ruko…';
@@ -340,6 +382,7 @@ el('saveBtn').addEventListener('click', async () => {
     await ensureFonts();
     const theme = el('theme').value, handle = el('handle').value;
     const type = el('type').value, category = el('category').value.trim();
+    const language = el('language').value;
     const off = document.createElement('canvas');
 
     // Per-card save — pehli card nayi collection banati hai, baaki usi me add
@@ -353,7 +396,7 @@ el('saveBtn').addEventListener('click', async () => {
             const r = await fetch(SAVE_URL, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json', 'X-CSRF-TOKEN': CSRF, 'Accept': 'application/json' },
-                body: JSON.stringify({ type, category, collection, order: i + 1, text, image: off.toDataURL('image/png') }),
+                body: JSON.stringify({ type, category, language, collection, order: i + 1, text, hashtags: items[i].hashtags || '', image: off.toDataURL('image/png') }),
             });
             const d = await r.json();
             if (!d.ok) throw new Error(d.error || ('card ' + (i + 1) + ' fail'));

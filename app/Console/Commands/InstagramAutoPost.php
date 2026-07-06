@@ -177,21 +177,29 @@ class InstagramAutoPost extends Command
             ->orderBy('id')
             ->get();
 
+        $randomPool = []; // shayari/joke/quote — random order me post honge
+
         foreach ($stories as $story) {
             if (! $story->targetsPlatform('instagram')) {
                 continue; // ye story Instagram ke liye target nahi
             }
+            $isCollection = in_array($story->type, ['shayari', 'joke', 'quote'], true);
             foreach ($story->parts as $part) {
                 foreach ($part->cards as $card) {
                     // Sirf fresh cards (jo abhi tak kabhi post/queue/fail nahi hue).
-                    // Isse manual-queue ya failed cards dubara auto-post nahi honge.
-                    if ($card->ig_status === null) {
-                        return $card;
+                    if ($card->ig_status !== null) {
+                        continue;
+                    }
+                    if ($isCollection) {
+                        $randomPool[] = $card; // baad me random se ek chunenge
+                    } else {
+                        return $card; // story: sequence (line-by-line) me
                     }
                 }
             }
         }
 
-        return null;
+        // Story cards khatam — collection (shayari/joke/quote) se RANDOM ek
+        return $randomPool ? $randomPool[array_rand($randomPool)] : null;
     }
 }

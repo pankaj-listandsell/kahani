@@ -32,7 +32,7 @@ class GeminiTtsService
      * @return array{path:string, seconds:float}
      * @throws \RuntimeException
      */
-    public function speak(string $text, ?string $voice = null, string $style = 'story'): array
+    public function speak(string $text, ?string $voice = null, string $style = 'story', string $language = 'hindi'): array
     {
         // Emoji/symbols hata do — warna TTS "red heart", "face with tears" bol deta
         $text = $this->stripForSpeech($text);
@@ -46,13 +46,22 @@ class GeminiTtsService
         $voice = $voice ?: (string) config('services.gemini.tts_voice', 'Kore');
         $disk  = Storage::disk('public');
 
-        // Style bhi cache key me — expressive shayari vs normal kahani alag audio
-        $wavPath = 'tts/' . sha1($voice . '|' . $style . '|' . $text) . '.wav';
+        // Style + language bhi cache key me — alag narration = alag audio
+        $wavPath = 'tts/' . sha1($voice . '|' . $style . '|' . $language . '|' . $text) . '.wav';
         if ($disk->exists($wavPath)) {
             return ['path' => $wavPath, 'seconds' => $this->durationOf($disk->path($wavPath))];
         }
 
-        $pcm = $this->fetchPcm($text, $voice, $this->instructionFor($style));
+        try {
+            $pcm = $this->fetchPcm($text, $voice, $this->instructionFor($style, $language));
+        } catch (\Throwable $e) {
+            // Gemini fail (10/din quota / 429) → free Google TTS par gir jao (unlimited)
+            if (! config('services.tts.free_fallback', true)) {
+                throw $e;
+            }
+            Log::warning('Gemini TTS fail, free TTS fallback', ['error' => $e->getMessage()]);
+            $pcm = app(FreeTtsService::class)->fetchPcm($text, $language);
+        }
 
         $disk->makeDirectory('tts');
         $disk->put($wavPath, $this->wrapWav($pcm));
@@ -112,16 +121,22 @@ class GeminiTtsService
      * Shayari/quote = dheere, gehre ehsaas ke saath; joke = comic timing;
      * warna normal kahani-sunane wala andaaz.
      */
-    protected function instructionFor(string $style): string
+    protected function instructionFor(string $style, string $language = 'hindi'): string
     {
+        $lang = match ($language) {
+            'gujarati' => 'Gujarati',
+            'hinglish' => 'Hindi (jo Roman/English letters me likhi hai — use Hindi pronunciation me hi padho)',
+            default    => 'Hindi',
+        };
+
         return match ($style) {
-            'shayari' => 'Neeche di gayi Hindi shayari ko bahut dheere, gehre ehsaas aur thehraav ke saath, '
+            'shayari' => "Neeche di gayi {$lang} shayari ko bahut dheere, gehre ehsaas aur thehraav ke saath, "
                 . 'har line ke baad halka pause lete hue, dil se — jaise ek mushayare me sunate hain — padho:',
-            'quote'   => 'Is Hindi suvichar ko shaant, prerak aur gambhir andaaz me, thehraav ke saath, '
+            'quote'   => "Is {$lang} suvichar ko shaant, prerak aur gambhir andaaz me, thehraav ke saath, "
                 . 'har shabd par zor dete hue padho:',
-            'joke'    => 'Is Hindi joke ko halke-phulke, mazedaar andaaz me, achhi comic timing ke saath padho — '
+            'joke'    => "Is {$lang} joke ko halke-phulke, mazedaar andaaz me, achhi comic timing ke saath padho — "
                 . 'punchline se thoda pehle chhota pause do:',
-            default   => 'Is Hindi kahani ko ek natural, expressive kahani-sunane wale andaaz me padho:',
+            default   => "Is {$lang} kahani ko ek natural, expressive kahani-sunane wale andaaz me padho:",
         };
     }
 

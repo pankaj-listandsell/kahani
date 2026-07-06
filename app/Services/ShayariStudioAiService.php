@@ -17,13 +17,13 @@ class ShayariStudioAiService
      * @return list<array{text:string, punchline?:string}>
      * @throws \RuntimeException
      */
-    public function generateBatch(string $type, string $category, int $count): array
+    public function generateBatch(string $type, string $category, int $count, string $language = 'hindi'): array
     {
         $type     = in_array($type, ['shayari', 'joke', 'quote'], true) ? $type : 'shayari';
         $count    = max(1, min(30, $count));
         $category = trim($category) ?: 'general';
 
-        $raw   = $this->callAi($this->prompt($type, $category, $count));
+        $raw   = $this->callAi($this->prompt($type, $category, $count, $language));
         $items = $this->parseItems($raw, $type);
 
         if (empty($items)) {
@@ -33,30 +33,44 @@ class ShayariStudioAiService
         return array_slice($items, 0, $count);
     }
 
-    protected function prompt(string $type, string $category, int $count): string
+    protected function prompt(string $type, string $category, int $count, string $language = 'hindi'): string
     {
+        // Bhasha/script rule — StoryAiService ke saath consistent
+        $lang = StoryAiService::langRule($language);
+
+        // Har item ke saath caption ke liye hashtags — safe & relevant
+        $tagRule = 'Har item ke saath "hashtags" bhi do — 6 se 10 relevant, popular hashtags '
+            . '(Instagram/YouTube ke liye). SIRF SAFE hashtags — koi banned/sensitive/adult/self-harm '
+            . 'wale nahi. Ek string me, space se alag, har tag # se shuru.';
+
         return match ($type) {
             'joke' => <<<TXT
-            Tum ek mazedaar Hindi comedy writer ho. "{$category}" topic par {$count} chhote, saaf-suthre (family-friendly) Hindi jokes likho.
-            Har joke me ek setup aur ek punchline ho — dono Devanagari me.
+            Tum ek mazedaar comedy writer ho. "{$category}" topic par {$count} chhote, saaf-suthre (family-friendly) jokes likho.
+            {$lang}
+            Har joke me ek setup aur ek punchline ho.
             Content ke hisab se 1-2 relevant emoji bhi daalo (jaise 😂🤣😅) — natural tarah se, khaaskar punchline me.
+            {$tagRule}
             SIRF ek valid JSON array return karo (koi markdown, koi backticks nahi), bilkul is format me:
-            [{"text":"setup line 😅", "punchline":"punchline line 😂"}]
+            [{"text":"setup line 😅", "punchline":"punchline line 😂", "hashtags":"#jokes #comedy #hindi #funny #viral"}]
             Koi adult/offensive/political content nahi.
             TXT,
             'quote' => <<<TXT
-            Tum ek prerak (motivational) Hindi lekhak ho. "{$category}" bhaav par {$count} chhote, dil chhoo lene wale original Hindi suvichar/quotes likho.
+            Tum ek prerak (motivational) lekhak ho. "{$category}" bhaav par {$count} chhote, dil chhoo lene wale original suvichar/quotes likho.
+            {$lang}
             Har ek 1-2 line ka ho — powerful aur meaningful.
             Har quote me 1-2 relevant emoji daalo jo bhaav se match kare (jaise ✨🌟💪🙏🔥).
+            {$tagRule}
             SIRF ek valid JSON array return karo (koi markdown, koi backticks nahi):
-            [{"text":"quote yahan ✨ (Devanagari)"}]
+            [{"text":"quote yahan ✨", "hashtags":"#suvichar #motivation #hindi #quotes #life"}]
             TXT,
             default => <<<TXT
-            Tum ek behtareen Hindi shayar ho. "{$category}" bhaav/mausam par {$count} khoobsurat, original Hindi shayari likho.
+            Tum ek behtareen shayar ho. "{$category}" bhaav/mausam par {$count} khoobsurat, original shayari likho.
+            {$lang}
             Har shayari 2 se 4 line ki ho — emotional aur gehri. Har line alag ho (line breaks ke saath).
-            Bhaav ke hisab se 1-2 relevant emoji bhi daalo (jaise pyaar ❤️🌹, dard 💔😢, chaand 🌙, aankhein 👀) — natural tarah se, zyada nahi.
+            Bhaav ke hisab se 1-2 relevant emoji bhi daalo (jaise pyaar ❤️🌹, dard 💔😢, chaand 🌙) — natural tarah se, zyada nahi.
+            {$tagRule}
             SIRF ek valid JSON array return karo (koi markdown, koi backticks nahi):
-            [{"text":"pehli line ❤️\ndusri line (Devanagari)"}]
+            [{"text":"pehli line ❤️\ndusri line", "hashtags":"#shayari #love #hindi #ishq #viral"}]
             TXT,
         };
     }
@@ -80,49 +94,62 @@ class ShayariStudioAiService
 
     protected function callGemini(string $prompt): string
     {
-        $url = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent';
+        $payload = [
+            'contents'         => [['parts' => [['text' => $prompt]]]],
+            'generationConfig' => [
+                'responseMimeType' => 'application/json',
+                'temperature'      => 1.15, // thoda creative
+                'maxOutputTokens'  => 8192,
+            ],
+        ];
 
-        $res = Http::timeout(120)
-            ->retry(2, 2000, throw: false)
-            ->withHeaders(['x-goog-api-key' => config('services.gemini.key')])
-            ->post($url, [
-                'contents'         => [['parts' => [['text' => $prompt]]]],
-                'generationConfig' => [
-                    'responseMimeType' => 'application/json',
-                    'temperature'      => 1.15, // thoda creative
-                    'maxOutputTokens'  => 8192,
-                ],
-            ]);
+        $lastError = 'Gemini generation fail.';
 
-        if (! $res->successful()) {
-            Log::error('Studio AI Gemini failed', ['status' => $res->status(), 'body' => $res->json() ?: $res->body()]);
-            throw new \RuntimeException($res->json('error.message') ?? 'Gemini generation fail.');
+        // Free-tier quota har model ki alag — 2.5-flash busy ho to 2.0-flash try karo
+        foreach (['gemini-2.5-flash', 'gemini-2.0-flash'] as $model) {
+            $url = "https://generativelanguage.googleapis.com/v1beta/models/{$model}:generateContent";
+            $res = Http::timeout(120)
+                ->withHeaders(['x-goog-api-key' => config('services.gemini.key')])
+                ->post($url, $payload);
+
+            if ($res->successful()) {
+                $text = (string) $res->json('candidates.0.content.parts.0.text');
+                if ($text !== '') {
+                    return $text;
+                }
+            }
+
+            $lastError = $res->json('error.message') ?? $lastError;
+            Log::warning('Studio AI Gemini model fail', ['model' => $model, 'status' => $res->status()]);
         }
 
-        $text = (string) $res->json('candidates.0.content.parts.0.text');
-        if ($text === '') {
-            throw new \RuntimeException('Gemini se khaali jawab aaya.');
-        }
-
-        return $text;
+        throw new \RuntimeException($lastError);
     }
 
     protected function callPollinations(string $prompt): string
     {
-        $res = Http::timeout(120)
-            ->retry(2, 1500, throw: false)
-            ->get('https://text.pollinations.ai/' . rawurlencode($prompt), ['model' => 'openai']);
+        $url = 'https://text.pollinations.ai/' . rawurlencode($prompt);
+        $status = 0;
 
-        if (! $res->successful()) {
-            throw new \RuntimeException('AI service ne error diya (HTTP ' . $res->status() . '). Thodi der baad try karein.');
+        // Ek model busy (429) ho to doosra try karo
+        foreach (['openai', 'mistral'] as $i => $model) {
+            $res = Http::timeout(120)->get($url, ['model' => $model]);
+            $body = trim($res->body());
+
+            if ($res->successful() && $body !== '') {
+                return $body;
+            }
+
+            $status = $res->status();
+            if ($status === 429 && $i === 0) {
+                sleep(3);
+            }
         }
 
-        $body = trim($res->body());
-        if ($body === '') {
-            throw new \RuntimeException('AI se khaali jawab aaya. Dobara try karein.');
-        }
-
-        return $body;
+        throw new \RuntimeException(
+            'AI service abhi bahut busy hai (HTTP ' . $status . '). 1-2 minute baad dobara try karein — '
+            . 'ya reliable ke liye Gemini API billing enable karein.'
+        );
     }
 
     /* ===================================================================
@@ -173,9 +200,11 @@ class ShayariStudioAiService
             if (is_string($row)) {
                 $text  = trim($row);
                 $punch = null;
+                $tags  = '';
             } elseif (is_array($row)) {
                 $text  = trim((string) ($row['text'] ?? $row['setup'] ?? $row['shayari'] ?? $row['quote'] ?? ''));
                 $punch = isset($row['punchline']) ? trim((string) $row['punchline']) : null;
+                $tags  = trim((string) ($row['hashtags'] ?? ''));
             } else {
                 continue;
             }
@@ -187,6 +216,9 @@ class ShayariStudioAiService
             $item = ['text' => $text];
             if ($type === 'joke' && filled($punch)) {
                 $item['punchline'] = $punch;
+            }
+            if (filled($tags)) {
+                $item['hashtags'] = $tags;
             }
             $items[] = $item;
         }

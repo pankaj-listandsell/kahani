@@ -69,6 +69,7 @@ class InstagramController extends Controller
             'ig_caption_suffix' => Setting::get('ig_caption_suffix'),
             'ig_auto_enabled'   => Setting::get('ig_auto_enabled', '0'),
             'ig_post_type'      => Setting::get('ig_post_type', 'image'),
+            'ig_also_story'     => Setting::get('ig_also_story', '0'),
             'ig_auto_windows'   => json_decode((string) Setting::get('ig_auto_windows', '[]'), true) ?: [],
             'ig_reel_music'     => Setting::get('ig_reel_music'),
             'tts_audio_mode'    => Setting::get('tts_audio_mode', 'music'),
@@ -136,6 +137,7 @@ class InstagramController extends Controller
 
         Setting::put('ig_auto_enabled', $request->boolean('ig_auto_enabled') ? '1' : '0');
         Setting::put('ig_post_type', $data['ig_post_type'] ?? 'image');
+        Setting::put('ig_also_story', $request->boolean('ig_also_story') ? '1' : '0');
         Setting::put('ig_auto_windows', json_encode($windows));
 
         // Voice-over (shared IG + YouTube ke beech)

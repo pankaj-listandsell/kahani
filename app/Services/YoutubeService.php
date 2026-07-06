@@ -338,8 +338,9 @@ class YoutubeService
 
         try {
             $voice = $this->voiceOverride ?: ($this->setting('tts_voice') ?: null);
+            $lang  = $card->part?->story?->language ?: 'hindi';
 
-            return $tts->speak($card->text, $voice, $this->voiceStyle($card));
+            return $tts->speak($card->text, $voice, $this->voiceStyle($card), $lang);
         } catch (\Throwable $e) {
             Log::warning('YT voice-over skip', ['card' => $card->id, 'error' => $e->getMessage()]);
 

@@ -9,7 +9,7 @@
     {{-- ✨ AI: Topic se poori kahani banao --}}
     <div class="bg-gradient-to-br from-violet-50 to-rose-50 border border-violet-200 rounded-xl p-5 mb-6">
         <h3 class="font-semibold flex items-center gap-2">✨ AI se Kahani banao (Topic se)</h3>
-        <p class="text-sm text-slate-600 mt-1 mb-3">Sirf topic likho — AI poori Hindi kahani + title + description bana dega. Neeche form apne-aap bhar jayega, phir aap edit/Save kar sakte ho.</p>
+        <p class="text-sm text-slate-600 mt-1 mb-3">Sirf topic likho — AI poori kahani + title + description bana dega (neeche <b>"Language"</b> me chuni bhasha me). Neeche form apne-aap bhar jayega, phir aap edit/Save kar sakte ho.</p>
 
         <div class="space-y-3">
             <input type="text" id="aiTopic"
@@ -65,7 +65,11 @@
                 const r = await fetch('{{ route('admin.stories.generate') }}', {
                     method: 'POST',
                     headers: { 'X-CSRF-TOKEN': csrf, 'Accept': 'application/json', 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ topic, length: document.getElementById('aiLength').value }),
+                    body: JSON.stringify({
+                        topic,
+                        length: document.getElementById('aiLength').value,
+                        language: document.getElementById('formLanguage')?.value || 'hindi',
+                    }),
                 });
                 const d = await r.json();
                 if (d.ok) {

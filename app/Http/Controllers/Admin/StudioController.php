@@ -78,10 +78,11 @@ class StudioController extends Controller
             'type'     => ['required', 'in:shayari,joke,quote'],
             'category' => ['nullable', 'string', 'max:100'],
             'count'    => ['required', 'integer', 'min:1', 'max:30'],
+            'language' => ['nullable', 'in:hindi,gujarati,hinglish'],
         ]);
 
         try {
-            $items = $ai->generateBatch($data['type'], $data['category'] ?? '', $data['count']);
+            $items = $ai->generateBatch($data['type'], $data['category'] ?? '', $data['count'], $data['language'] ?? 'hindi');
 
             return response()->json(['ok' => true, 'items' => $items]);
         } catch (\Throwable $e) {
@@ -99,9 +100,11 @@ class StudioController extends Controller
         $data = $request->validate([
             'type'       => ['required', 'in:shayari,joke,quote'],
             'category'   => ['nullable', 'string', 'max:100'],
+            'language'   => ['nullable', 'in:hindi,gujarati,hinglish'],
             'collection' => ['nullable', 'integer', 'exists:stories,id'],
             'order'      => ['required', 'integer', 'min:1'],
             'text'       => ['required', 'string'],
+            'hashtags'   => ['nullable', 'string', 'max:1000'],
             'image'      => ['required', 'string'], // data:image/png;base64,...
         ]);
 
@@ -124,6 +127,7 @@ class StudioController extends Controller
                 'title'    => $title,
                 'type'     => $data['type'],
                 'category' => $cat !== '' ? $cat : null,
+                'language' => $data['language'] ?? 'hindi',
                 'status'   => 'published',
             ]);
             $part = $story->parts()->create(['sort_order' => 1, 'body' => $data['text']]);
@@ -137,11 +141,17 @@ class StudioController extends Controller
         $path = 'cards/' . Str::uuid() . '.png';
         Storage::disk('public')->put($path, $binary);
 
+        // Instagram caption = shayari/joke text + hashtags (sirf Instagram ke liye;
+        // YouTube/Facebook ke liye set nahi karte).
+        $tags    = trim((string) ($data['hashtags'] ?? ''));
+        $caption = trim($data['text'] . ($tags !== '' ? "\n\n" . $tags : ''));
+
         // Har item = ek card (usi part me) → auto-post ek-ek karke post karega
         $part->cards()->create([
             'sort_order' => $data['order'],
             'image_path' => $path,
             'text'       => $data['text'],
+            'ig_caption' => $caption !== '' ? $caption : null,
         ]);
 
         return response()->json([

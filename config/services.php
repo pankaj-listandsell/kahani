@@ -40,6 +40,12 @@ return [
         'path' => env('FFMPEG_PATH', 'ffmpeg'),
     ],
 
+    // TTS voice-over settings. free_fallback: Gemini ki 10/din limit khatam hone
+    // par free Google Translate TTS (unlimited) par gir jao.
+    'tts' => [
+        'free_fallback' => env('TTS_FREE_FALLBACK', true),
+    ],
+
     // Google AI Studio (Gemini) — TTS voice-over for reels/shorts.
     // Free API key: https://aistudio.google.com/apikey
     'gemini' => [

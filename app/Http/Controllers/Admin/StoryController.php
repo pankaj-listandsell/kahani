@@ -52,12 +52,13 @@ class StoryController extends Controller
     public function generateFromTopic(Request $request, StoryAiService $ai)
     {
         $data = $request->validate([
-            'topic'  => ['required', 'string', 'max:500'],
-            'length' => ['nullable', 'in:short,medium,long,1000,1500,8000,20000'],
+            'topic'    => ['required', 'string', 'max:500'],
+            'length'   => ['nullable', 'in:short,medium,long,1000,1500,8000,20000'],
+            'language' => ['nullable', 'in:hindi,gujarati,hinglish'],
         ]);
 
         try {
-            $story = $ai->generate($data['topic'], $data['length'] ?? 'short');
+            $story = $ai->generate($data['topic'], $data['length'] ?? 'short', $data['language'] ?? 'hindi');
 
             return response()->json(['ok' => true] + $story);
         } catch (\Throwable $e) {
@@ -227,11 +228,16 @@ class StoryController extends Controller
 
     private function validated(Request $request): array
     {
-        return $request->validate([
+        $data = $request->validate([
             'title'       => ['required', 'string', 'max:255'],
             'description' => ['nullable', 'string'],
             'body'        => ['required', 'string'],
             'status'      => ['required', 'in:draft,published'],
+            'language'    => ['nullable', 'in:hindi,gujarati,hinglish'],
         ]);
+
+        $data['language'] = $data['language'] ?? 'hindi';
+
+        return $data;
     }
 }

@@ -17,12 +17,14 @@ class StoryAiService
      * @return array{title:string, description:string, body:string}
      * @throws \RuntimeException
      */
-    public function generate(string $topic, string $length = 'short'): array
+    public function generate(string $topic, string $length = 'short', string $language = 'hindi'): array
     {
         $topic = trim($topic);
         if ($topic === '') {
             throw new \RuntimeException('Topic khaali hai.');
         }
+
+        $langRule = $this->langRule($language);
 
         $words = match ($length) {
             'long'   => '500-700',
@@ -47,14 +49,16 @@ class StoryAiService
             : "Kahani lagभग {$words} shabd ki ho — engaging aur curiosity-driven.";
 
         $prompt = <<<TXT
-        Tum ek expert Hindi kahani-lekhak ho. Neeche diye gaye topic par {$framing}
+        Tum ek expert kahani-lekhak ho. Neeche diye gaye topic par {$framing}
 
         Rules:
+        - {$langRule}
         - {$lengthRule}
-        - Chhote paragraphs, saral Hindi, natural kahani-sunane wala andaaz.
+        - Chhote paragraphs, saral bhasha, natural kahani-sunane wala andaaz.
         - Ek strong hook se shuru karo, aur ek satisfying moral ya twist ending do.
         - SIRF ek valid JSON object return karo (koi markdown, koi backticks nahi), bilkul is format me:
-        {"title": "chhota aakarshak Hindi title", "description": "1-2 line ka summary", "body": "poori kahani yahan (Devanagari)"}
+        {"title": "chhota aakarshak title", "description": "1-2 line ka summary", "body": "poori kahani yahan"}
+        - title, description aur body — teeno usi bhasha/script me hon jo upar rule me di gayi hai.
 
         Topic: {$topic}
         TXT;
@@ -62,6 +66,20 @@ class StoryAiService
         $raw = $this->callAi($prompt);
 
         return $this->parse($raw);
+    }
+
+    /**
+     * Language ke hisab se AI ko script/bhasha instruction. Studio service bhi
+     * yahi shabdावली use karti hai — consistency ke liye.
+     */
+    public static function langRule(string $language): string
+    {
+        return match ($language) {
+            'gujarati' => 'Poora content GUJARATI (ગુજરાતી લિપિ) me likho — shuddh Gujarati bhasha, koi Hindi/English nahi.',
+            'hinglish' => 'Content HINGLISH me likho — matlab Hindi hi (bolchaal wali), par ANGREZI/Roman (Latin) letters me. '
+                . 'Devanagari bilkul mat use karo. Jaise: "Ek chhote gaon mein Ramu naam ka ladka rehta tha."',
+            default    => 'Poora content HINDI (Devanagari lipi) me likho — saral, sahaj Hindi.',
+        };
     }
 
     /**
@@ -138,52 +156,64 @@ class StoryAiService
 
     protected function callGemini(string $prompt): string
     {
-        $model = 'gemini-2.5-flash';
-        $url = "https://generativelanguage.googleapis.com/v1beta/models/{$model}:generateContent";
+        $payload = [
+            'contents' => [['parts' => [['text' => $prompt]]]],
+            'generationConfig' => [
+                'responseMimeType' => 'application/json', // saaf JSON force karo
+                'temperature'      => 1.0,
+                // Lambi kahaniyan (8000/20000 shabd) beech me na katein.
+                'maxOutputTokens'  => 65536,
+            ],
+        ];
 
-        $res = Http::timeout(150)
-            ->retry(2, 2000, throw: false)
-            ->withHeaders(['x-goog-api-key' => config('services.gemini.key')])
-            ->post($url, [
-                'contents' => [['parts' => [['text' => $prompt]]]],
-                'generationConfig' => [
-                    'responseMimeType' => 'application/json', // saaf JSON force karo
-                    'temperature'      => 1.0,
-                    // Lambi kahaniyan (8000/20000 shabd) beech me na katein — zyada
-                    // output tokens allow karo (gemini-2.5-flash max 65536).
-                    'maxOutputTokens'  => 65536,
-                ],
-            ]);
+        $lastError = 'Gemini story generation fail.';
 
-        if (! $res->successful()) {
-            Log::error('Story AI Gemini failed', ['status' => $res->status(), 'body' => $res->json() ?: $res->body()]);
-            throw new \RuntimeException($res->json('error.message') ?? 'Gemini story generation fail.');
+        // Free-tier quota har model ki alag hoti hai — 2.5-flash busy (429) ho to
+        // 2.0-flash try karo (aksar quota bacha hota hai).
+        foreach (['gemini-2.5-flash', 'gemini-2.0-flash'] as $model) {
+            $url = "https://generativelanguage.googleapis.com/v1beta/models/{$model}:generateContent";
+            $res = Http::timeout(150)
+                ->withHeaders(['x-goog-api-key' => config('services.gemini.key')])
+                ->post($url, $payload);
+
+            if ($res->successful()) {
+                $text = (string) $res->json('candidates.0.content.parts.0.text');
+                if ($text !== '') {
+                    return $text;
+                }
+            }
+
+            $lastError = $res->json('error.message') ?? $lastError;
+            Log::warning('Story AI Gemini model fail', ['model' => $model, 'status' => $res->status()]);
         }
 
-        $text = (string) $res->json('candidates.0.content.parts.0.text');
-        if ($text === '') {
-            throw new \RuntimeException('Gemini se khaali jawab aaya.');
-        }
-
-        return $text;
+        throw new \RuntimeException($lastError);
     }
 
     protected function callPollinations(string $prompt): string
     {
-        $res = Http::timeout(120)
-            ->retry(2, 1500, throw: false)
-            ->get('https://text.pollinations.ai/' . rawurlencode($prompt), ['model' => 'openai']);
+        $url = 'https://text.pollinations.ai/' . rawurlencode($prompt);
+        $status = 0;
 
-        if (! $res->successful()) {
-            throw new \RuntimeException('AI story service ne error diya (HTTP ' . $res->status() . '). Thodi der baad try karein.');
+        // Ek model busy (429) ho to doosra try karo
+        foreach (['openai', 'mistral'] as $i => $model) {
+            $res = Http::timeout(120)->get($url, ['model' => $model]);
+            $body = trim($res->body());
+
+            if ($res->successful() && $body !== '') {
+                return $body;
+            }
+
+            $status = $res->status();
+            if ($status === 429 && $i === 0) {
+                sleep(3); // thoda ruk kar agla model
+            }
         }
 
-        $body = trim($res->body());
-        if ($body === '') {
-            throw new \RuntimeException('AI se khaali jawab aaya. Dobara try karein.');
-        }
-
-        return $body;
+        throw new \RuntimeException(
+            'AI service abhi bahut busy hai (HTTP ' . $status . '). 1-2 minute baad dobara try karein — '
+            . 'ya reliable/unlimited ke liye Gemini API billing enable karein.'
+        );
     }
 
     /**

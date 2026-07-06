@@ -151,20 +151,29 @@ class YoutubeAutoPost extends Command
     /** Pehla card jise abhi tak YouTube par post nahi kiya. */
     protected function nextPendingCard(int $userId): ?PartCard
     {
+        $randomPool = []; // shayari/joke/quote — random order me post honge
+
         foreach ($this->publishedStories($userId) as $story) {
             if (! $story->targetsPlatform('youtube')) {
                 continue; // ye story YouTube ke liye target nahi
             }
+            $isCollection = in_array($story->type, ['shayari', 'joke', 'quote'], true);
             foreach ($story->parts as $part) {
                 foreach ($part->cards as $card) {
-                    if ($card->yt_status === null) {
-                        return $card;
+                    if ($card->yt_status !== null) {
+                        continue;
+                    }
+                    if ($isCollection) {
+                        $randomPool[] = $card;
+                    } else {
+                        return $card; // story: sequence me
                     }
                 }
             }
         }
 
-        return null;
+        // Story cards khatam — collection se RANDOM ek
+        return $randomPool ? $randomPool[array_rand($randomPool)] : null;
     }
 
     protected function publishedStories(int $userId)

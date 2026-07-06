@@ -55,7 +55,7 @@
             <div id="quickColors">
                 <label class="block text-sm font-medium mb-1">Quick colors</label>
                 <div class="flex gap-2 flex-wrap">
-                    @php($presets = [['#7c3aed','#db2777'],['#0f766e','#14b8a6'],['#b91c1c','#f59e0b'],['#1e3a8a','#3b82f6'],['#111827','#374151'],['#9d174d','#f43f5e']])
+                    @php($presets = [['#7c3aed','#db2777'],['#0f766e','#14b8a6'],['#b91c1c','#f59e0b'],['#1e3a8a','#3b82f6'],['#111827','#374151'],['#9d174d','#f43f5e'],['#ff512f','#dd2476'],['#2193b0','#6dd5ed'],['#41295a','#2f0743'],['#0f2027','#203a43'],['#a18cd1','#fbc2eb'],['#000000','#434343'],['#f7971e','#ffd200'],['#654ea3','#eaafc8']])
                     @foreach($presets as $p)
                         <button type="button" class="preset w-8 h-8 rounded-full border-2 border-white shadow"
                                 data-c1="{{ $p[0] }}" data-c2="{{ $p[1] }}"
@@ -95,11 +95,21 @@
                     <label class="block text-xs text-slate-500 mb-1">Ready-made themes</label>
                     <div class="flex gap-2 flex-wrap">
                         @php($sbThemes = [
-                            ['bg'=>'#f3e7cf','box'=>'#6d181c','title'=>'#f0c65a','body'=>'#2b211a'],
-                            ['bg'=>'#eef3e2','box'=>'#234d2e','title'=>'#e7c15b','body'=>'#1f2a1c'],
-                            ['bg'=>'#e6eef5','box'=>'#123a5e','title'=>'#ecd08a','body'=>'#16222e'],
-                            ['bg'=>'#fbeef0','box'=>'#7a1733','title'=>'#f2c2a0','body'=>'#2a1720'],
-                            ['bg'=>'#201b17','box'=>'#3a1518','title'=>'#e7b84f','body'=>'#f1e6d2'],
+                            ['bg'=>'#f3e7cf','box'=>'#6d181c','title'=>'#f0c65a','body'=>'#2b211a'], // Classic
+                            ['bg'=>'#eef3e2','box'=>'#234d2e','title'=>'#e7c15b','body'=>'#1f2a1c'], // Green
+                            ['bg'=>'#e6eef5','box'=>'#123a5e','title'=>'#ecd08a','body'=>'#16222e'], // Blue
+                            ['bg'=>'#fbeef0','box'=>'#7a1733','title'=>'#f2c2a0','body'=>'#2a1720'], // Pink
+                            ['bg'=>'#201b17','box'=>'#3a1518','title'=>'#e7b84f','body'=>'#f1e6d2'], // Dark
+                            ['bg'=>'#0f172a','box'=>'#1e293b','title'=>'#fbbf24','body'=>'#e2e8f0'], // Midnight
+                            ['bg'=>'#ffe8d6','box'=>'#c2410c','title'=>'#ffe9b0','body'=>'#4a1e10'], // Sunset
+                            ['bg'=>'#241033','box'=>'#4c1d95','title'=>'#f0c65a','body'=>'#efe3ff'], // Royal
+                            ['bg'=>'#f7e6e3','box'=>'#a24857','title'=>'#f6ddce','body'=>'#5a2530'], // Rose Gold
+                            ['bg'=>'#0f2027','box'=>'#1e3a2f','title'=>'#a7e8bd','body'=>'#eafff0'], // Forest
+                            ['bg'=>'#0a0a0a','box'=>'#1c1c1c','title'=>'#d4af37','body'=>'#f7e7b4'], // Black Gold
+                            ['bg'=>'#0b2a33','box'=>'#0e5b6e','title'=>'#9fe3f0','body'=>'#eafcff'], // Ocean
+                            ['bg'=>'#ffecd2','box'=>'#b5651d','title'=>'#ffe0b8','body'=>'#5a2a1a'], // Peach
+                            ['bg'=>'#e2f5ee','box'=>'#0f5132','title'=>'#d4f3e3','body'=>'#0b3025'], // Emerald
+                            ['bg'=>'#efe9fb','box'=>'#5b21b6','title'=>'#e9dfff','body'=>'#2e1065'], // Lavender
                         ])
                         @foreach($sbThemes as $t)
                             <button type="button" class="sbtheme w-8 h-8 rounded-full border-2 border-white shadow"
@@ -216,12 +226,12 @@ const SB = {
     body:      '#2b211a',   // dark brown body text
 };
 
-function titleFont(s) { return `700 ${s.titleSize}px "Noto Sans Devanagari"`; }
-function subFont(s)   { return `600 ${s.headerSize}px "Noto Sans Devanagari"`; }
+function titleFont(s) { return `700 ${s.titleSize}px "Noto Sans Devanagari","Noto Sans Gujarati"`; }
+function subFont(s)   { return `600 ${s.headerSize}px "Noto Sans Devanagari","Noto Sans Gujarati"`; }
 // Body font — bold only when the storybook "Bold body text" option is on
 function bodyFont(s) {
     const w = (s.style === 'storybook' && s.sbBold) ? '700 ' : '';
-    return `${w}${s.bodySize}px "Noto Serif Devanagari"`;
+    return `${w}${s.bodySize}px "Noto Serif Devanagari","Noto Serif Gujarati"`;
 }
 
 // Layout the maroon title box for the storybook style.
@@ -431,7 +441,7 @@ function renderPage(canvas, pageLines, pageIndex, total, titleLines, titleBlock,
     // 4) TOP HEADER (har card) — "story title (भाग N)" ek hi line me
     let y = s.pad;
 
-    ctx.font = `700 ${s.headerSize}px "Noto Sans Devanagari"`;
+    ctx.font = `700 ${s.headerSize}px "Noto Sans Devanagari","Noto Sans Gujarati"`;
     const suffix = ` (भाग ${pageIndex + 1})`;
     const suffixW = ctx.measureText(suffix).width;
     const title = fitOneLine(ctx, PART.storyTitle, contentW - suffixW);
@@ -473,10 +483,10 @@ async function reflow() {
     const off = document.createElement('canvas');
     off.width = s.W; off.height = s.H;
     const ctx = off.getContext('2d');
-    await document.fonts.load(`${s.bodySize}px "Noto Serif Devanagari"`);
-    await document.fonts.load(`700 ${s.bodySize}px "Noto Serif Devanagari"`);
-    await document.fonts.load(`700 ${s.titleSize}px "Noto Sans Devanagari"`);
-    await document.fonts.load(`600 ${s.headerSize}px "Noto Sans Devanagari"`);
+    await document.fonts.load(`${s.bodySize}px "Noto Serif Devanagari","Noto Serif Gujarati"`);
+    await document.fonts.load(`700 ${s.bodySize}px "Noto Serif Devanagari","Noto Serif Gujarati"`);
+    await document.fonts.load(`700 ${s.titleSize}px "Noto Sans Devanagari","Noto Sans Gujarati"`);
+    await document.fonts.load(`600 ${s.headerSize}px "Noto Sans Devanagari","Noto Sans Gujarati"`);
     await document.fonts.ready;
 
     const c = computePages(ctx, s);

@@ -231,6 +231,12 @@ class InstagramService
             $mediaId = $this->publishContainer($containerId, retry: true);
             $this->markPosted($card, $mediaId);
 
+            // 6) Setting ON ho to wahi video Instagram Story me bhi daal do (bonus).
+            //    Story fail ho to reel post fir bhi safe — sirf log hota hai.
+            if ($this->alsoStory()) {
+                $this->postStoryVideo($videoUrl, $card->id);
+            }
+
             // NOTE: upload ke baad media files JAAN-BUJHKAR delete NAHI karte —
             // same card doosre platform (YouTube/Instagram) par bhi post ho sake.
 
@@ -239,6 +245,45 @@ class InstagramService
             Log::error('IG reel post failed', ['card' => $card->id, 'error' => $e->getMessage()]);
             $this->markFailed($card, $e->getMessage());
             throw $e;
+        }
+    }
+
+    /** "Reel ke saath Story me bhi daalo" setting ON hai? */
+    protected function alsoStory(): bool
+    {
+        return (string) $this->setting('ig_also_story', '0') === '1';
+    }
+
+    /**
+     * Ek (already public) video URL ko Instagram Story (24h) ki tarah publish karo.
+     * Reel ke saath bonus — fail ho to sirf log (reel post par asar nahi).
+     *
+     * @return string|null  story media id, ya null agar fail
+     */
+    public function postStoryVideo(string $videoUrl, ?int $cardId = null): ?string
+    {
+        try {
+            $create = Http::asForm()->post($this->apiBase() . '/' . $this->nodeId() . '/media', [
+                'media_type'   => 'STORIES',
+                'video_url'    => $videoUrl,
+                'access_token' => $this->token(),
+            ]);
+
+            if (! $create->successful() || ! $create->json('id')) {
+                throw new \RuntimeException($create->json('error.message') ?? 'Story container create fail.');
+            }
+
+            $containerId = $create->json('id');
+            $this->waitUntilFinished($containerId);
+            $storyId = $this->publishContainer($containerId, retry: true);
+
+            Log::info('IG Story bhi post ho gayi', ['card' => $cardId, 'story_media' => $storyId]);
+
+            return $storyId;
+        } catch (\Throwable $e) {
+            Log::warning('IG Story post skip (reel safe hai)', ['card' => $cardId, 'error' => $e->getMessage()]);
+
+            return null;
         }
     }
 
@@ -613,8 +658,9 @@ class InstagramService
 
         try {
             $voice = $this->voiceOverride ?: ($this->setting('tts_voice') ?: null);
+            $lang  = $card->part?->story?->language ?: 'hindi';
 
-            return $tts->speak($card->text, $voice, $this->voiceStyle($card));
+            return $tts->speak($card->text, $voice, $this->voiceStyle($card), $lang);
         } catch (\Throwable $e) {
             Log::warning('IG voice-over skip', ['card' => $card->id, 'error' => $e->getMessage()]);
 
