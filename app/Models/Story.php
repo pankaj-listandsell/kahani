@@ -17,7 +17,27 @@ class Story extends Model
         'description',
         'cover_image',
         'status',
+        'type',       // story | shayari | joke | quote
+        'category',   // topic/mood (love, sad, funny...)
+        'tts_mode',   // per-story audio override: voice | voice_music | music (null=global)
+        'tts_voice',  // per-story voice (Kore, Puck...) — null=global
+        'platforms',  // auto-post target platforms: ["instagram","youtube","facebook"] (null=sab)
     ];
+
+    protected $casts = [
+        'platforms' => 'array',
+    ];
+
+    /**
+     * Kya is story ko diye gaye platform par auto-post karna hai?
+     * null/empty platforms = sab platforms (default).
+     */
+    public function targetsPlatform(string $platform): bool
+    {
+        $list = $this->platforms;
+
+        return empty($list) || in_array($platform, $list, true);
+    }
 
     /**
      * Is kahani ka malik (owner).

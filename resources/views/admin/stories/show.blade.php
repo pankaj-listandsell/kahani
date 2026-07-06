@@ -17,11 +17,11 @@
     </div>
 </div>
 
-{{-- AI Cover Image (Pollinations) — 9:16, reel ka cover banega --}}
+{{-- Cover Image — 9:16, reel/Short ka cover (khud upload) --}}
 <div class="bg-white rounded-xl border border-slate-200 p-5 mb-6">
-    <h3 class="font-semibold mb-1">🖼️ Cover Image (AI)</h3>
+    <h3 class="font-semibold mb-1">🖼️ Cover Image</h3>
     <p class="text-sm text-slate-500 mb-4">
-        Story se related 9:16 image banao. Yahi image Instagram <b>reel ka cover</b> (thumbnail) banegi.
+        9:16 image upload karo. Yahi image Instagram/YouTube <b>reel/Short ka cover</b> (thumbnail) banegi.
     </p>
     <div class="flex flex-col sm:flex-row gap-5">
         <div class="shrink-0">
@@ -34,42 +34,7 @@
             @endif
         </div>
         <div class="flex-1 space-y-4">
-            {{-- Option A1: Kahani ke hisab se (ek click, Gemini) --}}
-            <form method="POST" action="{{ route('admin.stories.cover.ai', $story) }}"
-                  onsubmit="this.querySelector('button').disabled=true;this.querySelector('button').textContent='⏳ Ban rahi hai…';">
-                @csrf
-                <label class="block text-sm font-medium mb-1">✨ Kahani ke hisab se (auto)</label>
-                <p class="text-xs text-slate-500 mb-2">AI khud kahani padhega, uske hisab se ek 9:16 cover banayega. Koi prompt likhne ki zaroorat nahi.</p>
-                <button class="bg-violet-600 hover:bg-violet-700 text-white font-medium rounded-lg px-5 py-2.5 text-sm">
-                    ✨ Generate AI Cover (kahani se)
-                </button>
-            </form>
-
-            <div class="flex items-center gap-3 text-xs text-slate-400">
-                <span class="flex-1 h-px bg-slate-200"></span> YA khud prompt do <span class="flex-1 h-px bg-slate-200"></span>
-            </div>
-
-            {{-- Option A2: khud prompt likho --}}
-            <form method="POST" action="{{ route('admin.stories.cover.generate', $story) }}" class="space-y-3">
-                @csrf
-                <div>
-                    <label class="block text-sm font-medium mb-1">🎨 Ya khud describe karein (English me behtar result)</label>
-                    <textarea name="cover_prompt" rows="3" required
-                              class="w-full rounded-lg border border-slate-300 px-3 py-2 focus:ring-2 focus:ring-rose-400 focus:outline-none"
-                              placeholder="e.g. magical dark forest at night, glowing fireflies, cinematic, vertical poster">{{ old('cover_prompt', $story->title) }}</textarea>
-                    <p class="text-xs text-slate-500 mt-1">Purani cover replace ho jaayegi. Image banne me kuch second lagte hain.</p>
-                </div>
-                <button class="bg-rose-600 hover:bg-rose-700 text-white font-medium rounded-lg px-5 py-2.5 text-sm">
-                    🎨 Generate Cover Image
-                </button>
-            </form>
-
-            {{-- ya --}}
-            <div class="flex items-center gap-3 text-xs text-slate-400">
-                <span class="flex-1 h-px bg-slate-200"></span> YA <span class="flex-1 h-px bg-slate-200"></span>
-            </div>
-
-            {{-- Option B: khud se upload karo --}}
+            {{-- Khud se image upload karo --}}
             <form method="POST" action="{{ route('admin.stories.cover.upload', $story) }}" enctype="multipart/form-data" class="space-y-3">
                 @csrf
                 <div>
@@ -87,6 +52,11 @@
 </div>
 
 @php($part = $story->parts->first())
+
+{{-- Reel & auto-post settings --}}
+<div class="mb-4">
+    @include('admin.partials._reel_settings')
+</div>
 
 {{-- Story ke cards (single part) --}}
 <div class="bg-white rounded-xl border border-slate-200 p-5">
@@ -113,10 +83,15 @@
                 <p class="text-xs text-slate-500 mb-1">{{ $part->cards->count() }} cards ready:</p>
                 <div class="flex gap-3 overflow-x-auto pb-1">
                     @foreach ($part->cards as $card)
-                        <div class="shrink-0 text-center">
-                            <a href="{{ asset('storage/' . $card->image_path) }}" target="_blank">
-                                <img src="{{ asset('storage/' . $card->image_path) }}" class="h-24 rounded-lg border border-slate-200" alt="Card {{ $card->sort_order }}">
-                            </a>
+                        <div class="shrink-0 text-center w-24">
+                            <div class="media-slot">
+                                <a href="{{ asset('storage/' . $card->image_path) }}" target="_blank">
+                                    <img src="{{ asset('storage/' . $card->image_path) }}" class="w-24 rounded-lg border border-slate-200" alt="Card {{ $card->sort_order }}">
+                                </a>
+                            </div>
+                            <button type="button"
+                                    class="gen-reel mt-1 w-full text-[11px] bg-violet-600 hover:bg-violet-700 text-white rounded px-1 py-1"
+                                    data-url="{{ route('admin.cards.reel', $card) }}">▶ Reel</button>
                             <a href="{{ asset('storage/' . $card->image_path) }}" download class="block text-[11px] text-rose-600 hover:underline mt-1">⬇ Download</a>
                         </div>
                     @endforeach
@@ -127,4 +102,45 @@
         @endif
     @endif
 </div>
+
+@push('scripts')
+<script>
+(function () {
+    const CSRF = document.querySelector('meta[name=csrf-token]').content;
+
+    document.querySelectorAll('.gen-reel').forEach(btn => {
+        btn.addEventListener('click', async () => {
+            const cell = btn.closest('div');
+            const lbl = btn.textContent;
+            btn.disabled = true;
+            btn.textContent = '⏳…';
+
+            try {
+                const r = await fetch(btn.dataset.url, {
+                    method: 'POST',
+                    headers: { 'X-CSRF-TOKEN': CSRF, 'Accept': 'application/json' },
+                });
+                const d = await r.json();
+                if (d.ok) {
+                    const slot = cell.querySelector('.media-slot');
+                    slot.innerHTML = '<video controls playsinline class="w-24 rounded-lg border border-slate-200"'
+                        + ' src="' + d.url + '?t=' + Date.now() + '"></video>';
+                    slot.querySelector('video').play().catch(() => {});
+                    if (d.warning) slot.insertAdjacentHTML('beforeend',
+                        '<p class="text-[10px] text-amber-600 mt-1 leading-tight">⚠ ' + d.warning + '</p>');
+                    btn.textContent = '🔄 Dobara';
+                } else {
+                    btn.textContent = '⚠ ' + (d.error || 'Fail');
+                    setTimeout(() => { btn.textContent = lbl; }, 3000);
+                }
+            } catch (e) {
+                btn.textContent = '⚠ Error';
+                setTimeout(() => { btn.textContent = lbl; }, 3000);
+            }
+            btn.disabled = false;
+        });
+    });
+})();
+</script>
+@endpush
 @endsection

@@ -168,6 +168,9 @@ class FacebookAutoPost extends Command
             ->get();
 
         foreach ($stories as $story) {
+            if (! $story->targetsPlatform('facebook')) {
+                continue; // ye story Facebook ke liye target nahi
+            }
             foreach ($story->parts as $part) {
                 foreach ($part->cards as $card) {
                     if ($card->fb_status === null) {

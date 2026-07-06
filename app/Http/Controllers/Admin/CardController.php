@@ -5,7 +5,10 @@ namespace App\Http\Controllers\Admin;
 use App\Http\Controllers\Controller;
 use App\Models\Part;
 use App\Models\PartCard;
+use App\Models\Setting;
+use App\Services\GeminiTtsService;
 use App\Services\InstagramService;
+use App\Services\YoutubeService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
@@ -97,6 +100,42 @@ class CardController extends Controller
         $card->delete();
 
         return back()->with('success', 'Card deleted.');
+    }
+
+    /**
+     * Ek card ka reel (720x1280 mp4, voice-mode ON ho to voice-over ke saath)
+     * bana ke uska URL do — page par preview/check karne ke liye.
+     */
+    public function reel(PartCard $card, YoutubeService $youtube, GeminiTtsService $tts)
+    {
+        $story = $card->part->story;
+        $this->authorize('update', $story);
+
+        @set_time_limit(300);
+
+        // Voice mode ON + text ho to pehle voice prime/detect karo — taaki agar
+        // Gemini TTS ka quota/limit khatam ho to user ko clear warning mile
+        // (warna chup-chaap silent video ban jaata hai). Success par cache ho jaata
+        // hai, to neeche mp4ForCard wahi reuse karega (dobara API call nahi).
+        $warning = null;
+        $mode = Setting::getFor($story->user_id, 'tts_audio_mode', 'music');
+        if ($mode !== 'music' && filled($card->text) && $tts->isConfigured()) {
+            $style = in_array($story->type, ['shayari', 'quote', 'joke'], true) ? $story->type : 'story';
+            try {
+                $tts->speak($card->text, Setting::getFor($story->user_id, 'tts_voice') ?: null, $style);
+            } catch (\Throwable $e) {
+                $warning = 'Voice add nahi hui — Gemini TTS ka limit/quota khatam (free tier: 10 voice/din). '
+                    . 'Video bina voice ke bana hai.';
+            }
+        }
+
+        try {
+            $mp4 = $youtube->forUser($story->user_id)->mp4ForCard($card);
+
+            return response()->json(['ok' => true, 'url' => asset('storage/' . $mp4), 'warning' => $warning]);
+        } catch (\Throwable $e) {
+            return response()->json(['ok' => false, 'error' => $e->getMessage()], 422);
+        }
     }
 
     /**

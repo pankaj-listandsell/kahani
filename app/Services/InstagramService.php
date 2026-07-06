@@ -459,6 +459,10 @@ class InstagramService
      */
     public function mp4PathFor(PartCard $card, int $seconds = 6): string
     {
+        // Story par audio mode/voice set ho to wahi (warna global) — har card par reset
+        $this->withAudioMode($card->part?->story?->tts_mode);
+        $this->withVoice($card->part?->story?->tts_voice);
+
         $jpeg = $this->jpegPathFor($card);
         $mp4Path = preg_replace('/\.[a-z0-9]+$/i', '.mp4', str_replace('cards/', 'reels/', $jpeg));
         $disk = Storage::disk('public');
@@ -555,11 +559,40 @@ class InstagramService
      |  VOICE-OVER (Gemini TTS) helpers
      * =================================================================== */
 
+    /** Per-call audio-mode override (story ka tts_mode) — null = global setting. */
+    protected ?string $audioModeOverride = null;
+
+    /** Per-call voice override (story ka tts_voice) — null = global setting. */
+    protected ?string $voiceOverride = null;
+
+    public function withAudioMode(?string $mode): static
+    {
+        $this->audioModeOverride = in_array($mode, ['music', 'voice', 'voice_music'], true) ? $mode : null;
+
+        return $this;
+    }
+
+    public function withVoice(?string $voice): static
+    {
+        $this->voiceOverride = filled($voice) ? $voice : null;
+
+        return $this;
+    }
+
     protected function ttsMode(): string
     {
-        $m = (string) $this->setting('tts_audio_mode', 'music');
+        // Story ka per-collection override pehle, warna user ka global setting
+        $m = $this->audioModeOverride ?? (string) $this->setting('tts_audio_mode', 'music');
 
         return in_array($m, ['music', 'voice', 'voice_music'], true) ? $m : 'music';
+    }
+
+    /** Narration ka andaaz — shayari/quote/joke expressive, warna kahani. */
+    protected function voiceStyle(PartCard $card): string
+    {
+        $type = $card->part?->story?->type;
+
+        return in_array($type, ['shayari', 'quote', 'joke'], true) ? $type : 'story';
     }
 
     /**
@@ -579,7 +612,9 @@ class InstagramService
         }
 
         try {
-            return $tts->speak($card->text, $this->setting('tts_voice') ?: null);
+            $voice = $this->voiceOverride ?: ($this->setting('tts_voice') ?: null);
+
+            return $tts->speak($card->text, $voice, $this->voiceStyle($card));
         } catch (\Throwable $e) {
             Log::warning('IG voice-over skip', ['card' => $card->id, 'error' => $e->getMessage()]);
 

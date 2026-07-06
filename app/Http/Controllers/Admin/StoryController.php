@@ -4,12 +4,10 @@ namespace App\Http\Controllers\Admin;
 
 use App\Http\Controllers\Controller;
 use App\Models\Story;
-use App\Services\GeminiImageService;
 use App\Services\ImageService;
 use App\Services\InstagramService;
 use App\Services\StoryAiService;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Storage;
 
 class StoryController extends Controller
@@ -25,7 +23,11 @@ class StoryController extends Controller
      */
     public function index()
     {
-        $query = Story::withCount('parts')->latest();
+        // Sirf normal kahaniyan — shayari/joke/quote collections "Shayari & Jokes"
+        // section me dikhte hain (purani rows type=story hoti hain).
+        $query = Story::withCount('parts')
+            ->where(fn ($q) => $q->where('type', 'story')->orWhereNull('type'))
+            ->latest();
 
         // Regular user sirf apni stories dekhe; admin sabki
         if (! auth()->user()->isAdmin()) {
@@ -128,72 +130,45 @@ class StoryController extends Controller
      * Pollinations.ai se story-related 9:16 (1080x1920 ratio) cover image banao.
      * Yahi image Instagram reel ka cover (thumbnail) banegi.
      */
-    public function generateCover(Request $request, Story $story)
+    /**
+     * Is story/collection ke reels ka audio mode set karo (voice / voice_music /
+     * music). null = user ka global setting use ho. Reel generate + auto-post
+     * dono me yahi use hota hai.
+     */
+    public function audioMode(Request $request, Story $story)
     {
         $this->authorize('update', $story);
 
-        $request->validate([
-            'cover_prompt' => ['required', 'string', 'max:1000'],
+        $data = $request->validate([
+            'tts_mode'  => ['nullable', 'in:voice,voice_music,music'],
+            'tts_voice' => ['nullable', 'in:Kore,Aoede,Leda,Zephyr,Puck,Charon,Fenrir,Orus'],
         ]);
 
-        try {
-            // Purani cover hata do
-            if ($story->cover_image) {
-                Storage::disk('public')->delete($story->cover_image);
-            }
+        $story->update([
+            'tts_mode'  => $data['tts_mode'] ?: null,
+            'tts_voice' => $data['tts_voice'] ?: null,
+        ]);
 
-            // 720x1280 = exact 9:16 (reel/cover ke saath match)
-            $path = $this->imageService->generate(
-                $request->input('cover_prompt'),
-                720,
-                1280,
-                'covers',
-            );
-
-            $story->update(['cover_image' => $path]);
-
-            return back()->with('success', 'AI cover image ban gayi! 🎨');
-        } catch (\Throwable $e) {
-            return back()->with('error', 'Cover image nahi bani: ' . $e->getMessage());
-        }
+        return response()->json(['ok' => true]);
     }
 
     /**
-     * Kahani ke hisab se AI cover — ek click. Gemini text se image-prompt banao,
-     * phir Gemini image se cover (fail ho to Pollinations par fallback).
+     * Is story/collection ko kaunse platforms par auto-post karna hai
+     * (instagram / youtube / facebook). Khaali = sab platforms (default).
      */
-    public function generateCoverAi(Story $story, StoryAiService $ai, GeminiImageService $gemini)
+    public function platforms(Request $request, Story $story)
     {
         $this->authorize('update', $story);
 
-        $part = $story->parts()->orderBy('sort_order')->first();
-        $body = $part?->body ?: ($story->description ?: $story->title);
+        $data = $request->validate([
+            'platforms'   => ['nullable', 'array'],
+            'platforms.*' => ['in:instagram,youtube,facebook'],
+        ]);
 
-        try {
-            // 1) Kahani se image prompt
-            $prompt = $ai->coverPrompt($story->title, $body);
+        $list = array_values(array_unique($data['platforms'] ?? []));
+        $story->update(['platforms' => $list ?: null]);
 
-            // Purani cover hata do
-            if ($story->cover_image) {
-                Storage::disk('public')->delete($story->cover_image);
-            }
-
-            // 2) Gemini image, warna Pollinations fallback
-            try {
-                $path = $gemini->isConfigured()
-                    ? $gemini->generate($prompt, 'covers')
-                    : $this->imageService->generate($prompt, 720, 1280, 'covers');
-            } catch (\Throwable $e) {
-                Log::warning('Gemini cover fail, Pollinations fallback', ['error' => $e->getMessage()]);
-                $path = $this->imageService->generate($prompt, 720, 1280, 'covers');
-            }
-
-            $story->update(['cover_image' => $path]);
-
-            return back()->with('success', 'AI cover kahani ke hisab se ban gayi! 🎨');
-        } catch (\Throwable $e) {
-            return back()->with('error', 'Cover nahi bani: ' . $e->getMessage());
-        }
+        return response()->json(['ok' => true]);
     }
 
     /**

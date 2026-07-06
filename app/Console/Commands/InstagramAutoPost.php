@@ -178,6 +178,9 @@ class InstagramAutoPost extends Command
             ->get();
 
         foreach ($stories as $story) {
+            if (! $story->targetsPlatform('instagram')) {
+                continue; // ye story Instagram ke liye target nahi
+            }
             foreach ($story->parts as $part) {
                 foreach ($part->cards as $card) {
                     // Sirf fresh cards (jo abhi tak kabhi post/queue/fail nahi hue).

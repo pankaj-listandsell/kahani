@@ -152,6 +152,9 @@ class YoutubeAutoPost extends Command
     protected function nextPendingCard(int $userId): ?PartCard
     {
         foreach ($this->publishedStories($userId) as $story) {
+            if (! $story->targetsPlatform('youtube')) {
+                continue; // ye story YouTube ke liye target nahi
+            }
             foreach ($story->parts as $part) {
                 foreach ($part->cards as $card) {
                     if ($card->yt_status === null) {

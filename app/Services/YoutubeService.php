@@ -31,9 +31,29 @@ class YoutubeService
 {
     protected ?int $settingsUserId = null;
 
+    /** Per-call audio-mode override (story ka tts_mode) — null = global setting. */
+    protected ?string $audioModeOverride = null;
+
+    /** Per-call voice override (story ka tts_voice) — null = global setting. */
+    protected ?string $voiceOverride = null;
+
     public function forUser(?int $userId): static
     {
         $this->settingsUserId = $userId;
+
+        return $this;
+    }
+
+    public function withAudioMode(?string $mode): static
+    {
+        $this->audioModeOverride = in_array($mode, ['music', 'voice', 'voice_music'], true) ? $mode : null;
+
+        return $this;
+    }
+
+    public function withVoice(?string $voice): static
+    {
+        $this->voiceOverride = filled($voice) ? $voice : null;
 
         return $this;
     }
@@ -231,6 +251,10 @@ class YoutubeService
     /** Ek card → 1080x1920 Short mp4. Storage-relative path return karta hai. */
     public function mp4ForCard(PartCard $card, ?int $seconds = null): string
     {
+        // Story par audio mode/voice set ho to wahi (warna global) — har card par reset
+        $this->withAudioMode($card->part?->story?->tts_mode);
+        $this->withVoice($card->part?->story?->tts_voice);
+
         $seconds = $seconds ?: max(2, (int) $this->setting('yt_card_seconds', 6));
 
         $disk = Storage::disk('public');
@@ -313,7 +337,9 @@ class YoutubeService
         }
 
         try {
-            return $tts->speak($card->text, $this->setting('tts_voice') ?: null);
+            $voice = $this->voiceOverride ?: ($this->setting('tts_voice') ?: null);
+
+            return $tts->speak($card->text, $voice, $this->voiceStyle($card));
         } catch (\Throwable $e) {
             Log::warning('YT voice-over skip', ['card' => $card->id, 'error' => $e->getMessage()]);
 
@@ -323,9 +349,18 @@ class YoutubeService
 
     protected function ttsMode(): string
     {
-        $m = (string) $this->setting('tts_audio_mode', 'music');
+        // Story ka per-collection override pehle, warna user ka global setting
+        $m = $this->audioModeOverride ?? (string) $this->setting('tts_audio_mode', 'music');
 
         return in_array($m, ['music', 'voice', 'voice_music'], true) ? $m : 'music';
+    }
+
+    /** Narration ka andaaz — shayari/quote/joke expressive, warna kahani. */
+    protected function voiceStyle(PartCard $card): string
+    {
+        $type = $card->part?->story?->type;
+
+        return in_array($type, ['shayari', 'quote', 'joke'], true) ? $type : 'story';
     }
 
     /**

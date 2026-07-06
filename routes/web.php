@@ -8,6 +8,7 @@ use App\Http\Controllers\Admin\InstagramController;
 use App\Http\Controllers\Admin\PartController;
 use App\Http\Controllers\Admin\SettingsController;
 use App\Http\Controllers\Admin\StoryController;
+use App\Http\Controllers\Admin\StudioController;
 use App\Http\Controllers\Admin\UserManagementController;
 use App\Http\Controllers\Admin\YoutubeController;
 use Illuminate\Support\Facades\Auth;
@@ -88,18 +89,26 @@ Route::middleware('auth')->prefix('admin')->name('admin.')->group(function () {
     Route::post('facebook/parts/{part}/photos', [FacebookController::class, 'postPart'])->name('facebook.part.photos');
     Route::post('facebook/parts/{part}/reels', [FacebookController::class, 'postPartReels'])->name('facebook.part.reels');
 
+    // Shayari / Jokes / Quotes Studio — AI batch → sundar cards (stories se alag)
+    Route::get('studio', [StudioController::class, 'index'])->name('studio.index');
+    Route::post('studio/generate', [StudioController::class, 'generate'])->name('studio.generate');
+    Route::post('studio/save', [StudioController::class, 'save'])->name('studio.save');
+    Route::get('studio/{story}', [StudioController::class, 'show'])->name('studio.show');
+    Route::delete('studio/{story}', [StudioController::class, 'destroy'])->name('studio.destroy');
+
     // Topic se AI kahani generate (create form bharne ke liye) — resource se pehle
     Route::post('stories/generate', [StoryController::class, 'generateFromTopic'])->name('stories.generate');
 
     // Story CRUD
     Route::resource('stories', StoryController::class);
 
-    // Story ke liye AI (Pollinations) se 9:16 cover image banao
-    Route::post('stories/{story}/cover', [StoryController::class, 'generateCover'])->name('stories.cover.generate');
-    // Kahani ke hisab se AI cover (Gemini image, ek click)
-    Route::post('stories/{story}/cover/ai', [StoryController::class, 'generateCoverAi'])->name('stories.cover.ai');
-    // Ya khud se cover image file upload karo
+    // Cover image khud se upload karo (9:16)
     Route::post('stories/{story}/cover/upload', [StoryController::class, 'uploadCover'])->name('stories.cover.upload');
+
+    // Per-story/collection reel audio mode (voice / voice_music / music)
+    Route::put('stories/{story}/audio-mode', [StoryController::class, 'audioMode'])->name('stories.audiomode');
+    // Per-story/collection auto-post target platforms
+    Route::put('stories/{story}/platforms', [StoryController::class, 'platforms'])->name('stories.platforms');
 
     // Parts — kahani ke andar nested
     Route::get('stories/{story}/parts/create', [PartController::class, 'create'])->name('parts.create');
@@ -112,6 +121,7 @@ Route::middleware('auth')->prefix('admin')->name('admin.')->group(function () {
     Route::get('parts/{part}/cards', [CardController::class, 'editor'])->name('parts.cards');
     Route::post('parts/{part}/cards', [CardController::class, 'store'])->name('parts.cards.store');
     Route::delete('parts/{part}/cards', [CardController::class, 'clear'])->name('parts.cards.clear');
+    Route::post('cards/{card}/reel', [CardController::class, 'reel'])->name('cards.reel');
     Route::delete('cards/{card}', [CardController::class, 'destroy'])->name('cards.destroy');
 
     // User management — sirf admin
