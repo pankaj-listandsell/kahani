@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Models\Part;
 use App\Models\PartCard;
 use App\Models\Setting;
+use App\Services\AiCaptionService;
 use App\Services\GeminiTtsService;
 use App\Services\InstagramService;
 use App\Services\YoutubeService;
@@ -62,11 +63,26 @@ class CardController extends Controller
         $path = 'cards/' . Str::uuid() . '.png';
         Storage::disk('public')->put($path, $binary);
 
-        $part->cards()->create([
+        $card = $part->cards()->create([
             'sort_order' => $data['order'],
             'image_path' => $path,
             'text'       => $data['text'] ?? null,
         ]);
+
+        // Auto Instagram caption + hashtags (Studio jaisa) — pehle card (reset) par
+        // ek baar AI se banao, baaki cards me wahi reuse karo (quota-friendly).
+        // Fail ho to chhod do — card fir bhi save (post ke time default caption banega).
+        try {
+            $caption = $request->boolean('reset')
+                ? app(AiCaptionService::class)->forCard($card)
+                : $part->cards()->whereNotNull('ig_caption')->value('ig_caption');
+
+            if (filled($caption)) {
+                $card->update(['ig_caption' => $caption]);
+            }
+        } catch (\Throwable $e) {
+            // caption optional — card save rahega
+        }
 
         return response()->json([
             'ok'    => true,

@@ -4,6 +4,7 @@ namespace App\Services;
 
 use App\Models\PartCard;
 use Illuminate\Support\Facades\Http;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Str;
 
 /**
@@ -104,26 +105,97 @@ class AiCaptionService
      */
     private function callAi(string $prompt): string
     {
+        // Gemini (agar key ho) — behtar + reliable; warna Pollinations par fallback
+        if (filled(config('services.gemini.key'))) {
+            try {
+                return $this->callGemini($prompt);
+            } catch (\Throwable $e) {
+                Log::warning('Caption AI: Gemini fail, Pollinations fallback', ['error' => $e->getMessage()]);
+            }
+        }
+
+        return $this->callPollinations($prompt);
+    }
+
+    private function callGemini(string $prompt): string
+    {
+        $payload = [
+            'contents'         => [['parts' => [['text' => $prompt]]]],
+            'generationConfig' => ['temperature' => 1.0],
+        ];
+        $lastError = 'Gemini caption fail.';
+
+        // Quota per-model — 2.5-flash busy ho to 2.0-flash try karo
+        foreach (['gemini-2.5-flash', 'gemini-2.0-flash'] as $model) {
+            $url = "https://generativelanguage.googleapis.com/v1beta/models/{$model}:generateContent";
+            $res = Http::timeout(60)
+                ->withHeaders(['x-goog-api-key' => config('services.gemini.key')])
+                ->post($url, $payload);
+
+            if ($res->successful()) {
+                $text = trim((string) $res->json('candidates.0.content.parts.0.text'));
+                if ($text !== '') {
+                    return $this->cleanCaption($text);
+                }
+            }
+            $lastError = $res->json('error.message') ?? $lastError;
+        }
+
+        throw new \RuntimeException($lastError);
+    }
+
+    private function callPollinations(string $prompt): string
+    {
         $url = 'https://text.pollinations.ai/' . rawurlencode($prompt);
+        $status = 0;
 
-        $response = Http::timeout(60)
-            ->retry(2, 1500, throw: false)
-            ->get($url, [
-                'model' => 'openai',
-            ]);
+        // openai-fast clean text; openai backup (mistral/llama Pollinations ne hata diye)
+        foreach (['openai-fast', 'openai'] as $i => $model) {
+            $res = Http::timeout(60)->get($url, ['model' => $model]);
+            $caption = $this->unwrapChat(trim($res->body()));
 
-        if (! $response->successful()) {
-            throw new \RuntimeException('AI caption service ne error diya (HTTP ' . $response->status() . '). Thodi der baad try karein.');
+            if ($res->successful() && $caption !== '' && ! Str::startsWith($caption, ['<', '{'])) {
+                return $this->cleanCaption($caption);
+            }
+            $status = $res->status() ?: $status;
+            if ($status === 429 && $i < 2) {
+                sleep(2);
+            }
         }
 
-        $caption = trim($response->body());
+        throw new \RuntimeException('AI caption service abhi busy hai (HTTP ' . $status . '). Thodi der baad try karein.');
+    }
 
-        // Kabhi-kabhi service khaali ya HTML de deti hai
-        if ($caption === '' || Str::startsWith($caption, ['<', '{'])) {
-            throw new \RuntimeException('AI se valid caption nahi mili. Dobara try karein.');
+    /** Pollinations kabhi chat-object / reasoning wrapper deta hai — actual text nikaalo. */
+    private function unwrapChat(string $body): string
+    {
+        if (! str_starts_with($body, '{')) {
+            return $body;
+        }
+        $obj = json_decode($body, true);
+        if (! is_array($obj)) {
+            return $body;
+        }
+        foreach ([
+            $obj['choices'][0]['message']['content'] ?? null,
+            $obj['choices'][0]['text'] ?? null,
+            $obj['content'] ?? null,
+            $obj['message']['content'] ?? null,
+            $obj['text'] ?? null,
+            $obj['response'] ?? null,
+            is_string($obj['message'] ?? null) ? $obj['message'] : null,
+        ] as $p) {
+            if (is_string($p) && trim($p) !== '') {
+                return trim($p);
+            }
         }
 
-        // Aage/peeche ke quote marks hata do agar AI ne laga diye
+        return $body;
+    }
+
+    /** Aage/peeche ke quote marks hata do agar AI ne laga diye. */
+    private function cleanCaption(string $caption): string
+    {
         return trim($caption, "\"' \n\r\t");
     }
 

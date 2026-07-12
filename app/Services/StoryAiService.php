@@ -195,17 +195,19 @@ class StoryAiService
         $url = 'https://text.pollinations.ai/' . rawurlencode($prompt);
         $status = 0;
 
-        // Ek model busy (429) ho to doosra try karo
-        foreach (['openai', 'mistral'] as $i => $model) {
+        // openai-fast clean JSON deta hai; openai backup (mistral/llama Pollinations ne hata diye)
+        foreach (['openai-fast', 'openai'] as $i => $model) {
             $res = Http::timeout(120)->get($url, ['model' => $model]);
-            $body = trim($res->body());
 
-            if ($res->successful() && $body !== '') {
-                return $body;
+            if ($res->successful()) {
+                $body = $this->unwrapChat(trim($res->body()));
+                if ($body !== '' && ! preg_match('/^\{\s*"(role|reasoning|error)"/', $body)) {
+                    return $body;
+                }
             }
 
-            $status = $res->status();
-            if ($status === 429 && $i === 0) {
+            $status = $res->status() ?: $status;
+            if ($status === 429 && $i < 2) {
                 sleep(3); // thoda ruk kar agla model
             }
         }
@@ -214,6 +216,35 @@ class StoryAiService
             'AI service abhi bahut busy hai (HTTP ' . $status . '). 1-2 minute baad dobara try karein — '
             . 'ya reliable/unlimited ke liye Gemini API billing enable karein.'
         );
+    }
+
+    /**
+     * Pollinations kabhi chat-object / reasoning wrapper deta hai — actual text nikaalo.
+     */
+    protected function unwrapChat(string $body): string
+    {
+        if (! str_starts_with($body, '{')) {
+            return $body;
+        }
+        $obj = json_decode($body, true);
+        if (! is_array($obj)) {
+            return $body;
+        }
+        foreach ([
+            $obj['choices'][0]['message']['content'] ?? null,
+            $obj['choices'][0]['text'] ?? null,
+            $obj['content'] ?? null,
+            $obj['message']['content'] ?? null,
+            $obj['text'] ?? null,
+            $obj['response'] ?? null,
+            is_string($obj['message'] ?? null) ? $obj['message'] : null,
+        ] as $p) {
+            if (is_string($p) && trim($p) !== '') {
+                return trim($p);
+            }
+        }
+
+        return $body;
     }
 
     /**

@@ -8,6 +8,7 @@ use App\Http\Controllers\Admin\InstagramController;
 use App\Http\Controllers\Admin\PartController;
 use App\Http\Controllers\Admin\SettingsController;
 use App\Http\Controllers\Admin\StoryController;
+use App\Http\Controllers\Admin\QuizController;
 use App\Http\Controllers\Admin\StudioController;
 use App\Http\Controllers\Admin\UserManagementController;
 use App\Http\Controllers\Admin\YoutubeController;
@@ -96,6 +97,14 @@ Route::middleware('auth')->prefix('admin')->name('admin.')->group(function () {
     Route::post('studio/save', [StudioController::class, 'save'])->name('studio.save');
     Route::get('studio/{story}', [StudioController::class, 'show'])->name('studio.show');
     Route::delete('studio/{story}', [StudioController::class, 'destroy'])->name('studio.destroy');
+
+    // Quiz (MCQ) — alag section
+    Route::get('quiz', [QuizController::class, 'index'])->name('quiz.index');
+    Route::post('quiz/generate', [QuizController::class, 'generate'])->name('quiz.generate');
+    Route::post('quiz/save', [QuizController::class, 'save'])->name('quiz.save');
+    Route::post('quiz/cards/{card}/reel', [QuizController::class, 'quizReel'])->name('quiz.card.reel');
+    Route::get('quiz/{story}', [QuizController::class, 'show'])->name('quiz.show');
+    Route::delete('quiz/{story}', [QuizController::class, 'destroy'])->name('quiz.destroy');
 
     // Topic se AI kahani generate (create form bharne ke liye) — resource se pehle
     Route::post('stories/generate', [StoryController::class, 'generateFromTopic'])->name('stories.generate');

@@ -278,6 +278,46 @@ class YoutubeService
     }
 
     /**
+     * Kai cards ko ek hi reel me jodo (jaise Quiz: Question card + Answer card).
+     * $extraDur[i] = us card par extra pause (seconds) — jaise question ke baad
+     * viewer ke sochne ka time. Voice-over per-card lagta hai (agar mode ON).
+     *
+     * @param  list<PartCard>  $cards
+     */
+    public function mp4ForCards(array $cards, string $key, array $extraDur = []): string
+    {
+        $first = $cards[0] ?? null;
+        // Story ka audio mode/voice override (har call par reset)
+        $this->withAudioMode($first?->part?->story?->tts_mode);
+        $this->withVoice($first?->part?->story?->tts_voice);
+
+        $seconds = max(2, (int) $this->setting('yt_card_seconds', 6));
+        $disk = Storage::disk('public');
+        $disk->makeDirectory('yt');
+        $mp4 = 'yt/' . $key . '.mp4';
+
+        $segments = [];
+        foreach ($cards as $i => $card) {
+            if (! $card->image_path || ! $disk->exists($card->image_path)) {
+                continue;
+            }
+            $seg = $this->cardSegment($card, $seconds);
+            if (! empty($extraDur[$i])) {
+                $seg['dur'] += (float) $extraDur[$i]; // extra pause
+            }
+            $segments[] = $seg;
+        }
+
+        if (empty($segments)) {
+            throw new \RuntimeException('In cards ki koi image nahi mili.');
+        }
+
+        $this->encodeSegments($segments, $mp4);
+
+        return $mp4;
+    }
+
+    /**
      * Story ki cover image ko ek intro-segment ki tarah do (agar cover on hai
      * aur file maujood hai). Warna khaali array.
      *

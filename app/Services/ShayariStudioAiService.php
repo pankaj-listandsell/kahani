@@ -33,6 +33,52 @@ class ShayariStudioAiService
         return array_slice($items, 0, $count);
     }
 
+    /**
+     * Quiz (MCQ) generate karo — competitive-exam style.
+     *
+     * @return list<array{question:string, options:list<string>, answer:string, reason:string, hashtags:string}>
+     * @throws \RuntimeException
+     */
+    public function generateQuiz(string $category, int $count, string $language = 'hindi'): array
+    {
+        $count    = max(1, min(30, $count));
+        $category = trim($category) ?: 'general knowledge';
+
+        $prompt = $this->quizPrompt($category, $count, $language);
+        $items  = $this->parseQuiz($this->callAi($prompt));
+
+        // Kabhi model galat format deta hai — ek baar dobara try karo
+        if (empty($items)) {
+            $raw = $this->callAi($prompt);
+            Log::warning('Quiz parse empty, retry', ['raw' => mb_substr($raw, 0, 400)]);
+            $items = $this->parseQuiz($raw);
+        }
+
+        if (empty($items)) {
+            throw new \RuntimeException('AI se quiz nahi bana. Dobara try karein.');
+        }
+
+        return array_slice($items, 0, $count);
+    }
+
+    protected function quizPrompt(string $category, int $count, string $language): string
+    {
+        $lang = StoryAiService::langRule($language);
+
+        return <<<TXT
+        Tum ek expert quiz-master ho jo competitive exam (jaise "{$category}") ki taiyari karwate ho.
+        "{$category}" topic par {$count} multiple-choice questions (MCQ) banao — factual aur accurate.
+        {$lang}
+        Rules (har question ke liye):
+        - EXACTLY 4 options do.
+        - "answer" me sahi option ka letter do: "A", "B", "C" ya "D".
+        - "reason" me ek chhoti 1-line wajah do (kyun sahi hai).
+        - Har item ke saath 6-10 safe, relevant hashtags "hashtags" me (banned/sensitive nahi).
+        SIRF ek valid JSON array return karo (koi markdown, koi backticks nahi), bilkul is format me:
+        [{"question":"prashn yahan?", "options":["pehla","dusra","teesra","chautha"], "answer":"B", "reason":"chhoti wajah", "hashtags":"#quiz #gk #exam"}]
+        TXT;
+    }
+
     protected function prompt(string $type, string $category, int $count, string $language = 'hindi'): string
     {
         // Bhasha/script rule — StoryAiService ke saath consistent
@@ -131,17 +177,20 @@ class ShayariStudioAiService
         $url = 'https://text.pollinations.ai/' . rawurlencode($prompt);
         $status = 0;
 
-        // Ek model busy (429) ho to doosra try karo
-        foreach (['openai', 'mistral'] as $i => $model) {
+        // openai-fast clean JSON deta hai; openai backup (mistral/llama Pollinations ne hata diye)
+        foreach (['openai-fast', 'openai'] as $i => $model) {
             $res = Http::timeout(120)->get($url, ['model' => $model]);
-            $body = trim($res->body());
 
-            if ($res->successful() && $body !== '') {
-                return $body;
+            if ($res->successful()) {
+                $body = $this->unwrapChat(trim($res->body()));
+                // Reasoning/error wrapper na ho — asli usable text
+                if ($body !== '' && ! preg_match('/^\{\s*"(role|reasoning|error)"/', $body)) {
+                    return $body;
+                }
             }
 
-            $status = $res->status();
-            if ($status === 429 && $i === 0) {
+            $status = $res->status() ?: $status;
+            if ($status === 429 && $i < 2) {
                 sleep(3);
             }
         }
@@ -150,6 +199,38 @@ class ShayariStudioAiService
             'AI service abhi bahut busy hai (HTTP ' . $status . '). 1-2 minute baad dobara try karein — '
             . 'ya reliable ke liye Gemini API billing enable karein.'
         );
+    }
+
+    /**
+     * Pollinations kabhi plain text ke bajaye chat-object deta hai
+     * ({"content":"..."} / {"choices":[...]} / reasoning wrapper) — usme se actual
+     * text nikaalo.
+     */
+    protected function unwrapChat(string $body): string
+    {
+        if (! str_starts_with($body, '{')) {
+            return $body;
+        }
+        $obj = json_decode($body, true);
+        if (! is_array($obj)) {
+            return $body;
+        }
+
+        foreach ([
+            $obj['choices'][0]['message']['content'] ?? null,
+            $obj['choices'][0]['text'] ?? null,
+            $obj['content'] ?? null,
+            $obj['message']['content'] ?? null,
+            $obj['text'] ?? null,
+            $obj['response'] ?? null,
+            is_string($obj['message'] ?? null) ? $obj['message'] : null,
+        ] as $p) {
+            if (is_string($p) && trim($p) !== '') {
+                return trim($p);
+            }
+        }
+
+        return $body;
     }
 
     /* ===================================================================
@@ -224,6 +305,145 @@ class ShayariStudioAiService
         }
 
         return $items;
+    }
+
+    /**
+     * Quiz JSON parse — {question, options[4], answer, reason, hashtags}.
+     *
+     * @return list<array{question:string, options:list<string>, answer:string, reason:string, hashtags:string}>
+     */
+    protected function parseQuiz(string $raw): array
+    {
+        $items = [];
+
+        foreach ($this->decodeArray($raw) as $row) {
+            if (! is_array($row)) {
+                continue;
+            }
+
+            // Question — alag-alag models alag keys use karte hain
+            $question = $this->asString(
+                $row['question'] ?? $row['q'] ?? $row['prashn'] ?? $row['title'] ?? $row['ques'] ?? ''
+            );
+
+            // Options — har ek ko safely string banao (AI kabhi object/nested deta hai)
+            $rawOpts = $row['options'] ?? $row['choices'] ?? $row['answers'] ?? $row['opts'] ?? [];
+            $options = [];
+            foreach ((array) $rawOpts as $o) {
+                $s = $this->asString($o);
+                if ($s !== '') {
+                    $options[] = $s;
+                }
+            }
+
+            if ($question === '' || count($options) < 2) {
+                continue;
+            }
+
+            // Sirf pehle 4 options; answer letter A–D normalize
+            $options = array_slice($options, 0, 4);
+            $ans     = strtoupper($this->asString(
+                $row['answer'] ?? $row['correct'] ?? $row['correct_answer'] ?? $row['ans'] ?? 'A'
+            ));
+            if (! preg_match('/^[A-D]$/', $ans)) {
+                // number (1-4) ya option-text bhi handle karo
+                if (preg_match('/^[1-4]$/', $ans)) {
+                    $ans = chr(64 + (int) $ans); // 1->A
+                } else {
+                    $idx = array_search($ans, array_map('strtoupper', $options), true);
+                    $ans = $idx !== false ? chr(65 + $idx) : 'A';
+                }
+            }
+            // Answer index options ki range me ho
+            if (ord($ans) - 65 >= count($options)) {
+                $ans = 'A';
+            }
+
+            $items[] = [
+                'question' => $question,
+                'options'  => $options,
+                'answer'   => $ans,
+                'reason'   => $this->asString($row['reason'] ?? $row['explanation'] ?? $row['reasoning'] ?? ''),
+                'hashtags' => $this->asString($row['hashtags'] ?? $row['tags'] ?? ''),
+            ];
+        }
+
+        return $items;
+    }
+
+    /**
+     * Kisi bhi AI value ko safely string banao — scalar hi, warna array me se
+     * text/value nikaalo ya join karo. "Array to string conversion" se bachne ke liye.
+     */
+    protected function asString(mixed $v): string
+    {
+        if (is_scalar($v)) {
+            return trim((string) $v);
+        }
+
+        if (is_array($v)) {
+            // Kabhi option {"text": "..."} / {"option": "..."} jaisa aata hai
+            foreach (['text', 'value', 'label', 'option', 'answer', 'title'] as $k) {
+                if (isset($v[$k]) && is_scalar($v[$k])) {
+                    return trim((string) $v[$k]);
+                }
+            }
+            // Flat scalars ko jodo
+            $flat = array_filter($v, 'is_scalar');
+
+            return trim(implode(' ', array_map('strval', $flat)));
+        }
+
+        return '';
+    }
+
+    /** AI ke jawab me se items array nikaalo (repair ke saath, robust). */
+    protected function decodeArray(string $raw): array
+    {
+        $clean = trim(preg_replace('/^```(?:json)?|```$/mi', '', trim($raw)));
+
+        $firstBracket = strpos($clean, '[');
+        $firstBrace   = strpos($clean, '{');
+
+        // Response '[' se shuru (array) — seedha list
+        if ($firstBracket !== false && ($firstBrace === false || $firstBracket < $firstBrace)) {
+            if (preg_match('/\[.*\]/s', $clean, $m)) {
+                foreach ([$m[0], $this->repairJsonControlChars($m[0])] as $cand) {
+                    $try = json_decode($cand, true);
+                    if (is_array($try) && $try !== []) {
+                        return $try;
+                    }
+                }
+            }
+        }
+
+        // Response '{' se shuru (object) — nested array ya single item
+        if ($firstBrace !== false && preg_match('/\{.*\}/s', $clean, $m)) {
+            foreach ([$m[0], $this->repairJsonControlChars($m[0])] as $cand) {
+                $obj = json_decode($cand, true);
+                if (! is_array($obj)) {
+                    continue;
+                }
+                foreach (['questions', 'items', 'quiz', 'data', 'mcqs', 'result'] as $k) {
+                    if (isset($obj[$k]) && is_array($obj[$k]) && $obj[$k] !== []) {
+                        return $obj[$k];
+                    }
+                }
+                if (isset($obj['question']) || isset($obj['text']) || isset($obj['q'])) {
+                    return [$obj];
+                }
+            }
+        }
+
+        // Last resort — koi bhi array block
+        if (preg_match('/\[.*\]/s', $clean, $m)) {
+            $try = json_decode($this->repairJsonControlChars($m[0]), true);
+            if (is_array($try) && $try !== []) {
+                return $try;
+            }
+        }
+
+        return [];
     }
 
     /**
