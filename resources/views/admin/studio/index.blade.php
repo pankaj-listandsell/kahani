@@ -15,6 +15,8 @@
                     <option value="shayari">🖊️ Shayari</option>
                     <option value="joke">😂 Jokes</option>
                     <option value="quote">🌟 Suvichar / Quotes</option>
+                    <option value="status">🔥 Status</option>
+                    <option value="fact">🤯 Facts</option>
                 </select>
             </div>
             <div>
@@ -79,7 +81,7 @@
             <a href="{{ route('admin.studio.show', $c) }}"
                class="flex items-center justify-between bg-white border border-slate-200 rounded-lg px-4 py-3 mb-2 hover:border-violet-300">
                 <span class="font-medium">
-                    @php($icon = ['shayari'=>'🖊️','joke'=>'😂','quote'=>'🌟'][$c->type] ?? '✨')
+                    @php($icon = ['shayari'=>'🖊️','joke'=>'😂','quote'=>'🌟','status'=>'🔥','fact'=>'🤯'][$c->type] ?? '✨')
                     {{ $icon }} {{ $c->title }}
                 </span>
                 <span class="text-xs text-slate-400">{{ $c->parts_count }} cards · {{ ucfirst($c->status) }}</span>
@@ -102,9 +104,35 @@ const W = 1080, H = 1920;
 
 // ---------- Category suggestions per type ----------
 const CATS = {
-    shayari: ['Love', 'Sad', 'Dosti', 'Zindagi', 'Bewafa', 'Romantic', 'Motivational', 'Ishq'],
-    joke:    ['Funny', 'Pati-Patni', 'Santa-Banta', 'School', 'Office', 'Bachpan'],
-    quote:   ['Motivational', 'Success', 'Good Morning', 'Life', 'Attitude', 'Positive'],
+    shayari: [
+        'Love', 'Romantic', 'Ishq', 'Mohabbat', 'Sad', 'Dard', 'Bewafa', 'Judai',
+        'Dosti', 'Yaadein', 'Zindagi', 'Tanhai', 'Intezaar', 'Aankhein', 'Chaand',
+        'Barish', 'Ishqiya', 'Attitude', 'Motivational', 'Dil', 'Pyaar', 'Gam',
+        'Khushi', 'Family', 'Maa', 'Papa', 'Behan-Bhai', 'Good Morning', 'Good Night',
+        'Birthday', 'Festival', 'Desh Bhakti', 'Shukrana',
+    ],
+    joke:    [
+        'Funny', 'Pati-Patni', 'Santa-Banta', 'School', 'Teacher-Student', 'Office',
+        'Boss-Employee', 'Bachpan', 'Doctor', 'Neta', 'Girlfriend-Boyfriend',
+        'Sharabi', 'Kanjoos', 'Padosi', 'Exam', 'WhatsApp', 'Ghar-Grihasti',
+        'Chai', 'Petrol', 'Mehngai', 'Bakait',
+    ],
+    quote:   [
+        'Motivational', 'Success', 'Good Morning', 'Good Night', 'Life', 'Attitude',
+        'Positive', 'Hard Work', 'Self Confidence', 'Time', 'Discipline', 'Dreams',
+        'Study', 'Struggle', 'Karma', 'Gratitude', 'Leadership', 'Spiritual',
+        'Bhagavad Gita', 'Chanakya Niti', 'Health', 'Money', 'Friendship', 'Family',
+    ],
+    status:  [
+        'Attitude', 'Love', 'Sad', 'Motivational', 'Funny', 'Friendship', 'Life',
+        'Alone', 'Royal', 'Swag', 'Desh Bhakti', 'Good Vibes', 'Success', 'Breakup',
+        'Cool', 'Savage', 'Girls', 'Boys',
+    ],
+    fact:    [
+        'Science', 'Space', 'Human Body', 'Animals', 'History', 'India', 'World',
+        'Technology', 'Nature', 'Ocean', 'Brain', 'Food', 'Money', 'Sports',
+        'Psychology', 'Amazing', 'Weird', 'Health',
+    ],
 };
 
 // ---------- Themes ----------
@@ -140,7 +168,8 @@ function syncCats() {
     const list = CATS[el('type').value] || [];
     el('catList').innerHTML = list.map(c => `<option value="${c}">`).join('');
     // Type-appropriate default theme
-    if (el('type').value === 'joke') el('theme').value = 'pop';
+    const defTheme = { joke: 'pop', status: 'neon', fact: 'midnight' };
+    if (defTheme[el('type').value]) el('theme').value = defTheme[el('type').value];
 }
 el('type').addEventListener('change', syncCats);
 syncCats();

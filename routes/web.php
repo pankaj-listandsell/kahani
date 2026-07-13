@@ -102,7 +102,6 @@ Route::middleware('auth')->prefix('admin')->name('admin.')->group(function () {
     Route::get('quiz', [QuizController::class, 'index'])->name('quiz.index');
     Route::post('quiz/generate', [QuizController::class, 'generate'])->name('quiz.generate');
     Route::post('quiz/save', [QuizController::class, 'save'])->name('quiz.save');
-    Route::post('quiz/cards/{card}/reel', [QuizController::class, 'quizReel'])->name('quiz.card.reel');
     Route::get('quiz/{story}', [QuizController::class, 'show'])->name('quiz.show');
     Route::delete('quiz/{story}', [QuizController::class, 'destroy'])->name('quiz.destroy');
 

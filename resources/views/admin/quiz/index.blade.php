@@ -4,7 +4,7 @@
 @section('content')
 <div class="max-w-5xl">
     <h2 class="text-xl font-bold flex items-center gap-2">🎯 Quiz Studio</h2>
-    <p class="text-slate-500 mb-6">Topic likho (jaise Constable, GK, History) → AI MCQ banata hai → har quiz ke <b>2 cards</b>: pehla Question (4 options), doosra Answer (reason ke saath). Fir auto-post inhe sequence me (Q → A) daal deta hai.</p>
+    <p class="text-slate-500 mb-6">Topic likho (jaise Constable, GK, History) → AI MCQ banata hai → har quiz ka <b>ek Question card</b> (4 options). <b>Answer + reason caption me</b> jaata hai (card par nahi). Fir auto-post inhe post karta hai.</p>
 
     {{-- CONTROLS --}}
     <div class="bg-white rounded-xl border border-slate-200 p-5 space-y-4">
@@ -14,8 +14,23 @@
                 <input type="text" id="category" list="catList" placeholder="e.g. Constable GK"
                        class="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm">
                 <datalist id="catList">
-                    <option value="Constable GK"><option value="Current Affairs"><option value="Indian History">
-                    <option value="Geography"><option value="Science"><option value="Reasoning"><option value="Polity / Constitution">
+                    {{-- Exam-focused --}}
+                    <option value="Constable GK"><option value="SSC GK"><option value="Railway (RRB) GK">
+                    <option value="Police Exam GK"><option value="Army / Defence GK"><option value="Banking Awareness">
+                    {{-- General Knowledge --}}
+                    <option value="General Knowledge (GK)"><option value="Current Affairs"><option value="Static GK">
+                    <option value="Important Days"><option value="Awards & Honours"><option value="Books & Authors">
+                    <option value="Sports GK"><option value="Famous Personalities">
+                    {{-- Subjects --}}
+                    <option value="Indian History"><option value="World History"><option value="Indian Geography">
+                    <option value="World Geography"><option value="Indian Polity / Constitution"><option value="Economics">
+                    <option value="General Science"><option value="Physics"><option value="Chemistry"><option value="Biology">
+                    <option value="Computer Knowledge"><option value="Environment & Ecology"><option value="Space & Technology">
+                    {{-- Aptitude --}}
+                    <option value="Reasoning"><option value="Maths / Quantitative Aptitude"><option value="English Grammar">
+                    {{-- Culture / misc --}}
+                    <option value="Indian Culture"><option value="Indian Festivals"><option value="Rajasthan GK">
+                    <option value="Madhya Pradesh GK"><option value="UP GK"><option value="Bihar GK">
                 </datalist>
             </div>
             <div>
@@ -52,7 +67,7 @@
     {{-- PREVIEW --}}
     <div id="previewWrap" class="hidden mt-6">
         <div class="flex items-center justify-between mb-3 gap-3 flex-wrap">
-            <h3 class="font-semibold"><span id="itemCount">0</span> quiz · <span id="cardCount">0</span> cards</h3>
+            <h3 class="font-semibold"><span id="itemCount">0</span> question cards <span id="cardCount" class="hidden"></span></h3>
             <button id="saveBtn" class="bg-rose-600 hover:bg-rose-700 text-white font-medium rounded-lg px-5 py-2.5 text-sm">✅ Save All Cards</button>
         </div>
         <div id="grid" class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3"></div>
@@ -136,7 +151,7 @@ function bgAndDeco(ctx, t){
 function handleAt(ctx, t, handle){ const hh=(handle||'').trim(); if(!hh)return; ctx.textAlign='center'; ctx.fillStyle=t.accent; ctx.globalAlpha=0.9; ctx.font=`600 34px ${sans}`; ctx.fillText(hh, W/2, H-95); ctx.globalAlpha=1; }
 
 // ---------- Question card (exam-serious, clean) ----------
-function renderQuestion(canvas, item, themeKey, handle) {
+function renderQuestion(canvas, item, themeKey, handle, category) {
     const t = THEMES[themeKey] || THEMES.night;
     canvas.width=W; canvas.height=H;
     const ctx = canvas.getContext('2d');
@@ -149,10 +164,22 @@ function renderQuestion(canvas, item, themeKey, handle) {
     const pad = 90, maxW = W - pad*2;
     ctx.textAlign='left'; ctx.textBaseline='top';
 
-    // Header label + divider
+    // Header label + topic (right) + divider
     let y = 100;
     ctx.fillStyle=t.accent; ctx.font=`800 44px ${sans}`;
     ctx.fillText('📝 QUIZ', pad, y);
+    const topic = (category || item.category || '').trim();
+    if (topic) {
+        ctx.font=`700 34px ${sans}`;
+        const tw = ctx.measureText(topic.toUpperCase()).width;
+        const px = 26, ph = 52, bx = W - pad - tw - px*2, by = y - 3;
+        roundRect(ctx, bx, by, tw + px*2, ph, ph/2);
+        ctx.fillStyle = t.accent; ctx.globalAlpha = 0.16; ctx.fill(); ctx.globalAlpha = 1;
+        roundRect(ctx, bx, by, tw + px*2, ph, ph/2); ctx.lineWidth = 2; ctx.strokeStyle = t.accent; ctx.stroke();
+        ctx.fillStyle = t.accent; ctx.textBaseline = 'middle';
+        ctx.fillText(topic.toUpperCase(), bx + px, by + ph/2 + 1);
+        ctx.textBaseline = 'top';
+    }
     y += 74;
     ctx.strokeStyle=panelBd; ctx.lineWidth=3;
     ctx.beginPath(); ctx.moveTo(pad, y); ctx.lineTo(W-pad, y); ctx.stroke();
@@ -261,23 +288,21 @@ async function ensureFonts(){ for(const f of ['700 68px "Noto Serif Devanagari"'
 
 function renderPreviews() {
     const grid = el('grid'); grid.innerHTML='';
-    const theme = el('theme').value, handle = el('handle').value;
+    const theme = el('theme').value, handle = el('handle').value, category = el('category').value.trim();
     const off = document.createElement('canvas');
     items.forEach((item, i) => {
-        [['Q'+(i+1), renderQuestion], ['A'+(i+1), renderAnswer]].forEach(([label, fn]) => {
-            fn(off, item, theme, handle);
-            const wrap = document.createElement('div'); wrap.className='text-center';
-            const small = document.createElement('canvas'); small.width=270; small.height=480;
-            small.className='w-full rounded-lg border border-slate-200 shadow-sm';
-            small.getContext('2d').drawImage(off,0,0,270,480);
-            wrap.appendChild(small);
-            const cap = document.createElement('div'); cap.className='text-[11px] text-slate-500 mt-0.5'; cap.textContent=label;
-            wrap.appendChild(cap);
-            grid.appendChild(wrap);
-        });
+        renderQuestion(off, item, theme, handle, category);
+        const wrap = document.createElement('div'); wrap.className='text-center';
+        const small = document.createElement('canvas'); small.width=270; small.height=480;
+        small.className='w-full rounded-lg border border-slate-200 shadow-sm';
+        small.getContext('2d').drawImage(off,0,0,270,480);
+        wrap.appendChild(small);
+        const cap = document.createElement('div'); cap.className='text-[11px] text-slate-500 mt-0.5'; cap.textContent='Q'+(i+1);
+        wrap.appendChild(cap);
+        grid.appendChild(wrap);
     });
     el('itemCount').textContent = items.length;
-    el('cardCount').textContent = items.length * 2;
+    el('cardCount').textContent = items.length;
     el('previewWrap').classList.remove('hidden');
 }
 
@@ -305,20 +330,17 @@ el('saveBtn').addEventListener('click', async () => {
     const theme=el('theme').value, handle=el('handle').value, category=el('category').value.trim(), language=el('language').value;
     const off=document.createElement('canvas');
     let collection=null, redirect=null, order=0;
-    const total = items.length * 2;
+    const total = items.length;
     try {
         for (let i=0;i<items.length;i++) {
             const item = items[i];
             const optsText = (item.options||[]).map((o,k)=>String.fromCharCode(65+k)+') '+o).join('\n');
             const ansIdx = (item.answer||'A').charCodeAt(0)-65;
             const ansOpt = (item.options && item.options[ansIdx]) ? item.options[ansIdx] : '';
-            // Q card
-            renderQuestion(off, item, theme, handle); order++;
-            await postCard({ collection, order, text: item.question + '\n\n' + optsText, hashtags: item.hashtags||'', image: off.toDataURL('image/png'), category, language });
-            // A card
-            renderAnswer(off, item, theme, handle); order++;
-            const aText = 'Sahi jawab: ' + (item.answer||'A') + ') ' + ansOpt + (item.reason ? '\n\n💡 ' + item.reason : '');
-            await postCard({ collection, order, text: aText, hashtags: item.hashtags||'', image: off.toDataURL('image/png'), category, language });
+            // Sirf Question card. Answer + reason caption me jaayega (image par nahi).
+            const answerBlock = '✅ Sahi jawab: ' + (item.answer||'A') + ') ' + ansOpt + (item.reason ? '\n💡 ' + item.reason : '');
+            renderQuestion(off, item, theme, handle, category); order++;
+            await postCard({ collection, order, text: item.question + '\n\n' + optsText, answer: answerBlock, hashtags: item.hashtags||'', image: off.toDataURL('image/png'), category, language });
             el('bar').style.width = Math.round((order/total)*100)+'%';
             el('progressText').textContent = `${order} / ${total} cards saved…`;
         }

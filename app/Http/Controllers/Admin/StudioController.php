@@ -19,9 +19,15 @@ use Illuminate\Support\Str;
 class StudioController extends Controller
 {
     /** @var list<string> */
-    private const TYPES = ['shayari', 'joke', 'quote'];
+    private const TYPES = ['shayari', 'joke', 'quote', 'status', 'fact'];
 
-    private const LABELS = ['shayari' => 'Shayari', 'joke' => 'Jokes', 'quote' => 'Suvichar'];
+    private const LABELS = [
+        'shayari' => 'Shayari',
+        'joke'    => 'Jokes',
+        'quote'   => 'Suvichar',
+        'status'  => 'Status',
+        'fact'    => 'Facts',
+    ];
 
     public function __construct(private InstagramService $instagram)
     {
@@ -60,9 +66,23 @@ class StudioController extends Controller
         $this->authorize('delete', $story);
 
         $story->load('parts.cards');
+
+        // Har part ki AI image + uske saare cards ki image/JPEG/reel MP4 delete karo
         foreach ($story->parts as $part) {
+            if ($part->image_path) {
+                Storage::disk('public')->delete($part->image_path);
+            }
             foreach ($part->cards as $card) {
                 $this->instagram->deleteMediaFiles($card);
+            }
+        }
+
+        // Cover image + uska JPEG cache (agar ho)
+        if ($story->cover_image) {
+            Storage::disk('public')->delete($story->cover_image);
+            $coverJpeg = preg_replace('/\.[a-z0-9]+$/i', '.jpg', $story->cover_image);
+            if ($coverJpeg && $coverJpeg !== $story->cover_image) {
+                Storage::disk('public')->delete($coverJpeg);
             }
         }
 
@@ -75,7 +95,7 @@ class StudioController extends Controller
     public function generate(Request $request, ShayariStudioAiService $ai)
     {
         $data = $request->validate([
-            'type'     => ['required', 'in:shayari,joke,quote'],
+            'type'     => ['required', 'in:shayari,joke,quote,status,fact'],
             'category' => ['nullable', 'string', 'max:100'],
             'count'    => ['required', 'integer', 'min:1', 'max:30'],
             'language' => ['nullable', 'in:hindi,gujarati,hinglish'],
@@ -98,7 +118,7 @@ class StudioController extends Controller
     public function save(Request $request)
     {
         $data = $request->validate([
-            'type'       => ['required', 'in:shayari,joke,quote'],
+            'type'       => ['required', 'in:shayari,joke,quote,status,fact'],
             'category'   => ['nullable', 'string', 'max:100'],
             'language'   => ['nullable', 'in:hindi,gujarati,hinglish'],
             'collection' => ['nullable', 'integer', 'exists:stories,id'],

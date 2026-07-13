@@ -7,7 +7,7 @@
 
     <div class="flex items-start justify-between gap-4 mt-2 mb-6 flex-wrap">
         <div>
-            @php($icon = ['shayari'=>'🖊️','joke'=>'😂','quote'=>'🌟'][$story->type] ?? '✨')
+            @php($icon = ['shayari'=>'🖊️','joke'=>'😂','quote'=>'🌟','status'=>'🔥','fact'=>'🤯'][$story->type] ?? '✨')
             <h2 class="text-xl font-bold">{{ $icon }} {{ $story->title }}</h2>
             <p class="text-slate-500 mt-1 text-sm">{{ $cards->count() }} cards · {{ ucfirst($story->status) }}</p>
         </div>

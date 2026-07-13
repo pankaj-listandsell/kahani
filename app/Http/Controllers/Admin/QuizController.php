@@ -3,11 +3,9 @@
 namespace App\Http\Controllers\Admin;
 
 use App\Http\Controllers\Controller;
-use App\Models\PartCard;
 use App\Models\Story;
 use App\Services\InstagramService;
 use App\Services\ShayariStudioAiService;
-use App\Services\YoutubeService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
@@ -65,6 +63,7 @@ class QuizController extends Controller
             'collection' => ['nullable', 'integer', 'exists:stories,id'],
             'order'      => ['required', 'integer', 'min:1'],
             'text'       => ['required', 'string'],
+            'answer'     => ['nullable', 'string', 'max:600'], // caption me answer+reason
             'hashtags'   => ['nullable', 'string', 'max:1000'],
             'image'      => ['required', 'string'], // data:image/png;base64,...
         ]);
@@ -96,14 +95,21 @@ class QuizController extends Controller
         $path = 'cards/' . Str::uuid() . '.png';
         Storage::disk('public')->put($path, $binary);
 
-        // Instagram caption = card text + hashtags (sirf IG ke liye)
+        // Instagram caption = question + answer/reason + hashtags. Card ki IMAGE
+        // par sirf question dikhta hai; answer caption me jaata hai (voice card.text
+        // se banti hai jisme answer nahi — reel question hi rehta hai).
+        $answer  = trim((string) ($data['answer'] ?? ''));
         $tags    = trim((string) ($data['hashtags'] ?? ''));
-        $caption = trim($data['text'] . ($tags !== '' ? "\n\n" . $tags : ''));
+        $caption = trim(
+            $data['text']
+            . ($answer !== '' ? "\n\n" . $answer : '')
+            . ($tags !== '' ? "\n\n" . $tags : '')
+        );
 
         $part->cards()->create([
             'sort_order' => $data['order'],
             'image_path' => $path,
-            'text'       => $data['text'],
+            'text'       => $data['text'], // voice: sirf question + options
             'ig_caption' => $caption !== '' ? $caption : null,
         ]);
 
@@ -126,37 +132,6 @@ class QuizController extends Controller
         return view('admin.quiz.show', compact('story', 'cards'));
     }
 
-    /**
-     * Combined "Quiz Reel" — Question card + uske baad wala Answer card ko ek hi
-     * video me jodo (Question → pause → Answer reveal).
-     */
-    public function quizReel(PartCard $card, YoutubeService $youtube)
-    {
-        $story = $card->part?->story;
-        abort_unless($story && $story->type === 'quiz', 404);
-        $this->authorize('update', $story);
-
-        @set_time_limit(300);
-
-        // Is Question card ke baad wala (Answer) card
-        $answer = $card->part->cards()
-            ->where('sort_order', '>', $card->sort_order)
-            ->orderBy('sort_order')
-            ->first();
-
-        $cards = $answer ? [$card, $answer] : [$card];
-
-        try {
-            // Question ke baad 3 sec pause (viewer sochne ka time)
-            $mp4 = $youtube->forUser($story->user_id)
-                ->mp4ForCards($cards, 'quiz-' . $card->id, [0 => 3.0]);
-
-            return response()->json(['ok' => true, 'url' => asset('storage/' . $mp4)]);
-        } catch (\Throwable $e) {
-            return response()->json(['ok' => false, 'error' => $e->getMessage()], 422);
-        }
-    }
-
     /** Poori quiz collection delete. */
     public function destroy(Story $story)
     {
@@ -164,11 +139,26 @@ class QuizController extends Controller
         $this->authorize('delete', $story);
 
         $story->load('parts.cards');
+
+        // Har part ki AI image + uske saare cards ki image/JPEG/reel MP4 delete karo
         foreach ($story->parts as $part) {
+            if ($part->image_path) {
+                Storage::disk('public')->delete($part->image_path);
+            }
             foreach ($part->cards as $card) {
                 $this->instagram->deleteMediaFiles($card);
             }
         }
+
+        // Cover image + uska JPEG cache (agar ho)
+        if ($story->cover_image) {
+            Storage::disk('public')->delete($story->cover_image);
+            $coverJpeg = preg_replace('/\.[a-z0-9]+$/i', '.jpg', $story->cover_image);
+            if ($coverJpeg && $coverJpeg !== $story->cover_image) {
+                Storage::disk('public')->delete($coverJpeg);
+            }
+        }
+
         $story->delete();
 
         return redirect()->route('admin.quiz.index')->with('success', 'Quiz collection delete ho gayi.');

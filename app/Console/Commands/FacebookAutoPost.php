@@ -167,13 +167,13 @@ class FacebookAutoPost extends Command
             ->orderBy('id')
             ->get();
 
-        $randomPool = []; // shayari/joke/quote — random order me post honge
+        $randomPool = []; // shayari/joke/quote/quiz — random order me post honge
 
         foreach ($stories as $story) {
             if (! $story->targetsPlatform('facebook')) {
                 continue; // ye story Facebook ke liye target nahi
             }
-            $isCollection = in_array($story->type, ['shayari', 'joke', 'quote'], true);
+            $isCollection = in_array($story->type, ['shayari', 'joke', 'quote', 'quiz', 'status', 'fact'], true);
             foreach ($story->parts as $part) {
                 foreach ($part->cards as $card) {
                     if ($card->fb_status !== null) {

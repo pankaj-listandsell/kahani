@@ -19,7 +19,7 @@ class ShayariStudioAiService
      */
     public function generateBatch(string $type, string $category, int $count, string $language = 'hindi'): array
     {
-        $type     = in_array($type, ['shayari', 'joke', 'quote'], true) ? $type : 'shayari';
+        $type     = in_array($type, ['shayari', 'joke', 'quote', 'status', 'fact'], true) ? $type : 'shayari';
         $count    = max(1, min(30, $count));
         $category = trim($category) ?: 'general';
 
@@ -108,6 +108,24 @@ class ShayariStudioAiService
             {$tagRule}
             SIRF ek valid JSON array return karo (koi markdown, koi backticks nahi):
             [{"text":"quote yahan ✨", "hashtags":"#suvichar #motivation #hindi #quotes #life"}]
+            TXT,
+            'status' => <<<TXT
+            Tum ek trendy social-media writer ho. "{$category}" par {$count} chhote, catchy WhatsApp/Instagram STATUS likho.
+            {$lang}
+            Har status sirf 1 line (max 2 short lines) ka ho — punchy, relatable aur shareable.
+            Bhaav ke hisab se 1-2 relevant emoji daalo (zyada nahi).
+            {$tagRule}
+            SIRF ek valid JSON array return karo (koi markdown, koi backticks nahi):
+            [{"text":"status line yahan 🔥", "hashtags":"#status #whatsappstatus #attitude #viral #trending"}]
+            TXT,
+            'fact' => <<<TXT
+            Tum ek rochak-tathya (interesting facts) writer ho. "{$category}" par {$count} chaunkane wale, sacche aur verified facts likho.
+            {$lang}
+            Har fact 1-2 line ka ho — "Kya aap jaante hain?" style, curiosity jagane wala. Sirf accurate facts.
+            Content ke hisab se 1-2 relevant emoji daalo (jaise 🤯🌍🧠🔬).
+            {$tagRule}
+            SIRF ek valid JSON array return karo (koi markdown, koi backticks nahi):
+            [{"text":"rochak fact yahan 🤯", "hashtags":"#facts #didyouknow #gk #amazingfacts #hindi"}]
             TXT,
             default => <<<TXT
             Tum ek behtareen shayar ho. "{$category}" bhaav/mausam par {$count} khoobsurat, original shayari likho.
