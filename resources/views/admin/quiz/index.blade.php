@@ -292,7 +292,7 @@ function renderAnswer(canvas, item, themeKey, handle) {
 // ---------- "Daily Quiz" poster style (navy + yellow, illustrated look) ----------
 function pdot(ctx, x, y, r, color){ ctx.fillStyle = color; ctx.beginPath(); ctx.arc(x, y, r, 0, 7); ctx.fill(); }
 
-function renderQuestionPoster(canvas, item, handle, category) {
+function renderQuestionPoster(canvas, item, handle, category, language) {
     canvas.width = W; canvas.height = H;
     const ctx = canvas.getContext('2d');
     const NAVY = '#152a54', NAVY2 = '#1d3a72', YELLOW = '#f9c21a', BG = '#eef1f6';
@@ -339,11 +339,13 @@ function renderQuestionPoster(canvas, item, handle, category) {
     ctx.strokeStyle = YELLOW; ctx.lineWidth = 6; ctx.lineCap = 'round';
     [-1, 1].forEach(s => { const x0 = W / 2 + s * (tkW / 2 + 26); for (let k = 0; k < 3; k++) { ctx.beginPath(); ctx.moveTo(x0 + s * k * 16, 486); ctx.lineTo(x0 + s * (k * 16 + 10), 514); ctx.stroke(); } });
 
-    // "QUESTION" badge
-    ctx.font = `800 40px ${sans}`;
-    const quW = ctx.measureText('QUESTION').width;
+    // Topic badge — jo topic/exam select kiya wahi (fallback: QUESTION)
+    const topic = ((category || item.category || '').trim().toUpperCase()) || 'QUESTION';
+    const tpSize = fitOne(ctx, topic, W - 260, sans, '800', 40);
+    ctx.font = `800 ${tpSize}px ${sans}`;
+    const quW = ctx.measureText(topic).width;
     roundRect(ctx, W / 2 - quW / 2 - 34, 556, quW + 68, 66, 33); ctx.fillStyle = NAVY; ctx.fill();
-    ctx.fillStyle = YELLOW; ctx.textBaseline = 'middle'; ctx.fillText('QUESTION', W / 2, 590);
+    ctx.fillStyle = YELLOW; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.fillText(topic, W / 2, 590);
 
     // ---- Question card ----
     const cardX = 54, cardW = W - 108, cardY = 672;
@@ -391,15 +393,20 @@ function renderQuestionPoster(canvas, item, handle, category) {
     ctx.quadraticCurveTo(W * 0.76, 1744, W, 1690);
     ctx.lineTo(W, H); ctx.lineTo(0, H); ctx.closePath(); ctx.fill();
 
-    // ---- Ribbon: "आपका उत्तर क्या है?" ----
+    // ---- Ribbon: apna jawab comment karo, jawab caption me (selected language) ----
+    const CTA = {
+        hindi:    'अपना जवाब कमेंट करें 👇 जवाब कैप्शन में',
+        gujarati: 'તમારો જવાબ કોમેન્ટ કરો 👇 જવાબ કૅપ્શનમાં',
+        hinglish: 'Apna answer comment karein 👇 answer caption me',
+    };
+    const rtxt = CTA[language] || CTA.hindi;
+    const rx = cardX, ry = 1548, rW = cardW, rh = 104;
+    roundRect(ctx, rx, ry, rW, rh, 20); ctx.fillStyle = NAVY; ctx.fill();
+    ctx.lineWidth = 4; ctx.strokeStyle = YELLOW; roundRect(ctx, rx, ry, rW, rh, 20); ctx.stroke();
     ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-    ctx.font = `800 52px ${sans}`;
-    const rtxt = 'आपका उत्तर क्या है?';
-    const rW = ctx.measureText(rtxt).width + 190, rx = W / 2 - rW / 2, ry = 1556, rh = 96;
-    roundRect(ctx, rx, ry, rW, rh, 18); ctx.fillStyle = NAVY; ctx.fill();
-    ctx.lineWidth = 4; ctx.strokeStyle = YELLOW; roundRect(ctx, rx, ry, rW, rh, 18); ctx.stroke();
-    ctx.font = `62px ${EMOJI}`; ctx.fillText('💡', rx + 62, ry + rh / 2 + 2);
-    ctx.fillStyle = '#ffffff'; ctx.font = `800 52px ${sans}`; ctx.fillText(rtxt, W / 2 + 46, ry + rh / 2 + 2);
+    const rSize = fitOne(ctx, rtxt, rW - 70, sans, '700', 44);
+    ctx.fillStyle = '#ffffff'; ctx.font = `700 ${rSize}px ${sans}`;
+    ctx.fillText(rtxt, rx + rW / 2, ry + rh / 2 + 2);
 
     // ---- Footer feature strip ----
     const feats = [['📚', 'सरकारी परीक्षा', 'की तैयारी करें'], ['🎯', 'अपना ज्ञान', 'बढ़ाएं'], ['🏆', 'रोज़ाना क्विज़', 'खेलें'], ['🏅', 'सफलता की ओर', 'एक कदम']];
@@ -423,10 +430,10 @@ async function ensureFonts(){ for(const f of ['700 68px "Noto Serif Devanagari"'
 
 function renderPreviews() {
     const grid = el('grid'); grid.innerHTML='';
-    const theme = el('theme').value, handle = el('handle').value, category = el('category').value.trim(), style = el('style').value;
+    const theme = el('theme').value, handle = el('handle').value, category = el('category').value.trim(), style = el('style').value, language = el('language').value;
     const off = document.createElement('canvas');
     items.forEach((item, i) => {
-        if (style === 'poster') renderQuestionPoster(off, item, handle, category);
+        if (style === 'poster') renderQuestionPoster(off, item, handle, category, language);
         else renderQuestion(off, item, theme, handle, category);
         const wrap = document.createElement('div'); wrap.className='text-center';
         const small = document.createElement('canvas'); small.width=270; small.height=480;
@@ -456,7 +463,7 @@ el('genBtn').addEventListener('click', async () => {
     } catch(e){ msg.textContent='⚠ Error aaya, dobara try karo.'; }
     btn.disabled=false; btn.textContent=lbl;
 });
-['theme','handle','style','category'].forEach(id => el(id).addEventListener('change', () => { if(items.length) renderPreviews(); }));
+['theme','handle','style','category','language'].forEach(id => el(id).addEventListener('change', () => { if(items.length) renderPreviews(); }));
 
 // ---------- Save (2 cards per quiz, sequence me) ----------
 el('saveBtn').addEventListener('click', async () => {
@@ -475,7 +482,7 @@ el('saveBtn').addEventListener('click', async () => {
             const ansOpt = (item.options && item.options[ansIdx]) ? item.options[ansIdx] : '';
             // Sirf Question card. Answer + reason caption me jaayega (image par nahi).
             const answerBlock = '✅ Sahi jawab: ' + (item.answer||'A') + ') ' + ansOpt + (item.reason ? '\n💡 ' + item.reason : '');
-            if (style === 'poster') renderQuestionPoster(off, item, handle, category);
+            if (style === 'poster') renderQuestionPoster(off, item, handle, category, language);
             else renderQuestion(off, item, theme, handle, category);
             order++;
             await postCard({ collection, order, text: item.question + '\n\n' + optsText, answer: answerBlock, hashtags: item.hashtags||'', image: off.toDataURL('image/png'), category, language });
