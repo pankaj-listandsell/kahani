@@ -55,11 +55,7 @@
             <div>
                 <label class="block text-sm font-medium mb-1">🖼 Card Design</label>
                 <select id="style" class="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm">
-                    <option value="gkNavy">🔵 GK Quiz — Navy (logo)</option>
-                    <option value="gkGreen">🟢 GK Quiz — Green (logo)</option>
-                    <option value="gkMaroon">🔴 GK Quiz — Maroon (logo)</option>
-                    <option value="gkWhite">⚪ GK Quiz — White (logo)</option>
-                    <option value="poster">🏆 Daily Quiz (drawn)</option>
+                    <option value="poster">🏆 Daily GK Quiz</option>
                     <option value="clean">📝 Classic (theme)</option>
                 </select>
             </div>
@@ -334,15 +330,18 @@ function renderQuestionPoster(canvas, item, handle, category, language) {
     roundRect(ctx, W / 2 - dW / 2 - 28, 66, dW + 56, 68, 16); ctx.fillStyle = YELLOW; ctx.fill();
     ctx.fillStyle = NAVY; ctx.fillText('DAILY', W / 2, 101);
 
-    // "QUIZ" speech bubble
-    ctx.font = `900 156px ${sans}`;
-    const qW = ctx.measureText('QUIZ').width;
+    // "QUIZ" speech bubble (auto-fit width)
+    const bigTxt = 'QUIZ';
+    const bigSize = fitOne(ctx, bigTxt, W - 210, sans, '900', 156);
+    ctx.font = `900 ${bigSize}px ${sans}`;
+    const qW = ctx.measureText(bigTxt).width;
     const bx = W / 2 - qW / 2 - 44, bw = qW + 88, by = 158, bh = 188;
     roundRect(ctx, bx, by, bw, bh, 30); ctx.fillStyle = NAVY2; ctx.fill();
     ctx.lineWidth = 6; ctx.strokeStyle = YELLOW; roundRect(ctx, bx, by, bw, bh, 30); ctx.stroke();
     ctx.fillStyle = NAVY2; ctx.beginPath(); // tail
     ctx.moveTo(bx + bw * 0.42, by + bh - 6); ctx.lineTo(bx + bw * 0.58, by + bh - 6); ctx.lineTo(bx + bw * 0.46, by + bh + 42); ctx.closePath(); ctx.fill();
-    ctx.fillStyle = '#ffffff'; ctx.fillText('QUIZ', W / 2, by + bh / 2 + 8);
+    ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+    ctx.fillStyle = '#ffffff'; ctx.fillText(bigTxt, W / 2, by + bh / 2 + 8);
 
     // "Test Your Knowledge"
     ctx.fillStyle = NAVY; ctx.font = `800 46px ${sans}`;
@@ -439,6 +438,28 @@ function renderQuestionPoster(canvas, item, handle, category, language) {
 // ---------- GK Quiz logo posters (aapke logo ke saath, alag-alag colors) ----------
 // Logo image ka center-square crop draw karta hai (badge circle isolate ho jaata
 // hai). File na mile to ek drawn badge fallback.
+// Text ko circle ke arc par likho (top arc ke liye centerAngle = -PI/2)
+function arcText(ctx, text, cx, cy, radius, centerAngle, fontPx, color){
+    ctx.save();
+    ctx.fillStyle = color; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+    ctx.font = `800 ${Math.round(fontPx)}px ${sans}`;
+    const chars = [...text];
+    const widths = chars.map(ch => ctx.measureText(ch).width + fontPx * 0.06);
+    const totalAng = widths.reduce((a, b) => a + b, 0) / radius;
+    let ang = centerAngle - totalAng / 2;
+    chars.forEach((ch, i) => {
+        ang += (widths[i] / 2) / radius;
+        ctx.save();
+        ctx.translate(cx + Math.cos(ang) * radius, cy + Math.sin(ang) * radius);
+        ctx.rotate(ang + Math.PI / 2);
+        ctx.fillText(ch, 0, 0);
+        ctx.restore();
+        ang += (widths[i] / 2) / radius;
+    });
+    ctx.restore();
+}
+
+// GK QUIZ DAILY badge — agar quiz-logo.png ho to wo, warna code se draw (KBC-style)
 function drawLogo(ctx, cx, top, box){
     if (logoReady && QUIZ_LOGO.naturalWidth > 0){
         const s = Math.min(QUIZ_LOGO.naturalWidth, QUIZ_LOGO.naturalHeight);
@@ -446,15 +467,43 @@ function drawLogo(ctx, cx, top, box){
         ctx.drawImage(QUIZ_LOGO, sx, sy, s, s, cx - box / 2, top, box, box);
         return box;
     }
-    // fallback drawn badge
-    const R = box * 0.44, ccy = top + R + 10;
-    pdot(ctx, cx, ccy, R, '#12315e');
-    ctx.lineWidth = 8; ctx.strokeStyle = '#f9c21a'; ctx.beginPath(); ctx.arc(cx, ccy, R - 6, 0, 7); ctx.stroke();
+
+    // ---- Drawn badge (koi image file ki zaroorat nahi) ----
+    const R = box / 2, cy = top + R;
+    // soft glow
+    ctx.save();
+    const gl = ctx.createRadialGradient(cx, cy, R * 0.6, cx, cy, R * 1.15);
+    gl.addColorStop(0, 'rgba(249,194,26,0.28)'); gl.addColorStop(1, 'rgba(249,194,26,0)');
+    ctx.fillStyle = gl; ctx.beginPath(); ctx.arc(cx, cy, R * 1.15, 0, 7); ctx.fill();
+    ctx.restore();
+    // navy disc
+    pdot(ctx, cx, cy, R, '#12315e');
+    // gold double ring
+    ctx.lineWidth = box * 0.032; ctx.strokeStyle = '#f9c21a';
+    ctx.beginPath(); ctx.arc(cx, cy, R - box * 0.045, 0, 7); ctx.stroke();
+    ctx.lineWidth = box * 0.010; ctx.strokeStyle = 'rgba(249,194,26,0.55)';
+    ctx.beginPath(); ctx.arc(cx, cy, R - box * 0.115, 0, 7); ctx.stroke();
+
+    // centre lightbulb (idea)
     ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-    ctx.font = `${Math.round(R*0.55)}px ${EMOJI}`; ctx.fillText('💡', cx, ccy - R*0.18);
-    ctx.fillStyle = '#ffffff'; ctx.font = `800 ${Math.round(R*0.30)}px ${sans}`; ctx.fillText('GK QUIZ', cx, ccy + R*0.42);
-    ctx.fillStyle = '#f9c21a'; ctx.font = `700 ${Math.round(R*0.20)}px ${sans}`; ctx.fillText('DAILY', cx, ccy + R*0.72);
-    return 2 * R + 20;
+    ctx.font = `${Math.round(box * 0.36)}px ${EMOJI}`;
+    ctx.fillText('💡', cx, cy - box * 0.03);
+
+    // check (sahi) + question (sawal) badges
+    ctx.font = `${Math.round(box * 0.135)}px ${EMOJI}`;
+    ctx.fillText('✅', cx - box * 0.205, cy + box * 0.205);
+    ctx.fillText('❓', cx + box * 0.205, cy + box * 0.205);
+
+    // curved top "GK QUIZ"
+    arcText(ctx, 'GK QUIZ', cx, cy, R - box * 0.135, -Math.PI / 2, box * 0.125, '#ffffff');
+    // bottom "DAILY"
+    ctx.font = `800 ${Math.round(box * 0.088)}px ${sans}`; ctx.fillStyle = '#ffffff';
+    ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+    ctx.save();
+    // subtle wide letter-spacing feel via manual draw
+    ctx.fillText('D A I L Y', cx, cy + R * 0.72);
+    ctx.restore();
+    return box;
 }
 
 const POSTERS = {
