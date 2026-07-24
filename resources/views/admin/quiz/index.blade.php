@@ -183,11 +183,11 @@ function renderQuestion(canvas, item, themeKey, handle, category) {
     y += 74;
     ctx.strokeStyle=panelBd; ctx.lineWidth=3;
     ctx.beginPath(); ctx.moveTo(pad, y); ctx.lineTo(W-pad, y); ctx.stroke();
-    y += 54;
+    y += 120; // header aur question ke beech zyada space (question thoda neeche)
 
-    // Question (left-aligned)
-    const q = fitLines(ctx, item.question, maxW, H*0.26, fam, '700', 64);
-    ctx.fillStyle=t.text; ctx.font=`700 ${q.size}px ${fam}`;
+    // Question (left-aligned) — bold/mota
+    const q = fitLines(ctx, item.question, maxW, H*0.26, fam, '900', 64);
+    ctx.fillStyle=t.text; ctx.font=`900 ${q.size}px ${fam}`;
     q.lines.forEach(l => { ctx.fillText(l, pad, y); y += q.lh; });
 
     // Options — bache hue space me evenly bhar do
@@ -211,9 +211,9 @@ function renderQuestion(canvas, item, themeKey, handle, category) {
         ctx.font=`800 ${Math.round(bs*0.5)}px ${sans}`; ctx.fillText(String.fromCharCode(65+i), bx+bs/2, by+bs/2+2);
         // option text
         const tx = bx+bs+34, tw = maxW-(bx+bs+34-pad)-36;
-        const os = fitOne(ctx, opt, tw, fam, '600', 48);
+        const os = fitOne(ctx, opt, tw, fam, '700', 48);
         ctx.fillStyle=t.text; ctx.textAlign='left'; ctx.textBaseline='middle';
-        ctx.font=`600 ${os}px ${fam}`; ctx.fillText(opt, tx, oy+boxH/2+2);
+        ctx.font=`700 ${os}px ${fam}`; ctx.fillText(opt, tx, oy+boxH/2+2);
         oy += boxH + gap;
     });
 
