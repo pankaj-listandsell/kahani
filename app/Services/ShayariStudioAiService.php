@@ -20,9 +20,9 @@ class ShayariStudioAiService
      * Instagram limit ke andar rehte hain.
      */
     private const TRENDING_HASHTAGS = [
-        '#trending', '#viral', '#reels', '#reelsinstagram', '#explore',
-        '#explorepage', '#foryou', '#fyp', '#viralvideo', '#trendingreels',
-        '#shorts', '#viralpost', '#instagram', '#india',
+        '#jantarmantar', '#trending', '#viral', '#reels', '#reelsinstagram',
+        '#explore', '#explorepage', '#foryou', '#fyp', '#viralvideo',
+        '#trendingreels', '#shorts', '#viralpost', '#instagram', '#india',
     ];
 
     /**

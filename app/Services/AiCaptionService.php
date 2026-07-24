@@ -20,7 +20,7 @@ class AiCaptionService
      * rakha jaata hai.
      */
     private const TRENDING_HASHTAGS = [
-        '#reels', '#reelsinstagram', '#trending', '#viral', '#explore',
+        '#jantarmantar', '#reels', '#reelsinstagram', '#trending', '#viral', '#explore',
         '#explorepage', '#foryou', '#fyp', '#instareels', '#trendingreels',
         '#viralvideo', '#reelitfeelit', '#storytime', '#hindikahani', '#kahani',
     ];
@@ -30,7 +30,7 @@ class AiCaptionService
      * #Shorts sabse zaroori — isi se YouTube video ko Short maanta hai.
      */
     private const YOUTUBE_TRENDING_HASHTAGS = [
-        '#shorts', '#youtubeshorts', '#ytshorts', '#shortsfeed', '#shortvideo',
+        '#jantarmantar', '#shorts', '#youtubeshorts', '#ytshorts', '#shortsfeed', '#shortvideo',
         '#viral', '#trending', '#trendingshorts', '#viralshorts', '#storytime',
         '#hindikahani', '#kahani', '#moralstory', '#story', '#hindistory',
     ];
