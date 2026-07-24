@@ -55,7 +55,11 @@
             <div>
                 <label class="block text-sm font-medium mb-1">🖼 Card Design</label>
                 <select id="style" class="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm">
-                    <option value="poster">🏆 Daily Quiz (poster)</option>
+                    <option value="gkNavy">🔵 GK Quiz — Navy (logo)</option>
+                    <option value="gkGreen">🟢 GK Quiz — Green (logo)</option>
+                    <option value="gkMaroon">🔴 GK Quiz — Maroon (logo)</option>
+                    <option value="gkWhite">⚪ GK Quiz — White (logo)</option>
+                    <option value="poster">🏆 Daily Quiz (drawn)</option>
                     <option value="clean">📝 Classic (theme)</option>
                 </select>
             </div>
@@ -106,6 +110,14 @@ const GEN_URL  = @json(route('admin.quiz.generate'));
 const SAVE_URL = @json(route('admin.quiz.save'));
 const el = id => document.getElementById(id);
 const W = 1080, H = 1920;
+
+// Quiz logo (public/img/quiz-logo.png) — GK Quiz poster designs me use hota hai.
+// File na ho to poster me ek simple drawn badge fallback aa jaata hai.
+const QUIZ_LOGO = new Image();
+let logoReady = false;
+QUIZ_LOGO.onload = () => { logoReady = true; };
+QUIZ_LOGO.src = @json(asset('img/quiz-logo.png'));
+function ensureLogo(){ return new Promise(res => { if (QUIZ_LOGO.complete) { logoReady = QUIZ_LOGO.naturalWidth > 0; return res(); } QUIZ_LOGO.onload = () => { logoReady = true; res(); }; QUIZ_LOGO.onerror = () => res(); }); }
 
 // ---------- Themes (Studio jaisa) ----------
 const THEMES = {
@@ -424,6 +436,132 @@ function renderQuestionPoster(canvas, item, handle, category, language) {
     if (hh) { ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.fillStyle = YELLOW; ctx.globalAlpha = 0.9; ctx.font = `600 26px ${sans}`; ctx.fillText(hh, W / 2, 1900); ctx.globalAlpha = 1; }
 }
 
+// ---------- GK Quiz logo posters (aapke logo ke saath, alag-alag colors) ----------
+// Logo image ka center-square crop draw karta hai (badge circle isolate ho jaata
+// hai). File na mile to ek drawn badge fallback.
+function drawLogo(ctx, cx, top, box){
+    if (logoReady && QUIZ_LOGO.naturalWidth > 0){
+        const s = Math.min(QUIZ_LOGO.naturalWidth, QUIZ_LOGO.naturalHeight);
+        const sx = (QUIZ_LOGO.naturalWidth - s) / 2, sy = (QUIZ_LOGO.naturalHeight - s) / 2;
+        ctx.drawImage(QUIZ_LOGO, sx, sy, s, s, cx - box / 2, top, box, box);
+        return box;
+    }
+    // fallback drawn badge
+    const R = box * 0.44, ccy = top + R + 10;
+    pdot(ctx, cx, ccy, R, '#12315e');
+    ctx.lineWidth = 8; ctx.strokeStyle = '#f9c21a'; ctx.beginPath(); ctx.arc(cx, ccy, R - 6, 0, 7); ctx.stroke();
+    ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+    ctx.font = `${Math.round(R*0.55)}px ${EMOJI}`; ctx.fillText('💡', cx, ccy - R*0.18);
+    ctx.fillStyle = '#ffffff'; ctx.font = `800 ${Math.round(R*0.30)}px ${sans}`; ctx.fillText('GK QUIZ', cx, ccy + R*0.42);
+    ctx.fillStyle = '#f9c21a'; ctx.font = `700 ${Math.round(R*0.20)}px ${sans}`; ctx.fillText('DAILY', cx, ccy + R*0.72);
+    return 2 * R + 20;
+}
+
+const POSTERS = {
+    gkNavy:   { name: '🔵 GK Quiz — Navy (logo)',   bg: ['#0c1f3f', '#173a72'], accent: '#f9c21a', ink: '#0c1f3f', band: '#081428' },
+    gkGreen:  { name: '🟢 GK Quiz — Green (logo)',  bg: ['#06281f', '#0e5240'], accent: '#ffd24a', ink: '#06281f', band: '#041c16' },
+    gkMaroon: { name: '🔴 GK Quiz — Maroon (logo)', bg: ['#3a0d16', '#711a24'], accent: '#ffd24a', ink: '#3a0d16', band: '#280910' },
+    gkWhite:  { name: '⚪ GK Quiz — White (logo)',  bg: ['#eef1f6', '#d8e0ee'], accent: '#1d4ed8', ink: '#152a54', band: '#152a54', light: true },
+};
+
+function renderLogoPoster(canvas, item, handle, category, language, P) {
+    canvas.width = W; canvas.height = H;
+    const ctx = canvas.getContext('2d');
+    const ACC = P.accent, INK = P.ink, BAND = P.band;
+    const badgeTxt = lum(ACC) > 150 ? INK : '#ffffff';
+    const qMark = lum(ACC) > 150 ? ACC : '#ffd24a';
+
+    // Background gradient
+    const g = ctx.createLinearGradient(0, 0, 0, H);
+    g.addColorStop(0, P.bg[0]); g.addColorStop(1, P.bg[1]);
+    ctx.fillStyle = g; ctx.fillRect(0, 0, W, H);
+
+    // Logo (top center)
+    const logoBox = 360;
+    drawLogo(ctx, W / 2, 44, logoBox);
+    let y = 44 + logoBox + 6;
+
+    // Topic badge — selected topic/exam
+    const topic = ((category || item.category || '').trim().toUpperCase()) || 'GK QUIZ';
+    const tpSize = fitOne(ctx, topic, W - 260, sans, '800', 40);
+    ctx.font = `800 ${tpSize}px ${sans}`;
+    const bW = ctx.measureText(topic).width;
+    roundRect(ctx, W / 2 - bW / 2 - 34, y, bW + 68, 66, 33); ctx.fillStyle = ACC; ctx.fill();
+    ctx.fillStyle = badgeTxt; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.fillText(topic, W / 2, y + 34);
+    y += 66 + 34;
+
+    // Question card (white)
+    const cardX = 54, cardW = W - 108, cardY = y;
+    ctx.textAlign = 'left'; ctx.textBaseline = 'top';
+    const qfit = fitLines(ctx, item.question, cardW - 240, 340, sans, '800', 58);
+    const cardH = Math.max(230, 120 + qfit.lines.length * qfit.lh);
+    ctx.save(); ctx.shadowColor = 'rgba(0,0,0,0.24)'; ctx.shadowBlur = 30; ctx.shadowOffsetY = 12;
+    roundRect(ctx, cardX, cardY, cardW, cardH, 34); ctx.fillStyle = '#ffffff'; ctx.fill(); ctx.restore();
+    ctx.fillStyle = 'rgba(21,42,84,0.06)'; ctx.font = `900 300px ${sans}`; ctx.textAlign = 'right'; ctx.textBaseline = 'alphabetic';
+    ctx.fillText('?', cardX + cardW - 40, cardY + cardH - 34);
+    ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+    pdot(ctx, cardX + 96, cardY + 92, 56, INK);
+    ctx.fillStyle = qMark; ctx.font = `900 44px ${sans}`; ctx.fillText('Q.', cardX + 98, cardY + 94);
+    ctx.textAlign = 'left'; ctx.textBaseline = 'top'; ctx.fillStyle = INK; ctx.font = `800 ${qfit.size}px ${sans}`;
+    let qy = cardY + 48; const qx = cardX + 180;
+    qfit.lines.forEach(l => { ctx.fillText(l, qx, qy); qy += qfit.lh; });
+
+    // Options (answer NOT revealed)
+    const opts = (item.options || []).slice(0, 4); const n = opts.length || 4;
+    const optTop = cardY + cardH + 42, zoneBottom = 1520, gap = 26;
+    const boxH = Math.min(150, (zoneBottom - optTop - (n - 1) * gap) / n);
+    let oy = optTop;
+    opts.forEach((opt, i) => {
+        ctx.save(); ctx.shadowColor = 'rgba(0,0,0,0.18)'; ctx.shadowBlur = 16; ctx.shadowOffsetY = 6;
+        roundRect(ctx, cardX, oy, cardW, boxH, boxH / 2); ctx.fillStyle = '#ffffff'; ctx.fill(); ctx.restore();
+        roundRect(ctx, cardX, oy, cardW, boxH, boxH / 2); ctx.lineWidth = 3; ctx.strokeStyle = INK; ctx.stroke();
+        const bs = boxH - 28, lbx = cardX + 16, lby = oy + 14;
+        pdot(ctx, lbx + bs / 2, lby + bs / 2, bs / 2, INK);
+        ctx.fillStyle = '#ffffff'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.font = `800 ${Math.round(bs * 0.44)}px ${sans}`;
+        ctx.fillText(String.fromCharCode(65 + i), lbx + bs / 2, lby + bs / 2 + 2);
+        const tx = lbx + bs + 34, tmaxW = cardW - (tx - cardX) - 44;
+        const os = fitOne(ctx, opt, tmaxW, sans, '700', 46);
+        ctx.fillStyle = INK; ctx.textAlign = 'left'; ctx.textBaseline = 'middle'; ctx.font = `700 ${os}px ${sans}`;
+        ctx.fillText(opt, tx, oy + boxH / 2 + 2);
+        oy += boxH + gap;
+    });
+
+    // Bottom band (wavy top)
+    ctx.fillStyle = BAND;
+    ctx.beginPath();
+    ctx.moveTo(0, 1706); ctx.quadraticCurveTo(W * 0.26, 1662, W * 0.5, 1704);
+    ctx.quadraticCurveTo(W * 0.76, 1744, W, 1690);
+    ctx.lineTo(W, H); ctx.lineTo(0, H); ctx.closePath(); ctx.fill();
+
+    // Ribbon (selected language)
+    const CTA = {
+        hindi:    'अपना जवाब कमेंट करें 👇 जवाब कैप्शन में',
+        gujarati: 'તમારો જવાબ કોમેન્ટ કરો 👇 જવાબ કૅપ્શનમાં',
+        hinglish: 'Apna answer comment karein 👇 answer caption me',
+    };
+    const rtxt = CTA[language] || CTA.hindi;
+    const rx = cardX, ry = 1548, rW = cardW, rh = 104;
+    roundRect(ctx, rx, ry, rW, rh, 20); ctx.fillStyle = BAND; ctx.fill();
+    ctx.lineWidth = 4; ctx.strokeStyle = ACC; roundRect(ctx, rx, ry, rW, rh, 20); ctx.stroke();
+    ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+    const rSize = fitOne(ctx, rtxt, rW - 70, sans, '700', 44);
+    ctx.fillStyle = '#ffffff'; ctx.font = `700 ${rSize}px ${sans}`; ctx.fillText(rtxt, rx + rW / 2, ry + rh / 2 + 2);
+
+    // Footer strip
+    const feats = [['📚', 'सरकारी परीक्षा', 'की तैयारी करें'], ['🎯', 'अपना ज्ञान', 'बढ़ाएं'], ['🏆', 'रोज़ाना क्विज़', 'खेलें'], ['🏅', 'सफलता की ओर', 'एक कदम']];
+    const fw = W / 4, fy = 1812;
+    feats.forEach((f, i) => {
+        const cx = fw * i + 30;
+        ctx.textAlign = 'left'; ctx.textBaseline = 'middle';
+        ctx.font = `46px ${EMOJI}`; ctx.fillText(f[0], cx, fy + 26);
+        ctx.fillStyle = '#ffffff'; ctx.font = `600 25px ${sans}`;
+        ctx.fillText(f[1], cx + 58, fy + 8); ctx.fillText(f[2], cx + 58, fy + 44);
+    });
+
+    const hh = (handle || '').trim();
+    if (hh) { ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.fillStyle = ACC; ctx.globalAlpha = 0.9; ctx.font = `600 26px ${sans}`; ctx.fillText(hh, W / 2, 1900); ctx.globalAlpha = 1; }
+}
+
 // ---------- State ----------
 let items = [];
 async function ensureFonts(){ for(const f of ['700 68px "Noto Serif Devanagari"','700 68px "Noto Sans Devanagari"','700 68px "Noto Serif Gujarati"','700 68px "Noto Sans Gujarati"']){ try{await document.fonts.load(f);}catch(e){} } await document.fonts.ready; }
@@ -433,7 +571,8 @@ function renderPreviews() {
     const theme = el('theme').value, handle = el('handle').value, category = el('category').value.trim(), style = el('style').value, language = el('language').value;
     const off = document.createElement('canvas');
     items.forEach((item, i) => {
-        if (style === 'poster') renderQuestionPoster(off, item, handle, category, language);
+        if (POSTERS[style]) renderLogoPoster(off, item, handle, category, language, POSTERS[style]);
+        else if (style === 'poster') renderQuestionPoster(off, item, handle, category, language);
         else renderQuestion(off, item, theme, handle, category);
         const wrap = document.createElement('div'); wrap.className='text-center';
         const small = document.createElement('canvas'); small.width=270; small.height=480;
@@ -458,7 +597,7 @@ el('genBtn').addEventListener('click', async () => {
     try {
         const r = await fetch(GEN_URL, { method:'POST', headers:{'Content-Type':'application/json','X-CSRF-TOKEN':CSRF,'Accept':'application/json'}, body: JSON.stringify(payload) });
         const d = await r.json();
-        if (d.ok && d.items && d.items.length) { items=d.items; await ensureFonts(); renderPreviews(); msg.textContent=`✓ ${items.length} quiz ready — theme badal ke dekho, phir Save karo.`; }
+        if (d.ok && d.items && d.items.length) { items=d.items; await Promise.all([ensureFonts(), ensureLogo()]); renderPreviews(); msg.textContent=`✓ ${items.length} quiz ready — theme badal ke dekho, phir Save karo.`; }
         else msg.textContent = '⚠ ' + (d.error || 'Kuch nahi bana.');
     } catch(e){ msg.textContent='⚠ Error aaya, dobara try karo.'; }
     btn.disabled=false; btn.textContent=lbl;
@@ -469,7 +608,7 @@ el('genBtn').addEventListener('click', async () => {
 el('saveBtn').addEventListener('click', async () => {
     if(!items.length) return;
     const btn=el('saveBtn'); btn.disabled=true; btn.classList.add('opacity-60'); el('progress').classList.remove('hidden');
-    await ensureFonts();
+    await Promise.all([ensureFonts(), ensureLogo()]);
     const theme=el('theme').value, handle=el('handle').value, category=el('category').value.trim(), language=el('language').value, style=el('style').value;
     const off=document.createElement('canvas');
     let collection=null, redirect=null, order=0;
@@ -482,7 +621,8 @@ el('saveBtn').addEventListener('click', async () => {
             const ansOpt = (item.options && item.options[ansIdx]) ? item.options[ansIdx] : '';
             // Sirf Question card. Answer + reason caption me jaayega (image par nahi).
             const answerBlock = '✅ Sahi jawab: ' + (item.answer||'A') + ') ' + ansOpt + (item.reason ? '\n💡 ' + item.reason : '');
-            if (style === 'poster') renderQuestionPoster(off, item, handle, category, language);
+            if (POSTERS[style]) renderLogoPoster(off, item, handle, category, language, POSTERS[style]);
+            else if (style === 'poster') renderQuestionPoster(off, item, handle, category, language);
             else renderQuestion(off, item, theme, handle, category);
             order++;
             await postCard({ collection, order, text: item.question + '\n\n' + optsText, answer: answerBlock, hashtags: item.hashtags||'', image: off.toDataURL('image/png'), category, language });
