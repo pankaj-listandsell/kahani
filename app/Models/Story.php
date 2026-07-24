@@ -14,6 +14,7 @@ class Story extends Model
         'user_id',
         'title',
         'slug',
+        'source_url', // dusri website se import ki gayi kahani ka original URL
         'description',
         'cover_image',
         'status',

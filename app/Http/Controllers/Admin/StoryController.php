@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Models\Story;
 use App\Services\ImageService;
 use App\Services\InstagramService;
+use App\Services\Scraper\StoryImporter;
 use App\Services\StoryAiService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Storage;
@@ -52,18 +53,65 @@ class StoryController extends Controller
     public function generateFromTopic(Request $request, StoryAiService $ai)
     {
         $data = $request->validate([
-            'topic'    => ['required', 'string', 'max:500'],
+            'topic'    => ['nullable', 'string', 'max:500'],
+            'genre'    => ['nullable', 'string', 'max:60'],
             'length'   => ['nullable', 'in:short,medium,long,1000,1500,8000,20000'],
             'language' => ['nullable', 'in:hindi,gujarati,hinglish'],
         ]);
 
+        // Topic ya type — kam se kam ek zaroori
+        if (blank($data['topic'] ?? null) && blank($data['genre'] ?? null)) {
+            return response()->json(['ok' => false, 'error' => 'Topic likho ya type chuno (kam se kam ek).'], 422);
+        }
+
         try {
-            $story = $ai->generate($data['topic'], $data['length'] ?? 'short', $data['language'] ?? 'hindi');
+            $story = $ai->generate(
+                $data['topic'] ?? '',
+                $data['length'] ?? 'short',
+                $data['language'] ?? 'hindi',
+                $data['genre'] ?? '',
+            );
 
             return response()->json(['ok' => true] + $story);
         } catch (\Throwable $e) {
             return response()->json(['ok' => false, 'error' => $e->getMessage()], 422);
         }
+    }
+
+    /**
+     * Dusri website (URL) se kahani(yan) import karo — Story + Part (draft).
+     * Ek story URL, ya index/listing URL (--all) dono chalte hain.
+     */
+    public function import(Request $request, StoryImporter $importer)
+    {
+        $data = $request->validate([
+            'url'      => ['required', 'url', 'max:500'],
+            'all'      => ['nullable', 'boolean'],
+            'limit'    => ['nullable', 'integer', 'min:1', 'max:200'],
+            'language' => ['nullable', 'in:hindi,gujarati,hinglish'],
+        ]);
+
+        if (! $importer->scraperFor($data['url'])) {
+            return back()->with('error', 'Is website ke liye abhi scraper nahi hai. (Support: hindikibindi.com)');
+        }
+
+        $r = $importer->import(
+            url: $data['url'],
+            userId: auth()->id(),
+            language: $data['language'] ?? 'hindi',
+            all: (bool) ($data['all'] ?? false),
+            limit: (int) ($data['limit'] ?? 0),
+        );
+
+        $msg = "Import done — {$r['imported']} nayi, {$r['skipped']} pehle se thi, {$r['failed']} fail. "
+            . 'Sab draft me hain — review karke publish karein.';
+
+        // Fail hui to pehla error bhi dikhao (debug ke liye)
+        if (! empty($r['errors'])) {
+            $msg .= ' ⚠ ' . $r['errors'][0];
+        }
+
+        return back()->with($r['imported'] > 0 ? 'success' : 'error', $msg);
     }
 
     public function store(Request $request)

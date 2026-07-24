@@ -17,11 +17,12 @@ class StoryAiService
      * @return array{title:string, description:string, body:string}
      * @throws \RuntimeException
      */
-    public function generate(string $topic, string $length = 'short', string $language = 'hindi'): array
+    public function generate(string $topic, string $length = 'short', string $language = 'hindi', string $genre = ''): array
     {
         $topic = trim($topic);
-        if ($topic === '') {
-            throw new \RuntimeException('Topic khaali hai.');
+        $genre = trim($genre);
+        if ($topic === '' && $genre === '') {
+            throw new \RuntimeException('Topic ya type — kam se kam ek do.');
         }
 
         $langRule = $this->langRule($language);
@@ -48,19 +49,29 @@ class StoryAiService
             ? "Kahani lagभग {$words} shabd ki ho — itni lambi zaroor ho, jaldi mat khatam karo. Kai paragraphs me detail, samvaad (dialogue) aur scene-building ke saath."
             : "Kahani lagभग {$words} shabd ki ho — engaging aur curiosity-driven.";
 
+        // Type/genre rule — agar user ne type chuna hai to kahani usi tarah ki ho
+        $genreRule = $genre !== ''
+            ? "- Kahani ka TYPE/GENRE: \"{$genre}\" — poori kahani isi genre, mood aur andaaz ki honi chahiye.\n"
+            : '';
+
+        // Subject: topic diya to us par; sirf type diya to AI khud original kahani soche
+        $subject = $topic !== ''
+            ? "Topic: {$topic}" . ($genre !== '' ? "  (genre: {$genre})" : '')
+            : "Is genre par ek bilkul nayi, original kahani khud socho: {$genre}";
+
         $prompt = <<<TXT
-        Tum ek expert kahani-lekhak ho. Neeche diye gaye topic par {$framing}
+        Tum ek expert kahani-lekhak ho. {$framing}
 
         Rules:
         - {$langRule}
         - {$lengthRule}
-        - Chhote paragraphs, saral bhasha, natural kahani-sunane wala andaaz.
+        {$genreRule}- Chhote paragraphs, saral bhasha, natural kahani-sunane wala andaaz.
         - Ek strong hook se shuru karo, aur ek satisfying moral ya twist ending do.
         - SIRF ek valid JSON object return karo (koi markdown, koi backticks nahi), bilkul is format me:
         {"title": "chhota aakarshak title", "description": "1-2 line ka summary", "body": "poori kahani yahan"}
         - title, description aur body — teeno usi bhasha/script me hon jo upar rule me di gayi hai.
 
-        Topic: {$topic}
+        {$subject}
         TXT;
 
         $raw = $this->callAi($prompt);

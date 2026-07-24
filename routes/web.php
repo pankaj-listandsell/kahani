@@ -108,6 +108,9 @@ Route::middleware('auth')->prefix('admin')->name('admin.')->group(function () {
     // Topic se AI kahani generate (create form bharne ke liye) — resource se pehle
     Route::post('stories/generate', [StoryController::class, 'generateFromTopic'])->name('stories.generate');
 
+    // Dusri website se kahani(yan) import (URL se) — resource se pehle
+    Route::post('stories/import', [StoryController::class, 'import'])->name('stories.import');
+
     // Story CRUD
     Route::resource('stories', StoryController::class);
 

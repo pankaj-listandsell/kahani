@@ -8,13 +8,36 @@
 
     {{-- ✨ AI: Topic se poori kahani banao --}}
     <div class="bg-gradient-to-br from-violet-50 to-rose-50 border border-violet-200 rounded-xl p-5 mb-6">
-        <h3 class="font-semibold flex items-center gap-2">✨ AI se Kahani banao (Topic se)</h3>
-        <p class="text-sm text-slate-600 mt-1 mb-3">Sirf topic likho — AI poori kahani + title + description bana dega (neeche <b>"Language"</b> me chuni bhasha me). Neeche form apne-aap bhar jayega, phir aap edit/Save kar sakte ho.</p>
+        <h3 class="font-semibold flex items-center gap-2">✨ AI se Kahani banao</h3>
+        <p class="text-sm text-slate-600 mt-1 mb-3"><b>Type</b> chuno aur/ya <b>topic</b> likho — AI poori kahani + title + description bana dega (neeche <b>"Language"</b> wali bhasha me). Sirf type chuno to AI usi tarah ki nayi kahani khud likhega. Form apne-aap bhar jayega, phir edit/Save.</p>
 
         <div class="space-y-3">
-            <input type="text" id="aiTopic"
-                   class="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:ring-2 focus:ring-violet-400 focus:outline-none"
-                   placeholder="e.g. Ek garib ladke aur jaadui deepak ki kahani">
+            <div class="grid sm:grid-cols-2 gap-3">
+                <select id="aiGenre" class="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:ring-2 focus:ring-violet-400 focus:outline-none">
+                    <option value="">— Type / Genre (optional) —</option>
+                    <option value="Moral / Naitik">📘 Moral (नैतिक)</option>
+                    <option value="Motivational / Prerak">🔥 Motivational (प्रेरक)</option>
+                    <option value="Love / Prem">❤️ Love (प्रेम)</option>
+                    <option value="Emotional / Bhavuk">😢 Emotional (भावुक)</option>
+                    <option value="Horror / Darawni">👻 Horror (डरावनी)</option>
+                    <option value="Suspense / Rahasya">🕵️ Suspense (रहस्य)</option>
+                    <option value="Comedy / Hasya">😂 Comedy (हास्य)</option>
+                    <option value="Kids / Bachchon ki">🧒 Kids (बच्चों की)</option>
+                    <option value="Fairy Tale / Pari katha">🧚 Fairy Tale (परी कथा)</option>
+                    <option value="Mythology / Pauranik">🕉️ Mythology (पौराणिक)</option>
+                    <option value="Bhagwan ki Katha / Devotional Bhakti">🙏 Bhagwan ki Katha (भगवान की कथा)</option>
+                    <option value="Krishna Leela / Bhagwan Krishna">🪈 Krishna Leela (कृष्ण लीला)</option>
+                    <option value="Ramayan / Bhagwan Ram">🏹 Ram Katha (राम कथा)</option>
+                    <option value="Shiv / Mahadev Katha">🔱 Shiv Katha (शिव कथा)</option>
+                    <option value="Hanuman / Bhakt katha">🐒 Hanuman Katha (हनुमान कथा)</option>
+                    <option value="Panchatantra / Animal">🦊 Panchatantra (पंचतंत्र)</option>
+                    <option value="Historical / Aitihasik">🏛️ Historical (ऐतिहासिक)</option>
+                    <option value="Adventure / Romanchak">🗺️ Adventure (रोमांचक)</option>
+                </select>
+                <input type="text" id="aiTopic"
+                       class="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:ring-2 focus:ring-violet-400 focus:outline-none"
+                       placeholder="Topic (optional) — e.g. jaadui deepak">
+            </div>
             <div class="flex items-center gap-3 flex-wrap">
                 <select id="aiLength" class="rounded-lg border border-slate-300 px-3 py-2 text-sm">
                     <option value="short">Chhoti (Short/Reel ke liye — ~150 shabd)</option>
@@ -54,7 +77,8 @@
 
         btn.addEventListener('click', async () => {
             const topic = document.getElementById('aiTopic').value.trim();
-            if (!topic) { msg.textContent = '⚠ Pehle topic likho.'; return; }
+            const genre = document.getElementById('aiGenre').value;
+            if (!topic && !genre) { msg.textContent = '⚠ Type chuno ya topic likho.'; return; }
 
             btn.disabled = true;
             const label = btn.textContent;
@@ -67,6 +91,7 @@
                     headers: { 'X-CSRF-TOKEN': csrf, 'Accept': 'application/json', 'Content-Type': 'application/json' },
                     body: JSON.stringify({
                         topic,
+                        genre,
                         length: document.getElementById('aiLength').value,
                         language: document.getElementById('formLanguage')?.value || 'hindi',
                     }),
