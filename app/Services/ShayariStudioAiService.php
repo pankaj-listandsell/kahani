@@ -14,6 +14,18 @@ use Illuminate\Support\Str;
 class ShayariStudioAiService
 {
     /**
+     * Har item ke hashtags ke saath jodne wale trending/viral hashtags
+     * (Instagram reels + YouTube shorts niche). AI ke relevant hashtags ke
+     * saath merge hote hain — duplicates hat jaate hain aur total 30 tag ki
+     * Instagram limit ke andar rehte hain.
+     */
+    private const TRENDING_HASHTAGS = [
+        '#trending', '#viral', '#reels', '#reelsinstagram', '#explore',
+        '#explorepage', '#foryou', '#fyp', '#viralvideo', '#trendingreels',
+        '#shorts', '#viralpost', '#instagram', '#india',
+    ];
+
+    /**
      * @return list<array{text:string, punchline?:string}>
      * @throws \RuntimeException
      */
@@ -316,6 +328,7 @@ class ShayariStudioAiService
             if ($type === 'joke' && filled($punch)) {
                 $item['punchline'] = $punch;
             }
+            $tags = $this->withTrending($tags);
             if (filled($tags)) {
                 $item['hashtags'] = $tags;
             }
@@ -382,11 +395,39 @@ class ShayariStudioAiService
                 'options'  => $options,
                 'answer'   => $ans,
                 'reason'   => $this->asString($row['reason'] ?? $row['explanation'] ?? $row['reasoning'] ?? ''),
-                'hashtags' => $this->asString($row['hashtags'] ?? $row['tags'] ?? ''),
+                'hashtags' => $this->withTrending($this->asString($row['hashtags'] ?? $row['tags'] ?? '')),
             ];
         }
 
         return $items;
+    }
+
+    /**
+     * AI ke diye hashtags ke saath trending/viral hashtags jodo — jo pehle se
+     * present nahi hain sirf wahi, aur total 30 tag (Instagram limit) ke andar.
+     * Case-insensitive dedup. Tags khaali ho to bhi trending add ho jaate hain.
+     */
+    protected function withTrending(string $tags): string
+    {
+        $tags = trim($tags);
+
+        // Pehle se maujood hashtags (case-insensitive)
+        preg_match_all('/#[\p{L}\p{N}_]+/u', $tags, $m);
+        $existing = array_map(fn ($h) => Str::lower($h), $m[0]);
+
+        $toAdd = array_values(array_filter(
+            self::TRENDING_HASHTAGS,
+            fn ($tag) => ! in_array(Str::lower($tag), $existing, true)
+        ));
+
+        $room  = max(0, 30 - count($existing));
+        $toAdd = array_slice($toAdd, 0, $room);
+
+        if (empty($toAdd)) {
+            return $tags;
+        }
+
+        return trim($tags . ' ' . implode(' ', $toAdd));
     }
 
     /**
