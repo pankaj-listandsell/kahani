@@ -733,6 +733,10 @@ class InstagramService
      * kar lega. Ye 0x0.st jaise flaky temp hosts se zyada reliable hai.
      *
      * localhost / http (dev) par null return hota hai → temp host fallback.
+     *
+     * Server par bhi verify karte hain ki URL asli media de raha hai — agar
+     * `storage:link` missing hai to /storage/... par Laravel ka 404 HTML page
+     * milta hai, jise Meta reject kar deta hai. Aise case me null → temp host.
      */
     protected function publicMediaUrl(string $storageRelativePath): ?string
     {
@@ -743,12 +747,23 @@ class InstagramService
             return null;
         }
 
+        if (! $this->servesMedia($url)) {
+            Log::warning('Apna public URL media nahi de raha (storage:link missing?)', ['url' => $url]);
+
+            return null;
+        }
+
         return $url;
     }
 
     /**
      * Local file ko ek temporary public host par upload karke direct URL do.
      * Kai providers try karta hai jab tak koi chal na jaye.
+     *
+     * URL milne ke baad verify bhi karta hai ki wo asli media serve kar raha
+     * hai — tmpfiles jaise hosts kabhi HTML viewer page de dete hain, jise
+     * Meta reject karta hai ("Content type returned by URL: text/html … is
+     * not supported"). Aisa URL skip karke next provider try hota hai.
      */
     public function uploadToTempHost(string $absolutePath): ?string
     {
@@ -760,23 +775,67 @@ class InstagramService
         $name = basename($absolutePath);
 
         $providers = [
-            '0x0'       => fn () => $this->uploadTo0x0($contents, $name),
-            'tmpfiles'  => fn () => $this->uploadToTmpfiles($contents, $name),
+            'catbox'    => fn () => $this->uploadToCatbox($contents, $name),
             'litterbox' => fn () => $this->uploadToLitterbox($contents, $name),
+            'tmpfiles'  => fn () => $this->uploadToTmpfiles($contents, $name),
+            '0x0'       => fn () => $this->uploadTo0x0($contents, $name),
         ];
 
         foreach ($providers as $label => $fn) {
             try {
                 $url = $fn();
-                if ($url) {
-                    return $url;
+                if (! $url) {
+                    continue;
                 }
+                if (! $this->servesMedia($url)) {
+                    Log::warning("Temp host {$label} ne media nahi diya (HTML page?)", ['url' => $url]);
+
+                    continue;
+                }
+
+                return $url;
             } catch (\Throwable $e) {
                 Log::warning("Temp host {$label} failed", ['error' => $e->getMessage()]);
             }
         }
 
         return null;
+    }
+
+    /**
+     * URL asli image/video serve kar raha hai? (Content-Type check)
+     */
+    public function servesMedia(string $url): bool
+    {
+        try {
+            $res = Http::timeout(30)
+                ->withHeaders(['User-Agent' => 'Mozilla/5.0'])
+                ->head($url);
+
+            if (! $res->successful()) {
+                return false;
+            }
+
+            $type = Str::lower((string) $res->header('Content-Type'));
+
+            return Str::startsWith($type, ['video/', 'image/', 'application/octet-stream']);
+        } catch (\Throwable $e) {
+            return false;
+        }
+    }
+
+    /**
+     * catbox.moe — direct file URL (files.catbox.moe/xxx.mp4), permanent.
+     */
+    protected function uploadToCatbox(string $contents, string $name): ?string
+    {
+        $res = Http::timeout(180)
+            ->attach('fileToUpload', $contents, $name)
+            ->post('https://catbox.moe/user/api.php', ['reqtype' => 'fileupload']);
+
+        $url = trim($res->body());
+
+        return ($res->successful() && str_starts_with($url, 'https://')) ? $url : null;
     }
 
     protected function uploadTo0x0(string $contents, string $name): ?string

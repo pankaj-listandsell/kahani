@@ -154,12 +154,7 @@ class FacebookService
         try {
             // 1) Instagram wala hi reel mp4 (720x1280, voice/music ke saath)
             $mp4 = $this->instagram->mp4PathFor($card);
-            $videoUrl = $this->publicUrl($mp4)
-                ?? $this->instagram->uploadToTempHost(Storage::disk('public')->path($mp4));
-
-            if (! $videoUrl) {
-                throw new \RuntimeException('Could not upload video to a public host.');
-            }
+            $absolute = Storage::disk('public')->path($mp4);
 
             // 2) Reel session start → video_id
             $start = Http::asForm()->post($this->apiBase() . '/' . $this->pageId() . '/video_reels', [
@@ -173,15 +168,42 @@ class FacebookService
                 throw $this->graphException($start->json('error'), 'Reel start fail.');
             }
 
-            // 3) Hosted file se upload (rupload) — file_url header
-            $upload = Http::withHeaders([
-                'Authorization' => 'OAuth ' . $this->token(),
-                'file_url'      => $videoUrl,
-            ])->timeout(180)->post('https://rupload.facebook.com/video-upload/v21.0/' . $videoId);
+            // 3) Upload — pehle file ke bytes seedhe bhejo. Ye `file_url` se
+            //    zyada reliable hai: shared hosting ka WAF Facebook ke rupload
+            //    fetcher ko 403 de sakta hai, aur localhost par to koi public
+            //    URL hi nahi hota. Bytes bhejne me ye dono problem nahi.
+            $upload = $this->uploadReelBytes($videoId, $absolute);
+
+            // Bytes wala raasta na chale to purana hosted-URL tareeka try karo.
+            if (! $upload->successful()) {
+                Log::warning('FB reel byte-upload fail — file_url fallback', [
+                    'card' => $card->id,
+                    'body' => $upload->json() ?: $upload->body(),
+                ]);
+
+                $videoUrl = $this->publicUrl($mp4) ?? $this->instagram->uploadToTempHost($absolute);
+
+                if (! $videoUrl) {
+                    throw new \RuntimeException('Could not upload video to a public host.');
+                }
+
+                Log::info('FB reel video_url', ['card' => $card->id, 'url' => $videoUrl]);
+
+                $upload = Http::withHeaders([
+                    'Authorization' => 'OAuth ' . $this->token(),
+                    'file_url'      => $videoUrl,
+                ])->timeout(180)->post('https://rupload.facebook.com/video-upload/v21.0/' . $videoId);
+            }
 
             if (! $upload->successful()) {
                 Log::error('FB reel upload failed', ['card' => $card->id, 'body' => $upload->json() ?: $upload->body()]);
-                throw $this->graphException($upload->json('error'), 'Reel upload fail.');
+                // rupload `error` ki jagah `debug_info` deta hai — asli wajah
+                // wahi hoti hai (jaise "Unable to fetch media from URL … 403").
+                $detail = $upload->json('debug_info.message') ?? $upload->json('error.message');
+                throw $this->graphException(
+                    $upload->json('error'),
+                    'Reel upload fail.' . ($detail ? ' — ' . $detail : '')
+                );
             }
 
             // 4) Finish + publish
@@ -216,6 +238,28 @@ class FacebookService
      * =================================================================== */
 
     /**
+     * Reel mp4 ke raw bytes rupload par bhejo (resumable upload, single chunk).
+     * Koi public URL ki zaroorat nahi — isliye localhost par bhi chalta hai.
+     */
+    protected function uploadReelBytes(string $videoId, string $absolutePath): \Illuminate\Http\Client\Response
+    {
+        $bytes = @file_get_contents($absolutePath);
+
+        if ($bytes === false) {
+            throw new \RuntimeException('Reel video file padhi nahi ja saki: ' . basename($absolutePath));
+        }
+
+        return Http::withHeaders([
+            'Authorization' => 'OAuth ' . $this->token(),
+            'offset'        => '0',
+            'file_size'     => (string) strlen($bytes),
+        ])
+            ->withBody($bytes, 'application/octet-stream')
+            ->timeout(300)
+            ->post('https://rupload.facebook.com/video-upload/v21.0/' . $videoId);
+    }
+
+    /**
      * Graph API error → sahi exception. Rate-limit / spam-block ("We limit how
      * often you can post…") ko FacebookRateLimitException me convert karta hai
      * taaki caller back-off kare (card ko permanently fail na kare).
@@ -247,12 +291,23 @@ class FacebookService
 
     /**
      * Apne domain ka public HTTPS URL (localhost/http par null → temp host).
+     *
+     * Server par URL ka Content-Type bhi verify hota hai: `storage:link`
+     * missing ho to /storage/... par Laravel ka 404 HTML page milta hai aur
+     * Meta "Content type … text/html is not supported" de deta hai. Aise
+     * case me null return karke temp host par fallback ho jaata hai.
      */
     protected function publicUrl(string $storageRelativePath): ?string
     {
         $url = Storage::disk('public')->url($storageRelativePath);
 
         if (! Str::startsWith($url, 'https://') || Str::contains($url, ['localhost', '127.0.0.1'])) {
+            return null;
+        }
+
+        if (! $this->instagram->servesMedia($url)) {
+            Log::warning('FB: apna public URL media nahi de raha (storage:link missing?)', ['url' => $url]);
+
             return null;
         }
 
