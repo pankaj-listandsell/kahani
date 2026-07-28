@@ -67,6 +67,9 @@ class StoryAiService
         - {$lengthRule}
         {$genreRule}- Chhote paragraphs, saral bhasha, natural kahani-sunane wala andaaz.
         - Ek strong hook se shuru karo, aur ek satisfying moral ya twist ending do.
+        - EMOJI: title me 1-2 emoji do, description me 1-2, aur kahani ke andar bhaav ke hisab se
+          emoji daalo (jaise pyaar ❤️, dard 💔😢, dar 😨, khushi 😊✨, raat 🌙, twist 😲) —
+          har paragraph me zyada se zyada 1-2, natural jagah par. Emoji se kahani ka flow mat todo.
         - SIRF ek valid JSON object return karo (koi markdown, koi backticks nahi), bilkul is format me:
         {"title": "chhota aakarshak title", "description": "1-2 line ka summary", "body": "poori kahani yahan"}
         - title, description aur body — teeno usi bhasha/script me hon jo upar rule me di gayi hai.

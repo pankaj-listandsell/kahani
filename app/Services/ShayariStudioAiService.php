@@ -85,9 +85,11 @@ class ShayariStudioAiService
         - EXACTLY 4 options do.
         - "answer" me sahi option ka letter do: "A", "B", "C" ya "D".
         - "reason" me ek chhoti 1-line wajah do (kyun sahi hai).
+        - EMOJI: "question" me 1-2 topic-relevant emoji daalo (jaise 🤔🧠📚🌍🔬🏆) aur "reason" me
+          1 emoji (jaise ✅💡). Options plain rakho — unme emoji mat daalo.
         - Har item ke saath 6-10 safe, relevant hashtags "hashtags" me (banned/sensitive nahi).
         SIRF ek valid JSON array return karo (koi markdown, koi backticks nahi), bilkul is format me:
-        [{"question":"prashn yahan?", "options":["pehla","dusra","teesra","chautha"], "answer":"B", "reason":"chhoti wajah", "hashtags":"#quiz #gk #exam"}]
+        [{"question":"prashn yahan? 🤔", "options":["pehla","dusra","teesra","chautha"], "answer":"B", "reason":"chhoti wajah ✅", "hashtags":"#quiz #gk #exam"}]
         TXT;
     }
 
