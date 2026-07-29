@@ -39,13 +39,22 @@ class QuizController extends Controller
     public function generate(Request $request, ShayariStudioAiService $ai)
     {
         $data = $request->validate([
-            'category' => ['nullable', 'string', 'max:100'],
-            'count'    => ['required', 'integer', 'min:1', 'max:30'],
-            'language' => ['nullable', 'in:hindi,gujarati,hinglish'],
+            'category'  => ['nullable', 'string', 'max:100'],
+            'count'     => ['required', 'integer', 'min:1', 'max:30'],
+            'language'  => ['nullable', 'in:hindi,gujarati,hinglish'],
+            // Q&A List design kai batch me sawaal maangta hai — jo mil chuke hain
+            // wo yahan bhejta hai taaki AI unhe dobara na likhe.
+            'exclude'   => ['nullable', 'array', 'max:60'],
+            'exclude.*' => ['string', 'max:300'],
         ]);
 
         try {
-            $items = $ai->generateQuiz($data['category'] ?? '', $data['count'], $data['language'] ?? 'hindi');
+            $items = $ai->generateQuiz(
+                $data['category'] ?? '',
+                $data['count'],
+                $data['language'] ?? 'hindi',
+                $data['exclude'] ?? [],
+            );
 
             return response()->json(['ok' => true, 'items' => $items]);
         } catch (\Throwable $e) {

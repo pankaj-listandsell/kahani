@@ -42,9 +42,10 @@
                 </select>
             </div>
             <div>
-                <label class="block text-sm font-medium mb-1">Kitne?</label>
+                <label class="block text-sm font-medium mb-1">Kitne cards?</label>
                 <input type="number" id="count" value="5" min="1" max="30"
                        class="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm">
+                <p id="countHint" class="text-[11px] text-slate-400 mt-1"></p>
             </div>
             <div>
                 <label class="block text-sm font-medium mb-1">Theme 🎨</label>
@@ -56,9 +57,14 @@
                 <label class="block text-sm font-medium mb-1">🖼 Card Design</label>
                 <select id="style" class="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm">
                     <option value="simple">✨ Simple (header + footer)</option>
+                    <option value="list">📋 Q&amp;A List (kai sawaal ek card me)</option>
                     <option value="poster">🏆 Daily GK Quiz</option>
                     <option value="clean">📝 Classic (theme)</option>
                 </select>
+                <label id="listOptsWrap" class="hidden items-center gap-2 mt-2 text-xs text-slate-600 cursor-pointer">
+                    <input type="checkbox" id="listOptions" class="accent-violet-600">
+                    Options bhi dikhao <span class="text-slate-400">(kam sawaal fit honge)</span>
+                </label>
             </div>
             <div id="headerWrap">
                 <label class="block text-sm font-medium mb-1">📌 Header text</label>
@@ -308,12 +314,29 @@ function renderAnswer(canvas, item, themeKey, handle) {
 // question + options, aur neeche ek patli line wala simple footer. Koi emoji
 // bhari sajawat nahi. Rang chune hue THEME se aate hain.
 
-/** Letter-spaced text — header ko premium look deta hai. */
+/**
+ * Center-aligned letter-spaced text — header ko premium look deta hai.
+ *
+ * Devanagari/Gujarati par tracking NAHI lagti: har character alag draw karne se
+ * matra aur conjunct tooot jaate hain ("વૈદિક" → "વ ૈ દ િ ક"). Aise text ko
+ * seedha normal fillText se likhte hain.
+ */
 function trackedText(ctx, text, cx, y, spacing) {
+    const align = ctx.textAlign;
+
+    if (/[^\x00-\x7F]/.test(text)) {
+        ctx.textAlign = 'center';
+        ctx.fillText(text, cx, y);
+        ctx.textAlign = align;
+        return;
+    }
+
+    ctx.textAlign = 'left';
     const chars = [...text];
     const total = chars.reduce((s, ch) => s + ctx.measureText(ch).width, 0) + spacing * (chars.length - 1);
     let x = cx - total / 2;
     chars.forEach(ch => { ctx.fillText(ch, x, y); x += ctx.measureText(ch).width + spacing; });
+    ctx.textAlign = align;
 }
 
 /** Simple design ka header — sirf text + patli accent line. Y (line ke neeche) return. */
@@ -496,7 +519,220 @@ function renderSimpleAnswer(canvas, item, themeKey, handle, category, language, 
 /** Left-aligned letter spacing (trackedText center-aligned hai). */
 function trackedText2(ctx, text, x, y, spacing) {
     ctx.textAlign = 'left'; ctx.textBaseline = 'top';
+    // Indic text par tracking matra/conjunct tod deti hai — waise hi likho
+    if (/[^\x00-\x7F]/.test(text)) { ctx.fillText(text, x, y); return; }
     [...text].forEach(ch => { ctx.fillText(ch, x, y); x += ctx.measureText(ch).width + spacing; });
+}
+
+// ---------- "Q&A List" design ----------
+// Ek hi card me kai sawaal + unke jawab (revision/study post jaisa). Kitne
+// sawaal aayenge ye fix nahi — font ghata-badha kar jitne padhne layak fit
+// hote hain utne. Bache hue sawaal agle card par chale jaate hain.
+
+const LIST_ZONE_TOP = 300;     // header/topic ke neeche se content shuru
+const LIST_ZONE_BOTTOM = 1630; // footer line se thoda upar
+const LIST_FONT_MAX = 44;
+const LIST_FONT_MIN = 24;      // isse chhota = reel me padha nahi jaata
+const LIST_FONT_COMFORT = 34;  // "kitne sawaal mangwane hain" isi size par tay hota hai
+
+/**
+ * Diye gaye sawaalon ka layout ek font size par naapo.
+ * Render aur measurement dono yahi function use karte hain — warna preview aur
+ * asli card ka layout alag ho jaata hai.
+ */
+function listLayout(ctx, quizItems, fs, showOptions, maxW) {
+    const qSize = fs, aSize = Math.round(fs * 0.92), oSize = Math.round(fs * 0.82);
+    const blocks = [];
+    let total = 0;
+
+    quizItems.forEach((item, i) => {
+        ctx.font = `700 ${qSize}px ${sans}`;
+        const qLines = wrap(ctx, (i + 1) + '. ' + item.question, maxW - 20);
+
+        let oLines = [];
+        if (showOptions) {
+            ctx.font = `500 ${oSize}px ${sans}`;
+            const opts = (item.options || []).slice(0, 4)
+                .map((o, k) => String.fromCharCode(65 + k) + ') ' + o).join('   ');
+            oLines = opts.trim() === '' ? [] : wrap(ctx, opts, maxW - 40);
+        }
+
+        const ansIdx = (item.answer || 'A').charCodeAt(0) - 65;
+        const ansOpt = (item.options && item.options[ansIdx]) ? item.options[ansIdx] : '';
+        ctx.font = `800 ${aSize}px ${sans}`;
+        const aLines = wrap(ctx, '✅ ' + (item.answer || 'A') + ') ' + ansOpt, maxW - 40);
+
+        const h = qLines.length * qSize * 1.34
+            + (oLines.length ? 8 + oLines.length * oSize * 1.34 : 0)
+            + 10 + aLines.length * aSize * 1.34;
+
+        blocks.push({ qLines, oLines, aLines, h, qSize, aSize, oSize });
+        total += h + Math.round(fs * 0.62); // do sawaalon ke beech gap
+    });
+
+    return { blocks, total };
+}
+
+/**
+ * Sawaalon ko cards me baanto — har card me utne hi jitne padhne layak font par
+ * fit ho jaayein. Return: [{items, fs}, ...]
+ */
+/**
+ * Comfort font par ek card me kitne sawaal aaram se aate hain.
+ * Isi se tay hota hai ki AI se kitne sawaal mangwane hain — warna zyada mangwa
+ * kar cards minimum font (24) par thuns jaate hain.
+ */
+function itemsPerCard(quizItems, showOptions) {
+    const ctx = document.createElement('canvas').getContext('2d');
+    const maxW = W - 84 * 2;
+    const zone = LIST_ZONE_BOTTOM - LIST_ZONE_TOP;
+
+    let n = 0;
+    for (let k = 1; k <= quizItems.length; k++) {
+        if (listLayout(ctx, quizItems.slice(0, k), LIST_FONT_COMFORT, showOptions, maxW).total > zone) break;
+        n = k;
+    }
+
+    return Math.max(1, n);
+}
+
+/** Ek array ko `parts` barabar hisson me baanto (bache hue items shuru ke hisson me). */
+function splitEvenly(arr, parts) {
+    const out = [];
+    const base = Math.floor(arr.length / parts);
+    let rem = arr.length % parts, i = 0;
+
+    for (let p = 0; p < parts; p++) {
+        const n = base + (rem > 0 ? 1 : 0);
+        if (rem > 0) rem--;
+        if (n > 0) out.push(arr.slice(i, i + n));
+        i += n;
+    }
+
+    return out;
+}
+
+function packQuizPages(quizItems, showOptions, targetPages) {
+    const ctx = document.createElement('canvas').getContext('2d');
+    const maxW = W - 84 * 2;
+    const zone = LIST_ZONE_BOTTOM - LIST_ZONE_TOP;
+
+    // In sawaalon ke liye sabse bada font jo poore card me fit ho jaaye
+    const bestFont = (group) => {
+        for (let s = LIST_FONT_MAX; s > LIST_FONT_MIN; s -= 2) {
+            if (listLayout(ctx, group, s, showOptions, maxW).total <= zone) return s;
+        }
+        return LIST_FONT_MIN;
+    };
+    const fits = (group) => listLayout(ctx, group, LIST_FONT_MIN, showOptions, maxW).total <= zone;
+
+    // User ne cards ki ginti maangi hai (Q&A List) — bas utne hisson me baant do
+    if (targetPages > 0 && quizItems.length) {
+        const groups = splitEvenly(quizItems, targetPages);
+        if (groups.every(fits)) {
+            return groups.map(group => ({ items: group, fs: bestFont(group) }));
+        }
+        // Na fit ho to neeche greedy chalega (cards zyada ban jaayenge)
+    }
+
+    // 1) Greedy — har card me jitne minimum font par fit ho sakein
+    const greedy = [];
+    let pending = quizItems.slice();
+    while (pending.length) {
+        let take = pending.length;
+        while (take > 1 && !fits(pending.slice(0, take))) take--;
+        greedy.push(pending.slice(0, take));
+        pending = pending.slice(take);
+    }
+
+    // 2) Barabar baanto. Greedy akela chhod de to aakhri card par 1-2 sawaal
+    //    reh jaate hain (16 sawaal → 15 + 1) aur pehla card font 24 par ghut
+    //    jaata hai. Utne hi cards me barabar baantne se font bada rehta hai.
+    if (greedy.length > 1) {
+        const per = Math.ceil(quizItems.length / greedy.length);
+        const balanced = [];
+        for (let i = 0; i < quizItems.length; i += per) balanced.push(quizItems.slice(i, i + per));
+
+        if (balanced.length === greedy.length && balanced.every(fits)) {
+            return balanced.map(group => ({ items: group, fs: bestFont(group) }));
+        }
+    }
+
+    return greedy.map(group => ({ items: group, fs: bestFont(group) }));
+}
+
+function renderList(canvas, page, themeKey, handle, category, language, headerText, showOptions, pageNo, totalPages) {
+    const t = THEMES[themeKey] || THEMES.night;
+    canvas.width = W; canvas.height = H;
+    const ctx = canvas.getContext('2d');
+    const dark = lum(t.text) > 140;
+    const GREEN = dark ? '#4ade80' : '#15803d';
+
+    const g = ctx.createLinearGradient(0, 0, 0, H);
+    g.addColorStop(0, t.bg[0]); g.addColorStop(1, t.bg[1]);
+    ctx.fillStyle = g; ctx.fillRect(0, 0, W, H);
+
+    simpleHeader(ctx, t, headerText);
+
+    // Topic + page number (kai cards hon to "1/3")
+    const topic = (category || '').trim();
+    const label = [topic.toUpperCase(), totalPages > 1 ? `${pageNo}/${totalPages}` : ''].filter(Boolean).join('  •  ');
+    if (label !== '') {
+        ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+        ctx.fillStyle = t.accent; ctx.globalAlpha = 0.9; ctx.font = `700 34px ${sans}`;
+        trackedText(ctx, label, W / 2, 250, 3);
+        ctx.globalAlpha = 1;
+    }
+
+    const pad = 84, maxW = W - pad * 2;
+    const { blocks } = listLayout(ctx, page.items, page.fs, showOptions, maxW);
+
+    ctx.textAlign = 'left'; ctx.textBaseline = 'top';
+    let y = LIST_ZONE_TOP;
+
+    blocks.forEach(b => {
+        // Sawaal
+        ctx.fillStyle = t.text; ctx.font = `700 ${b.qSize}px ${sans}`;
+        b.qLines.forEach(l => { ctx.fillText(l, pad, y); y += b.qSize * 1.34; });
+
+        // Options (optional)
+        if (b.oLines.length) {
+            y += 8;
+            ctx.fillStyle = t.text; ctx.globalAlpha = 0.62; ctx.font = `500 ${b.oSize}px ${sans}`;
+            b.oLines.forEach(l => { ctx.fillText(l, pad + 30, y); y += b.oSize * 1.34; });
+            ctx.globalAlpha = 1;
+        }
+
+        // Jawab
+        y += 10;
+        ctx.fillStyle = GREEN; ctx.font = `800 ${b.aSize}px ${sans}`;
+        b.aLines.forEach(l => { ctx.fillText(l, pad + 30, y); y += b.aSize * 1.34; });
+
+        y += Math.round(page.fs * 0.62);
+    });
+
+    simpleFooter(ctx, t, handle, language, false);
+}
+
+/** Ek list-card ka text (voice + caption ke liye). */
+function listText(page) {
+    return page.items.map((item, i) => {
+        const ansIdx = (item.answer || 'A').charCodeAt(0) - 65;
+        const ansOpt = (item.options && item.options[ansIdx]) ? item.options[ansIdx] : '';
+        return (i + 1) + '. ' + item.question + '\n✅ ' + (item.answer || 'A') + ') ' + ansOpt;
+    }).join('\n\n');
+}
+
+/** Page ke saare items ke hashtags mila do (dedup, max 30 — Instagram limit). */
+function listHashtags(page) {
+    const seen = new Set(), out = [];
+    page.items.forEach(item => {
+        (item.hashtags || '').split(/\s+/).forEach(tag => {
+            const k = tag.toLowerCase();
+            if (tag.startsWith('#') && !seen.has(k) && out.length < 30) { seen.add(k); out.push(tag); }
+        });
+    });
+    return out.join(' ');
 }
 
 // ---------- "Daily Quiz" poster style (navy + yellow, illustrated look) ----------
@@ -822,19 +1058,38 @@ function renderPreviews() {
     const theme = el('theme').value, handle = el('handle').value, category = el('category').value.trim(), style = el('style').value, language = el('language').value;
     const headerText = el('headerText').value;
     const off = document.createElement('canvas');
-    items.forEach((item, i) => {
-        if (style === 'simple') renderSimple(off, item, theme, handle, category, language, headerText);
-        else if (POSTERS[style]) renderLogoPoster(off, item, handle, category, language, POSTERS[style]);
-        else if (style === 'poster') renderQuestionPoster(off, item, handle, category, language);
-        else renderQuestion(off, item, theme, handle, category);
+
+    const addCell = (label) => {
         const wrap = document.createElement('div'); wrap.className='text-center';
         const small = document.createElement('canvas'); small.width=270; small.height=480;
         small.className='w-full rounded-lg border border-slate-200 shadow-sm';
         small.getContext('2d').drawImage(off,0,0,270,480);
         wrap.appendChild(small);
-        const cap = document.createElement('div'); cap.className='text-[11px] text-slate-500 mt-0.5'; cap.textContent='Q'+(i+1);
+        const cap = document.createElement('div'); cap.className='text-[11px] text-slate-500 mt-0.5'; cap.textContent=label;
         wrap.appendChild(cap);
         grid.appendChild(wrap);
+    };
+
+    // Q&A List: kai sawaal ek card me — cards ki ginti apne aap nikalti hai
+    if (style === 'list') {
+        const showOpts = el('listOptions').checked;
+        const pages = packQuizPages(items, showOpts);
+        pages.forEach((page, i) => {
+            renderList(off, page, theme, handle, category, language, headerText, showOpts, i + 1, pages.length);
+            addCell(`Card ${i + 1} — ${page.items.length} sawaal`);
+        });
+        el('itemCount').textContent = items.length;
+        el('cardCount').textContent = pages.length;
+        el('previewWrap').classList.remove('hidden');
+        return;
+    }
+
+    items.forEach((item, i) => {
+        if (style === 'simple') renderSimple(off, item, theme, handle, category, language, headerText);
+        else if (POSTERS[style]) renderLogoPoster(off, item, handle, category, language, POSTERS[style]);
+        else if (style === 'poster') renderQuestionPoster(off, item, handle, category, language);
+        else renderQuestion(off, item, theme, handle, category);
+        addCell('Q' + (i + 1));
     });
     el('itemCount').textContent = items.length;
     el('cardCount').textContent = items.length;
@@ -842,27 +1097,103 @@ function renderPreviews() {
 }
 
 // ---------- Generate ----------
+/** AI se ek batch sawaal maango. `exclude` me pehle mile sawaal — dobara na aayein. */
+async function fetchQuizBatch(base, count, exclude) {
+    const r = await fetch(GEN_URL, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'X-CSRF-TOKEN': CSRF, 'Accept': 'application/json' },
+        body: JSON.stringify({ ...base, count, exclude: exclude.slice(-40) }),
+    });
+    const d = await r.json();
+    if (!d.ok || !d.items) throw new Error(d.error || 'Kuch nahi bana.');
+    return d.items;
+}
+
+/**
+ * Q&A List ke liye utne sawaal jama karo jitne se `targetCards` card ban jaayein.
+ *
+ * Ek card me kitne sawaal aayenge ye pehle se pata nahi (sawaal ki lambai par
+ * depend karta hai), isliye batch-batch me maangte hain aur har baar pack karke
+ * dekhte hain ki kitne card ban rahe hain. Ek hi AI call me 70 MCQ maangna
+ * bharosemand nahi — model beech me kaat deta hai.
+ */
+async function collectForCards(base, targetCards, showOpts, onProgress) {
+    const collected = [], seen = new Set();
+
+    // Pehla andaaza; pehle batch ke baad asli naap se badal jaata hai
+    let goal = targetCards * (showOpts ? 7 : 10);
+
+    for (let round = 0; round < 8; round++) {
+        const need = goal - collected.length;
+        if (need <= 0) break;
+
+        onProgress(`AI sawaal bana raha hai… ${collected.length}/${goal}`);
+
+        const batch = await fetchQuizBatch(base, Math.min(25, Math.max(5, need)), collected.map(i => i.question));
+
+        let added = 0;
+        batch.forEach(it => {
+            const key = (it.question || '').trim().toLowerCase();
+            if (key && !seen.has(key)) { seen.add(key); collected.push(it); added++; }
+        });
+
+        // AI naye sawaal nahi de pa raha — aur try karne ka fayda nahi
+        if (added === 0) break;
+
+        // Ab asli sawaalon se naapo ki ek card me kitne aate hain
+        if (round === 0) goal = targetCards * itemsPerCard(collected, showOpts);
+    }
+
+    // Zaroorat se zyada aa gaye to extra chhod do, phir theek utne cards me baanto
+    const use = collected.slice(0, goal);
+    const pages = packQuizPages(use, showOpts, targetCards);
+
+    return { items: pages.flatMap(p => p.items), pages, short: pages.length < targetCards };
+}
+
 el('genBtn').addEventListener('click', async () => {
     const btn = el('genBtn'), msg = el('msg');
-    const payload = { category: el('category').value.trim(), count: parseInt(el('count').value,10)||5, language: el('language').value };
+    const wanted = parseInt(el('count').value, 10) || 5;
+    const base = { category: el('category').value.trim(), language: el('language').value };
+    const isList = el('style').value === 'list';
+
     btn.disabled=true; const lbl=btn.textContent; btn.textContent='⏳ Ban raha hai…'; msg.textContent='AI quiz bana raha hai…';
     el('previewWrap').classList.add('hidden');
+
     try {
-        const r = await fetch(GEN_URL, { method:'POST', headers:{'Content-Type':'application/json','X-CSRF-TOKEN':CSRF,'Accept':'application/json'}, body: JSON.stringify(payload) });
-        const d = await r.json();
-        if (d.ok && d.items && d.items.length) { items=d.items; await Promise.all([ensureFonts(), ensureLogo()]); renderPreviews(); msg.textContent=`✓ ${items.length} quiz ready — theme badal ke dekho, phir Save karo.`; }
-        else msg.textContent = '⚠ ' + (d.error || 'Kuch nahi bana.');
-    } catch(e){ msg.textContent='⚠ Error aaya, dobara try karo.'; }
+        if (isList) {
+            // "Kitne cards?" = card ki ginti. Har card me jitne sawaal fit ho jaayein.
+            const res = await collectForCards(base, wanted, el('listOptions').checked, t => { msg.textContent = t; });
+            items = res.items;
+            await Promise.all([ensureFonts(), ensureLogo()]);
+            renderPreviews();
+            msg.textContent = res.short
+                ? `⚠ Sirf ${res.pages.length} card ban paaye (${items.length} sawaal) — AI is topic par aur naye sawaal nahi de paaya.`
+                : `✓ ${res.pages.length} cards ready — kul ${items.length} sawaal. Theme badal ke dekho, phir Save karo.`;
+        } else {
+            // Baaki designs me 1 sawaal = 1 card
+            items = await fetchQuizBatch(base, Math.min(30, wanted), []);
+            await Promise.all([ensureFonts(), ensureLogo()]);
+            renderPreviews();
+            msg.textContent = `✓ ${items.length} cards ready — theme badal ke dekho, phir Save karo.`;
+        }
+    } catch(e){ msg.textContent = '⚠ ' + (e.message || 'Error aaya, dobara try karo.'); }
     btn.disabled=false; btn.textContent=lbl;
 });
-// Header text sirf Simple design me kaam aata hai — baaki styles me chhupa do
-function syncHeaderField() {
-    el('headerWrap').style.display = el('style').value === 'simple' ? '' : 'none';
+// Header text Simple + List dono me lagta hai; "Options bhi dikhao" sirf List me
+function syncStyleFields() {
+    const s = el('style').value;
+    el('headerWrap').style.display = (s === 'simple' || s === 'list') ? '' : 'none';
+    el('listOptsWrap').classList.toggle('hidden', s !== 'list');
+    el('listOptsWrap').classList.toggle('flex', s === 'list');
+    el('countHint').textContent = s === 'list'
+        ? 'Har card me jitne sawaal fit honge utne aayenge'
+        : '1 sawaal = 1 card';
 }
-el('style').addEventListener('change', syncHeaderField);
-syncHeaderField();
+el('style').addEventListener('change', syncStyleFields);
+syncStyleFields();
 
-['theme','handle','style','category','language','headerText'].forEach(id => el(id).addEventListener('change', () => { if(items.length) renderPreviews(); }));
+['theme','handle','style','category','language','headerText','listOptions'].forEach(id => el(id).addEventListener('change', () => { if(items.length) renderPreviews(); }));
 
 // ---------- Save (2 cards per quiz, sequence me) ----------
 el('saveBtn').addEventListener('click', async () => {
@@ -873,8 +1204,30 @@ el('saveBtn').addEventListener('click', async () => {
     const off=document.createElement('canvas');
     const ansOff=document.createElement('canvas');
     let collection=null, redirect=null, order=0;
-    const total = items.length;
+    let total = items.length;
     try {
+        // Q&A List: har card me kai sawaal — ek card = ek post. Timer reel yahan
+        // nahi banti (jawab card par hi hai), isliye answer_image bhejte nahi.
+        if (style === 'list') {
+            const showOpts = el('listOptions').checked;
+            const pages = packQuizPages(items, showOpts);
+            total = pages.length;
+            for (let p = 0; p < pages.length; p++) {
+                renderList(off, pages[p], theme, handle, category, language, headerText, showOpts, p + 1, pages.length);
+                order++;
+                await postCard({
+                    collection, order, text: listText(pages[p]),
+                    hashtags: listHashtags(pages[p]), image: off.toDataURL('image/png'),
+                    category, language,
+                });
+                el('bar').style.width = Math.round((order/total)*100)+'%';
+                el('progressText').textContent = `${order} / ${total} cards saved…`;
+            }
+            el('progressText').textContent='✅ Saved! Redirecting…';
+            setTimeout(()=>{ window.location = redirect; }, 700);
+            return;
+        }
+
         for (let i=0;i<items.length;i++) {
             const item = items[i];
             const optsText = (item.options||[]).map((o,k)=>String.fromCharCode(65+k)+') '+o).join('\n');

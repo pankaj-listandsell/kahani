@@ -51,12 +51,12 @@ class ShayariStudioAiService
      * @return list<array{question:string, options:list<string>, answer:string, reason:string, hashtags:string}>
      * @throws \RuntimeException
      */
-    public function generateQuiz(string $category, int $count, string $language = 'hindi'): array
+    public function generateQuiz(string $category, int $count, string $language = 'hindi', array $exclude = []): array
     {
         $count    = max(1, min(30, $count));
         $category = trim($category) ?: 'general knowledge';
 
-        $prompt = $this->quizPrompt($category, $count, $language);
+        $prompt = $this->quizPrompt($category, $count, $language, $exclude);
         $items  = $this->parseQuiz($this->callAi($prompt));
 
         // Kabhi model galat format deta hai — ek baar dobara try karo
@@ -73,14 +73,32 @@ class ShayariStudioAiService
         return array_slice($items, 0, $count);
     }
 
-    protected function quizPrompt(string $category, int $count, string $language): string
+    protected function quizPrompt(string $category, int $count, string $language, array $exclude = []): string
     {
         $lang = StoryAiService::langRule($language);
+
+        // Ek hi topic par kai batch maangne par model wahi sawaal dohra deta hai.
+        // Pichhle sawaal dikha dene se naye sawaal aate hain. Sirf aakhri 40 —
+        // isse zyada bhejne par prompt bahut lamba ho jaata hai.
+        $avoid = '';
+        if (! empty($exclude)) {
+            $list = collect($exclude)
+                ->filter(fn ($q) => is_string($q) && trim($q) !== '')
+                ->take(-40)
+                ->map(fn ($q) => '- ' . Str::limit(trim($q), 90, ''))
+                ->implode("\n");
+
+            if ($list !== '') {
+                $avoid = "\nYe sawaal PEHLE SE ban chuke hain — inme se koi bhi dobara mat likhna, "
+                    . "na hi inka thoda badla hua roop. Bilkul NAYE sawaal do:\n{$list}\n";
+            }
+        }
 
         return <<<TXT
         Tum ek expert quiz-master ho jo competitive exam (jaise "{$category}") ki taiyari karwate ho.
         "{$category}" topic par {$count} multiple-choice questions (MCQ) banao — factual aur accurate.
         {$lang}
+        {$avoid}
         Rules (har question ke liye):
         - EXACTLY 4 options do.
         - "answer" me sahi option ka letter do: "A", "B", "C" ya "D".
