@@ -24,6 +24,7 @@
         ['route' => 'admin.stories.index',  'active' => 'admin.stories.*',   'icon' => '📚', 'label' => 'Stories'],
         ['route' => 'admin.studio.index',   'active' => 'admin.studio.*',    'icon' => '✨', 'label' => 'Shayari & Jokes'],
         ['route' => 'admin.quiz.index',     'active' => 'admin.quiz.*',      'icon' => '🎯', 'label' => 'Quiz'],
+        ['route' => 'admin.yoga.index',     'active' => 'admin.yoga.*',      'icon' => '🧘', 'label' => 'Kids Yoga'],
         ['route' => 'admin.instagram.index','active' => 'admin.instagram.*', 'icon' => '📸', 'label' => 'Instagram'],
         ['route' => 'admin.youtube.index',  'active' => 'admin.youtube.*',   'icon' => '▶️', 'label' => 'YouTube'],
         ['route' => 'admin.facebook.index', 'active' => 'admin.facebook.*',  'icon' => '📘', 'label' => 'Facebook'],

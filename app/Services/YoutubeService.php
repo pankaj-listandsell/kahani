@@ -251,6 +251,13 @@ class YoutubeService
     /** Ek card → 1080x1920 Short mp4. Storage-relative path return karta hai. */
     public function mp4ForCard(PartCard $card, ?int $seconds = null): string
     {
+        // Quiz card jiske paas answer image hai → question + countdown + answer
+        // wali ek hi reel (viral quiz format). Baaki sab pehle jaisa.
+        $quiz = app(QuizReelService::class);
+        if ($quiz->supports($card)) {
+            return $quiz->mp4For($card);
+        }
+
         // Story par audio mode/voice set ho to wahi (warna global) — har card par reset
         $this->withAudioMode($card->part?->story?->tts_mode);
         $this->withVoice($card->part?->story?->tts_voice);
@@ -396,12 +403,12 @@ class YoutubeService
         return in_array($m, ['music', 'voice', 'voice_music'], true) ? $m : 'music';
     }
 
-    /** Narration ka andaaz — shayari/quote/joke expressive, warna kahani. */
+    /** Narration ka andaaz — shayari/quote/joke expressive, yoga shaant, warna kahani. */
     protected function voiceStyle(PartCard $card): string
     {
         $type = $card->part?->story?->type;
 
-        return in_array($type, ['shayari', 'quote', 'joke'], true) ? $type : 'story';
+        return in_array($type, ['shayari', 'quote', 'joke', 'yoga'], true) ? $type : 'story';
     }
 
     /**

@@ -55,9 +55,15 @@
             <div>
                 <label class="block text-sm font-medium mb-1">🖼 Card Design</label>
                 <select id="style" class="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm">
+                    <option value="simple">✨ Simple (header + footer)</option>
                     <option value="poster">🏆 Daily GK Quiz</option>
                     <option value="clean">📝 Classic (theme)</option>
                 </select>
+            </div>
+            <div id="headerWrap">
+                <label class="block text-sm font-medium mb-1">📌 Header text</label>
+                <input type="text" id="headerText" value="Daily GK Quiz" placeholder="Daily GK Quiz"
+                       class="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm">
             </div>
             <div>
                 <label class="block text-sm font-medium mb-1">Watermark / Handle <span class="text-slate-400">(optional)</span></label>
@@ -295,6 +301,202 @@ function renderAnswer(canvas, item, themeKey, handle) {
     }
 
     handleAt(ctx, t, handle);
+}
+
+// ---------- "Simple" design ----------
+// Saaf-suthra layout: upar sirf header text (jaise "Daily GK Quiz"), beech me
+// question + options, aur neeche ek patli line wala simple footer. Koi emoji
+// bhari sajawat nahi. Rang chune hue THEME se aate hain.
+
+/** Letter-spaced text — header ko premium look deta hai. */
+function trackedText(ctx, text, cx, y, spacing) {
+    const chars = [...text];
+    const total = chars.reduce((s, ch) => s + ctx.measureText(ch).width, 0) + spacing * (chars.length - 1);
+    let x = cx - total / 2;
+    chars.forEach(ch => { ctx.fillText(ch, x, y); x += ctx.measureText(ch).width + spacing; });
+}
+
+/** Simple design ka header — sirf text + patli accent line. Y (line ke neeche) return. */
+function simpleHeader(ctx, t, headerText) {
+    const title = (headerText || '').trim() || 'Daily GK Quiz';
+
+    ctx.textAlign = 'left'; ctx.textBaseline = 'middle';
+    const size = fitOne(ctx, title, W - 260, sans, '800', 62);
+    ctx.font = `800 ${size}px ${sans}`;
+    ctx.fillStyle = t.text;
+    trackedText(ctx, title.toUpperCase(), W / 2, 128, Math.round(size * 0.09));
+
+    // Patli accent line — header ko baaki card se alag karti hai
+    ctx.strokeStyle = t.accent; ctx.lineWidth = 5; ctx.lineCap = 'round';
+    ctx.beginPath(); ctx.moveTo(W / 2 - 90, 188); ctx.lineTo(W / 2 + 90, 188); ctx.stroke();
+
+    return 188;
+}
+
+/** Simple design ka footer — patli line, chhota CTA, handle. Footer ka top Y return. */
+function simpleFooter(ctx, t, handle, language, cta) {
+    const top = 1650;
+
+    ctx.strokeStyle = t.text; ctx.globalAlpha = 0.18; ctx.lineWidth = 3;
+    ctx.beginPath(); ctx.moveTo(90, top); ctx.lineTo(W - 90, top); ctx.stroke();
+    ctx.globalAlpha = 1;
+
+    ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+
+    if (cta) {
+        const CTA = {
+            hindi:    'अपना जवाब कमेंट करें — जवाब कैप्शन में',
+            gujarati: 'તમારો જવાબ કોમેન્ટ કરો — જવાબ કૅપ્શનમાં',
+            hinglish: 'Apna answer comment karein — answer caption me',
+        };
+        const txt = CTA[language] || CTA.hindi;
+        const s = fitOne(ctx, txt, W - 200, sans, '600', 40);
+        ctx.fillStyle = t.text; ctx.globalAlpha = 0.8; ctx.font = `600 ${s}px ${sans}`;
+        ctx.fillText(txt, W / 2, top + 76);
+        ctx.globalAlpha = 1;
+    }
+
+    const hh = (handle || '').trim();
+    if (hh) {
+        ctx.fillStyle = t.accent; ctx.font = `700 36px ${sans}`;
+        ctx.fillText(hh, W / 2, cta ? top + 152 : top + 90);
+    }
+
+    return top;
+}
+
+function renderSimple(canvas, item, themeKey, handle, category, language, headerText) {
+    const t = THEMES[themeKey] || THEMES.night;
+    canvas.width = W; canvas.height = H;
+    const ctx = canvas.getContext('2d');
+    const dark = lum(t.text) > 140; // light text = dark background
+
+    // Plain gradient — koi deco nahi (yahi "simple" ka matlab hai)
+    const g = ctx.createLinearGradient(0, 0, 0, H);
+    g.addColorStop(0, t.bg[0]); g.addColorStop(1, t.bg[1]);
+    ctx.fillStyle = g; ctx.fillRect(0, 0, W, H);
+
+    let y = simpleHeader(ctx, t, headerText) + 62;
+
+    // Topic — sirf tab jab user ne diya ho
+    const topic = (category || item.category || '').trim();
+    if (topic !== '') {
+        ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+        ctx.fillStyle = t.accent; ctx.globalAlpha = 0.9; ctx.font = `700 34px ${sans}`;
+        trackedText(ctx, topic.toUpperCase(), W / 2, y, 3);
+        ctx.globalAlpha = 1;
+        y += 66;
+    }
+
+    // ---- Question ----
+    const pad = 84, maxW = W - pad * 2;
+    ctx.textAlign = 'left'; ctx.textBaseline = 'top';
+    const q = fitLines(ctx, item.question, maxW - 40, 430, sans, '700', 62);
+    ctx.fillStyle = t.text; ctx.font = `700 ${q.size}px ${sans}`;
+    let qy = y + 20;
+    q.lines.forEach(l => { ctx.fillText(l, pad, qy); qy += q.lh; });
+
+    // ---- Options ----
+    const opts = (item.options || []).slice(0, 4);
+    const n = opts.length || 4;
+    const top = qy + 70, bottom = 1590, gap = 26;
+    const boxH = Math.min(160, (bottom - top - (n - 1) * gap) / n);
+    // Chhote question par options upar chipak jaate the aur neeche bada khali
+    // gap reh jaata tha — isliye block ko bache hue space me center karo.
+    const blockH = n * boxH + (n - 1) * gap;
+    let oy = top + Math.max(0, (bottom - top - blockH) / 2);
+
+    opts.forEach((opt, i) => {
+        // Halka box — border theme ke text rang ka, bahut halka
+        roundRect(ctx, pad, oy, maxW, boxH, 18);
+        ctx.fillStyle = dark ? 'rgba(255,255,255,0.07)' : 'rgba(0,0,0,0.05)'; ctx.fill();
+        ctx.lineWidth = 2.5;
+        ctx.strokeStyle = dark ? 'rgba(255,255,255,0.22)' : 'rgba(0,0,0,0.16)';
+        roundRect(ctx, pad, oy, maxW, boxH, 18); ctx.stroke();
+
+        // A / B / C / D
+        ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+        ctx.fillStyle = t.accent; ctx.font = `800 ${Math.round(boxH * 0.42)}px ${sans}`;
+        ctx.fillText(String.fromCharCode(65 + i), pad + 58, oy + boxH / 2 + 2);
+
+        // Option text
+        const tx = pad + 116;
+        const os = fitOne(ctx, opt, maxW - (tx - pad) - 40, sans, '600', 46);
+        ctx.fillStyle = t.text; ctx.textAlign = 'left'; ctx.font = `600 ${os}px ${sans}`;
+        ctx.fillText(opt, tx, oy + boxH / 2 + 2);
+
+        oy += boxH + gap;
+    });
+
+    simpleFooter(ctx, t, handle, language, true);
+}
+
+/** Simple design ka answer card — reel me countdown ke baad yahi dikhta hai. */
+function renderSimpleAnswer(canvas, item, themeKey, handle, category, language, headerText) {
+    const t = THEMES[themeKey] || THEMES.night;
+    canvas.width = W; canvas.height = H;
+    const ctx = canvas.getContext('2d');
+    const dark = lum(t.text) > 140;
+    const GREEN = '#22c55e';
+
+    const g = ctx.createLinearGradient(0, 0, 0, H);
+    g.addColorStop(0, t.bg[0]); g.addColorStop(1, t.bg[1]);
+    ctx.fillStyle = g; ctx.fillRect(0, 0, W, H);
+
+    let y = simpleHeader(ctx, t, headerText) + 70;
+
+    const pad = 84, maxW = W - pad * 2;
+    const ansIdx = (item.answer || 'A').charCodeAt(0) - 65;
+    const ansOpt = (item.options && item.options[ansIdx]) ? item.options[ansIdx] : '';
+
+    // Question — halka (context ke liye)
+    ctx.textAlign = 'left'; ctx.textBaseline = 'top';
+    const q = fitLines(ctx, item.question, maxW, 300, sans, '600', 48);
+    ctx.fillStyle = t.text; ctx.globalAlpha = 0.65; ctx.font = `600 ${q.size}px ${sans}`;
+    q.lines.forEach(l => { ctx.fillText(l, pad, y); y += q.lh; });
+    ctx.globalAlpha = 1;
+
+    // Answer block ko question ke neeche bache hue space me center karo —
+    // warna sab upar chipak jaata hai aur footer se pehle bada gap dikhta hai.
+    const reasonLines = (item.reason || '').trim() !== ''
+        ? fitLines(ctx, item.reason, maxW, 400, sans, '500', 44) : null;
+    const aPre = fitLines(ctx, (item.answer || 'A') + ')  ' + ansOpt, maxW - 80, 300, sans, '800', 66);
+    const blockH = (156 + aPre.lines.length * aPre.lh)
+        + (reasonLines ? 56 + reasonLines.lines.length * reasonLines.lh : 0);
+    y = Math.max(y + 66, y + (1590 - y - blockH) / 2);
+
+    // ---- Sahi jawab (green box) ----
+    const a = fitLines(ctx, (item.answer || 'A') + ')  ' + ansOpt, maxW - 80, 300, sans, '800', 66);
+    // 156 = label + uske aage khula space. Gujarati/Hindi ke matras baseline se
+    // kaafi upar jaate hain, isliye label aur jawab ke beech khula rakhna padta hai.
+    const boxH = 156 + a.lines.length * a.lh;
+    roundRect(ctx, pad, y, maxW, boxH, 22);
+    ctx.fillStyle = dark ? 'rgba(34,197,94,0.16)' : 'rgba(34,197,94,0.14)'; ctx.fill();
+    ctx.lineWidth = 3; ctx.strokeStyle = GREEN; roundRect(ctx, pad, y, maxW, boxH, 22); ctx.stroke();
+
+    ctx.fillStyle = GREEN; ctx.font = `700 32px ${sans}`;
+    trackedText2(ctx, 'SAHI JAWAB', pad + 40, y + 40, 3);
+
+    ctx.fillStyle = t.text; ctx.font = `800 ${a.size}px ${sans}`;
+    let ay = y + 112;
+    a.lines.forEach(l => { ctx.fillText(l, pad + 40, ay); ay += a.lh; });
+    y += boxH + 56;
+
+    // ---- Reason ----
+    if ((item.reason || '').trim() !== '') {
+        const r = fitLines(ctx, item.reason, maxW, 1600 - y, sans, '500', 44);
+        ctx.fillStyle = t.text; ctx.globalAlpha = 0.85; ctx.font = `500 ${r.size}px ${sans}`;
+        r.lines.forEach(l => { ctx.fillText(l, pad, y); y += r.lh; });
+        ctx.globalAlpha = 1;
+    }
+
+    simpleFooter(ctx, t, handle, language, false);
+}
+
+/** Left-aligned letter spacing (trackedText center-aligned hai). */
+function trackedText2(ctx, text, x, y, spacing) {
+    ctx.textAlign = 'left'; ctx.textBaseline = 'top';
+    [...text].forEach(ch => { ctx.fillText(ch, x, y); x += ctx.measureText(ch).width + spacing; });
 }
 
 // ---------- "Daily Quiz" poster style (navy + yellow, illustrated look) ----------
@@ -618,9 +820,11 @@ async function ensureFonts(){ for(const f of ['700 68px "Noto Serif Devanagari"'
 function renderPreviews() {
     const grid = el('grid'); grid.innerHTML='';
     const theme = el('theme').value, handle = el('handle').value, category = el('category').value.trim(), style = el('style').value, language = el('language').value;
+    const headerText = el('headerText').value;
     const off = document.createElement('canvas');
     items.forEach((item, i) => {
-        if (POSTERS[style]) renderLogoPoster(off, item, handle, category, language, POSTERS[style]);
+        if (style === 'simple') renderSimple(off, item, theme, handle, category, language, headerText);
+        else if (POSTERS[style]) renderLogoPoster(off, item, handle, category, language, POSTERS[style]);
         else if (style === 'poster') renderQuestionPoster(off, item, handle, category, language);
         else renderQuestion(off, item, theme, handle, category);
         const wrap = document.createElement('div'); wrap.className='text-center';
@@ -651,15 +855,23 @@ el('genBtn').addEventListener('click', async () => {
     } catch(e){ msg.textContent='⚠ Error aaya, dobara try karo.'; }
     btn.disabled=false; btn.textContent=lbl;
 });
-['theme','handle','style','category','language'].forEach(id => el(id).addEventListener('change', () => { if(items.length) renderPreviews(); }));
+// Header text sirf Simple design me kaam aata hai — baaki styles me chhupa do
+function syncHeaderField() {
+    el('headerWrap').style.display = el('style').value === 'simple' ? '' : 'none';
+}
+el('style').addEventListener('change', syncHeaderField);
+syncHeaderField();
+
+['theme','handle','style','category','language','headerText'].forEach(id => el(id).addEventListener('change', () => { if(items.length) renderPreviews(); }));
 
 // ---------- Save (2 cards per quiz, sequence me) ----------
 el('saveBtn').addEventListener('click', async () => {
     if(!items.length) return;
     const btn=el('saveBtn'); btn.disabled=true; btn.classList.add('opacity-60'); el('progress').classList.remove('hidden');
     await Promise.all([ensureFonts(), ensureLogo()]);
-    const theme=el('theme').value, handle=el('handle').value, category=el('category').value.trim(), language=el('language').value, style=el('style').value;
+    const theme=el('theme').value, handle=el('handle').value, category=el('category').value.trim(), language=el('language').value, style=el('style').value, headerText=el('headerText').value;
     const off=document.createElement('canvas');
+    const ansOff=document.createElement('canvas');
     let collection=null, redirect=null, order=0;
     const total = items.length;
     try {
@@ -668,13 +880,19 @@ el('saveBtn').addEventListener('click', async () => {
             const optsText = (item.options||[]).map((o,k)=>String.fromCharCode(65+k)+') '+o).join('\n');
             const ansIdx = (item.answer||'A').charCodeAt(0)-65;
             const ansOpt = (item.options && item.options[ansIdx]) ? item.options[ansIdx] : '';
-            // Sirf Question card. Answer + reason caption me jaayega (image par nahi).
+            // Question card. Answer + reason caption me jaata hai (question image par nahi).
             const answerBlock = '✅ Sahi jawab: ' + (item.answer||'A') + ') ' + ansOpt + (item.reason ? '\n💡 ' + item.reason : '');
-            if (POSTERS[style]) renderLogoPoster(off, item, handle, category, language, POSTERS[style]);
+            if (style === 'simple') renderSimple(off, item, theme, handle, category, language, headerText);
+            else if (POSTERS[style]) renderLogoPoster(off, item, handle, category, language, POSTERS[style]);
             else if (style === 'poster') renderQuestionPoster(off, item, handle, category, language);
             else renderQuestion(off, item, theme, handle, category);
+            // Answer-reveal card — reel me countdown ke baad yahi dikhta hai.
+            // Simple design ka apna matching answer card hai taaki reel me
+            // question se answer par jaate waqt look na badle.
+            if (style === 'simple') renderSimpleAnswer(ansOff, item, theme, handle, category, language, headerText);
+            else renderAnswer(ansOff, item, theme, handle);
             order++;
-            await postCard({ collection, order, text: item.question + '\n\n' + optsText, answer: answerBlock, hashtags: item.hashtags||'', image: off.toDataURL('image/png'), category, language });
+            await postCard({ collection, order, text: item.question + '\n\n' + optsText, answer: answerBlock, hashtags: item.hashtags||'', image: off.toDataURL('image/png'), answer_image: ansOff.toDataURL('image/png'), category, language });
             el('bar').style.width = Math.round((order/total)*100)+'%';
             el('progressText').textContent = `${order} / ${total} cards saved…`;
         }

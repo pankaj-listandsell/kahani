@@ -11,6 +11,7 @@ use App\Http\Controllers\Admin\StoryController;
 use App\Http\Controllers\Admin\QuizController;
 use App\Http\Controllers\Admin\StudioController;
 use App\Http\Controllers\Admin\UserManagementController;
+use App\Http\Controllers\Admin\YogaController;
 use App\Http\Controllers\Admin\YoutubeController;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Route;
@@ -102,8 +103,21 @@ Route::middleware('auth')->prefix('admin')->name('admin.')->group(function () {
     Route::get('quiz', [QuizController::class, 'index'])->name('quiz.index');
     Route::post('quiz/generate', [QuizController::class, 'generate'])->name('quiz.generate');
     Route::post('quiz/save', [QuizController::class, 'save'])->name('quiz.save');
+    Route::post('quiz/timer', [QuizController::class, 'timer'])->name('quiz.timer');
     Route::get('quiz/{story}', [QuizController::class, 'show'])->name('quiz.show');
     Route::delete('quiz/{story}', [QuizController::class, 'destroy'])->name('quiz.destroy');
+
+    // Kids Yoga — apna alag menu/section (curated aasan + vector illustration cards)
+    Route::get('yoga', [YogaController::class, 'index'])->name('yoga.index');
+    Route::post('yoga/generate', [YogaController::class, 'generate'])->name('yoga.generate');
+    Route::post('yoga/image', [YogaController::class, 'image'])->name('yoga.image');
+    Route::post('yoga/search', [YogaController::class, 'search'])->name('yoga.search');
+    Route::post('yoga/pick', [YogaController::class, 'pick'])->name('yoga.pick');
+    Route::post('yoga/upload', [YogaController::class, 'upload'])->name('yoga.upload');
+    Route::post('yoga/approve', [YogaController::class, 'approve'])->name('yoga.approve');
+    Route::post('yoga/save', [YogaController::class, 'save'])->name('yoga.save');
+    Route::get('yoga/{story}', [YogaController::class, 'show'])->name('yoga.show');
+    Route::delete('yoga/{story}', [YogaController::class, 'destroy'])->name('yoga.destroy');
 
     // Topic se AI kahani generate (create form bharne ke liye) — resource se pehle
     Route::post('stories/generate', [StoryController::class, 'generateFromTopic'])->name('stories.generate');

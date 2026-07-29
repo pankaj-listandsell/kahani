@@ -136,9 +136,16 @@ class CardController extends Controller
         $warning = null;
         $mode = Setting::getFor($story->user_id, 'tts_audio_mode', 'music');
         if ($mode !== 'music' && filled($card->text) && $tts->isConfigured()) {
-            $style = in_array($story->type, ['shayari', 'quote', 'joke'], true) ? $story->type : 'story';
+            // Style + language wahi hon jo reel builder use karta hai — warna TTS
+            // cache miss ho jaata hai aur ek hi card par do Gemini call lag jaati hain.
+            $style = in_array($story->type, ['shayari', 'quote', 'joke', 'yoga', 'quiz'], true) ? $story->type : 'story';
             try {
-                $tts->speak($card->text, Setting::getFor($story->user_id, 'tts_voice') ?: null, $style);
+                $tts->speak(
+                    $card->text,
+                    Setting::getFor($story->user_id, 'tts_voice') ?: null,
+                    $style,
+                    $story->language ?: 'hindi',
+                );
             } catch (\Throwable $e) {
                 $warning = 'Voice add nahi hui — Gemini TTS ka limit/quota khatam (free tier: 10 voice/din). '
                     . 'Video bina voice ke bana hai.';

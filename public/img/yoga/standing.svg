@@ -1,0 +1,24 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="400" height="400" viewBox="0 0 400 400">
+  <!-- Kids yoga fallback figure: khada aasan (Tadasana/Vrikshasana jaisa) -->
+  <circle cx="200" cy="200" r="188" fill="#eef4ff"/>
+  <rect x="70" y="336" width="260" height="18" rx="9" fill="#c3d4fb"/>
+
+  <!-- Haath sar ke upar jude hue -->
+  <g fill="none" stroke="#f2c396" stroke-width="22" stroke-linecap="round">
+    <path d="M172 186 C146 130 168 84 200 72"/>
+    <path d="M228 186 C254 130 232 84 200 72"/>
+  </g>
+
+  <!-- Sar -->
+  <circle cx="200" cy="126" r="31" fill="#f2c396"/>
+  <path d="M169 118 C176 92 224 92 231 118 C224 104 176 104 169 118 Z" fill="#3f3a52"/>
+
+  <!-- Dhad -->
+  <path d="M200 158 L200 246" fill="none" stroke="#6d8cff" stroke-width="46" stroke-linecap="round"/>
+
+  <!-- Pair -->
+  <g fill="none" stroke="#f2c396" stroke-width="24" stroke-linecap="round">
+    <path d="M192 248 L178 332"/>
+    <path d="M208 248 L222 332"/>
+  </g>
+</svg>

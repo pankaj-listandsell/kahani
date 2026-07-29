@@ -1,0 +1,24 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="400" height="400" viewBox="0 0 400 400">
+  <!-- Kids yoga fallback figure: baith kar (Sukhasana/Padmasana jaisa) -->
+  <circle cx="200" cy="200" r="188" fill="#eaf7f0"/>
+  <rect x="80" y="300" width="240" height="16" rx="8" fill="#bfe6d2"/>
+
+  <!-- Sar -->
+  <circle cx="200" cy="132" r="31" fill="#f2c396"/>
+  <path d="M169 124 C176 98 224 98 231 124 C224 110 176 110 169 124 Z" fill="#3f3a52"/>
+
+  <!-- Dhad -->
+  <path d="M200 164 L200 244" fill="none" stroke="#33b985" stroke-width="46" stroke-linecap="round"/>
+
+  <!-- Haath ghutno par -->
+  <g fill="none" stroke="#f2c396" stroke-width="21" stroke-linecap="round">
+    <path d="M182 186 C146 208 138 232 137 250"/>
+    <path d="M218 186 C254 208 262 232 263 250"/>
+  </g>
+
+  <!-- Palathi (crossed legs) -->
+  <g fill="none" stroke="#f2c396" stroke-width="26" stroke-linecap="round">
+    <path d="M140 258 L260 280"/>
+    <path d="M260 258 L140 280"/>
+  </g>
+</svg>

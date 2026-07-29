@@ -157,7 +157,7 @@ class YoutubeAutoPost extends Command
             if (! $story->targetsPlatform('youtube')) {
                 continue; // ye story YouTube ke liye target nahi
             }
-            $isCollection = in_array($story->type, ['shayari', 'joke', 'quote', 'quiz', 'status', 'fact'], true);
+            $isCollection = in_array($story->type, ['shayari', 'joke', 'quote', 'quiz', 'status', 'fact', 'yoga'], true);
             foreach ($story->parts as $part) {
                 foreach ($part->cards as $card) {
                     if ($card->yt_status !== null) {

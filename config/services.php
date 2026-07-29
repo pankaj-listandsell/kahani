@@ -38,6 +38,9 @@ return [
     // ffmpeg binary path (card image -> reel video conversion)
     'ffmpeg' => [
         'path' => env('FFMPEG_PATH', 'ffmpeg'),
+        // Quiz reel ke countdown number ke liye TTF font. Khaali chhodo to
+        // common Windows/Linux paths khud dhoond liye jaate hain.
+        'font' => env('FFMPEG_FONT'),
     ],
 
     // TTS voice-over settings. free_fallback: Gemini ki 10/din limit khatam hone
@@ -53,6 +56,13 @@ return [
         'tts_model'   => env('GEMINI_TTS_MODEL', 'gemini-2.5-flash-preview-tts'),
         'tts_voice'   => env('GEMINI_TTS_VOICE', 'Kore'), // default voice (Hindi supported)
         'image_model' => env('GEMINI_IMAGE_MODEL', 'gemini-2.5-flash-image'), // "Nano Banana"
+    ],
+
+    // Pixabay — free stock vectors/illustrations (Kids Yoga ke pose images ke liye).
+    // Free API key: https://pixabay.com/api/docs/ (account banao → key mil jaati hai)
+    // Key na ho to Yoga studio ka Pixabay search band rehta hai, baaki sab chalta hai.
+    'pixabay' => [
+        'key' => env('PIXABAY_KEY'),
     ],
 
     // Google / YouTube Data API v3 (OAuth) — Shorts auto-upload

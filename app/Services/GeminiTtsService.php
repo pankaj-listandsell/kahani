@@ -136,6 +136,10 @@ class GeminiTtsService
                 . 'har shabd par zor dete hue padho:',
             'joke'    => "Is {$lang} joke ko halke-phulke, mazedaar andaaz me, achhi comic timing ke saath padho — "
                 . 'punchline se thoda pehle chhota pause do:',
+            'yoga'    => "Ye {$lang} yoga instructions bachchon ko samjha rahe ho — bahut shaant, dheeme, "
+                . 'pyaar bhare andaaz me padho. Har step ke baad chhota pause do taaki bachcha follow kar sake:',
+            'quiz'    => "Tum ek quiz-master ho. Is {$lang} sawaal ko saaf, spasht aur thoda dramatic andaaz me padho — "
+                . 'har option ke baad chhota pause do taaki sunne wala soch sake:',
             default   => "Is {$lang} kahani ko ek natural, expressive kahani-sunane wale andaaz me padho:",
         };
     }

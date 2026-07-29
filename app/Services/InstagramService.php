@@ -368,6 +368,13 @@ class InstagramService
         if ($mp4) {
             $disk->delete($mp4);
         }
+
+        // 4) Quiz timer reel ka answer-image + uski cached MP4
+        if ($card->answer_image_path) {
+            $disk->delete($card->answer_image_path);
+        }
+        $disk->delete('reels/quiz-' . $card->id . '.mp4');
+        $disk->delete('yt/card-' . $card->id . '.mp4');
     }
 
     /**
@@ -553,6 +560,13 @@ class InstagramService
      */
     public function mp4PathFor(PartCard $card, int $seconds = 6): string
     {
+        // Quiz card jiske paas answer image hai → question + countdown + answer
+        // wali ek hi reel (viral quiz format). Baaki sab pehle jaisa.
+        $quiz = app(QuizReelService::class);
+        if ($quiz->supports($card)) {
+            return $quiz->mp4For($card);
+        }
+
         // Story par audio mode/voice set ho to wahi (warna global) — har card par reset
         $this->withAudioMode($card->part?->story?->tts_mode);
         $this->withVoice($card->part?->story?->tts_voice);
@@ -681,12 +695,12 @@ class InstagramService
         return in_array($m, ['music', 'voice', 'voice_music'], true) ? $m : 'music';
     }
 
-    /** Narration ka andaaz — shayari/quote/joke expressive, warna kahani. */
+    /** Narration ka andaaz — shayari/quote/joke expressive, yoga shaant, warna kahani. */
     protected function voiceStyle(PartCard $card): string
     {
         $type = $card->part?->story?->type;
 
-        return in_array($type, ['shayari', 'quote', 'joke'], true) ? $type : 'story';
+        return in_array($type, ['shayari', 'quote', 'joke', 'yoga'], true) ? $type : 'story';
     }
 
     /**

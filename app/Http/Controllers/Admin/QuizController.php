@@ -3,8 +3,10 @@
 namespace App\Http\Controllers\Admin;
 
 use App\Http\Controllers\Controller;
+use App\Models\Setting;
 use App\Models\Story;
 use App\Services\InstagramService;
+use App\Services\QuizReelService;
 use App\Services\ShayariStudioAiService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Storage;
@@ -66,6 +68,8 @@ class QuizController extends Controller
             'answer'     => ['nullable', 'string', 'max:600'], // caption me answer+reason
             'hashtags'   => ['nullable', 'string', 'max:1000'],
             'image'      => ['required', 'string'], // data:image/png;base64,...
+            // Answer-reveal card — timer reel (question → countdown → answer) ke liye
+            'answer_image' => ['nullable', 'string'],
         ]);
 
         if (! empty($data['collection'])) {
@@ -95,6 +99,16 @@ class QuizController extends Controller
         $path = 'cards/' . Str::uuid() . '.png';
         Storage::disk('public')->put($path, $binary);
 
+        // Answer-reveal image (optional) — isi se ek hi reel me answer dikhta hai
+        $answerPath = null;
+        if (filled($data['answer_image'] ?? null)) {
+            $answerBinary = $this->decodeDataUrl($data['answer_image']);
+            if ($answerBinary !== null) {
+                $answerPath = 'cards/' . Str::uuid() . '-a.png';
+                Storage::disk('public')->put($answerPath, $answerBinary);
+            }
+        }
+
         // Instagram caption = question + answer/reason + hashtags. Card ki IMAGE
         // par sirf question dikhta hai; answer caption me jaata hai (voice card.text
         // se banti hai jisme answer nahi — reel question hi rehta hai).
@@ -107,10 +121,12 @@ class QuizController extends Controller
         );
 
         $part->cards()->create([
-            'sort_order' => $data['order'],
-            'image_path' => $path,
-            'text'       => $data['text'], // voice: sirf question + options
-            'ig_caption' => $caption !== '' ? $caption : null,
+            'sort_order'        => $data['order'],
+            'image_path'        => $path,
+            'answer_image_path' => $answerPath,
+            'text'              => $data['text'], // voice: sirf question + options
+            'answer_text'       => $answer !== '' ? $answer : null, // answer-reveal ki voice
+            'ig_caption'        => $caption !== '' ? $caption : null,
         ]);
 
         return response()->json([
@@ -118,6 +134,22 @@ class QuizController extends Controller
             'collection' => $story->id,
             'redirect'   => route('admin.quiz.show', $story),
         ]);
+    }
+
+    /**
+     * Timer reel ka countdown kitne second ka ho — per-user setting.
+     * Reel har baar naye sire se banti hai, isliye badalne ke baad "Generate
+     * Reel" dabate hi naya timer lag jaata hai.
+     */
+    public function timer(Request $request)
+    {
+        $data = $request->validate([
+            'seconds' => ['required', 'integer', 'min:' . QuizReelService::MIN_TIMER, 'max:' . QuizReelService::MAX_TIMER],
+        ]);
+
+        Setting::putFor(auth()->id(), 'quiz_timer_seconds', (string) $data['seconds']);
+
+        return response()->json(['ok' => true, 'seconds' => $data['seconds']]);
     }
 
     /** Ek quiz collection ke saare cards (gallery). */
@@ -129,7 +161,11 @@ class QuizController extends Controller
         $story->load(['parts.cards']);
         $cards = $story->parts->flatMap->cards->values();
 
-        return view('admin.quiz.show', compact('story', 'cards'));
+        // Timer reel tabhi banti hai jab card me answer image ho (naye quiz)
+        $hasTimer = $cards->contains(fn ($c) => filled($c->answer_image_path));
+        $timer    = app(QuizReelService::class)->timerSeconds($story->user_id);
+
+        return view('admin.quiz.show', compact('story', 'cards', 'hasTimer', 'timer'));
     }
 
     /** Poori quiz collection delete. */

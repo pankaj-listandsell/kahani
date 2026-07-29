@@ -3,15 +3,15 @@
 
 @section('content')
 <div class="max-w-5xl">
-    <a href="{{ route('admin.quiz.index') }}" class="text-sm text-slate-500 hover:text-violet-700">← Quiz</a>
+    <a href="{{ route('admin.yoga.index') }}" class="text-sm text-slate-500 hover:text-emerald-700">← Kids Yoga</a>
 
     <div class="flex items-start justify-between gap-4 mt-2 mb-6 flex-wrap">
         <div>
-            <h2 class="text-xl font-bold">🎯 {{ $story->title }}</h2>
-            <p class="text-slate-500 mt-1 text-sm">{{ $cards->count() }} question cards · {{ ucfirst($story->status) }}</p>
+            <h2 class="text-xl font-bold">🧘 {{ $story->title }}</h2>
+            <p class="text-slate-500 mt-1 text-sm">{{ $cards->count() }} aasan cards · {{ ucfirst($story->status) }}</p>
         </div>
-        <form method="POST" action="{{ route('admin.quiz.destroy', $story) }}"
-              onsubmit="return confirm('Poori quiz collection delete karein?')">
+        <form method="POST" action="{{ route('admin.yoga.destroy', $story) }}"
+              onsubmit="return confirm('Poori yoga collection delete karein?')">
             @csrf @method('DELETE')
             <button class="px-4 py-2 border border-red-300 text-red-600 rounded-lg hover:bg-red-50 text-sm">🗑 Delete</button>
         </form>
@@ -22,31 +22,13 @@
         @include('admin.partials._reel_settings')
     </div>
 
-    @if ($hasTimer)
-        {{-- Timer reel: question + countdown → answer, sab ek hi video me --}}
-        <div class="mb-6 bg-white rounded-xl border border-slate-200 p-4 flex items-center gap-3 flex-wrap">
-            <span class="text-sm font-medium">⏱ Countdown timer</span>
-            <select id="quizTimer" data-url="{{ route('admin.quiz.timer') }}"
-                    class="rounded-lg border border-slate-300 px-3 py-2 text-sm">
-                @foreach (\App\Services\QuizReelService::TIMER_CHOICES as $s)
-                    <option value="{{ $s }}" @selected($timer === $s)>{{ $s }} second</option>
-                @endforeach
-            </select>
-            <span id="timerSaved" class="text-green-600 text-xs font-medium"></span>
-            <p class="text-xs text-slate-500">
-                Reel me sawaal + countdown, phir answer — sab ek hi video me. Badalne ke baad
-                "Generate Reel" dobara dabao.
-            </p>
-        </div>
-    @endif
-
     @if ($cards->isEmpty())
         <div class="bg-white rounded-xl border border-slate-200 p-8 text-center text-slate-500">Koi card nahi.</div>
     @else
         <div class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4">
             @foreach ($cards as $i => $card)
                 <div class="bg-white rounded-xl border border-slate-200 p-2">
-                    <div class="text-[11px] font-medium mb-1 text-violet-600">❓ Q{{ $i + 1 }}</div>
+                    <div class="text-[11px] font-medium mb-1 text-emerald-600">🧘 आसन {{ $i + 1 }}</div>
                     <div class="media-slot">
                         <a href="{{ asset('storage/' . $card->image_path) }}" target="_blank">
                             <img src="{{ asset('storage/' . $card->image_path) }}" class="w-full rounded-lg border border-slate-100" alt="Card">
@@ -58,10 +40,10 @@
                         <span class="{{ $card->isFbPosted() ? '' : 'opacity-25 grayscale' }}" title="Facebook">📘</span>
                     </div>
                     <button type="button"
-                            class="gen-reel mt-2 w-full text-[11px] bg-violet-600 hover:bg-violet-700 text-white rounded px-2 py-1.5"
+                            class="gen-reel mt-2 w-full text-[11px] bg-emerald-600 hover:bg-emerald-700 text-white rounded px-2 py-1.5"
                             data-url="{{ route('admin.cards.reel', $card) }}">▶ Generate Reel</button>
                     <a href="{{ asset('storage/' . $card->image_path) }}" download
-                       class="block text-center text-[11px] text-violet-600 hover:underline mt-1">⬇ Image</a>
+                       class="block text-center text-[11px] text-emerald-600 hover:underline mt-1">⬇ Image</a>
                     <form method="POST" action="{{ route('admin.cards.destroy', $card) }}"
                           onsubmit="return confirm('Ye card delete karein?')" class="mt-1">
                         @csrf @method('DELETE')
@@ -71,7 +53,7 @@
             @endforeach
         </div>
 
-        <p class="text-xs text-slate-400 mt-4">Har card ek quiz question hai (answer + reason caption me). Auto-post inhe post karta hai. Icon highlight = post ho chuka.</p>
+        <p class="text-xs text-slate-400 mt-4">Har card ek aasan hai. Caption me steps, fayda aur safety line jaati hai. Icon highlight = post ho chuka.</p>
     @endif
 </div>
 
@@ -79,25 +61,6 @@
 <script>
 (function () {
     const CSRF = document.querySelector('meta[name=csrf-token]').content;
-
-    // ---------- Countdown timer seconds ----------
-    const timerSel = document.getElementById('quizTimer');
-    if (timerSel) {
-        timerSel.addEventListener('change', async () => {
-            const saved = document.getElementById('timerSaved');
-            saved.textContent = '…';
-            try {
-                const r = await fetch(timerSel.dataset.url, {
-                    method: 'POST',
-                    headers: { 'X-CSRF-TOKEN': CSRF, 'Accept': 'application/json', 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ seconds: parseInt(timerSel.value, 10) }),
-                });
-                saved.textContent = (await r.json()).ok ? '✓ saved' : '⚠ fail';
-            } catch (e) { saved.textContent = '⚠ error'; }
-            setTimeout(() => { saved.textContent = ''; }, 2500);
-        });
-    }
-
     document.querySelectorAll('.gen-reel').forEach(btn => {
         btn.addEventListener('click', async () => {
             const cell = btn.closest('div'); const lbl = btn.textContent;

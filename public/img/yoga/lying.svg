@@ -1,0 +1,20 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="400" height="400" viewBox="0 0 400 400">
+  <!-- Kids yoga fallback figure: let kar (Shavasana/Bhujangasana jaisa) — side view -->
+  <circle cx="200" cy="200" r="188" fill="#f3eeff"/>
+  <rect x="52" y="268" width="296" height="18" rx="9" fill="#ddd0ff"/>
+
+  <!-- Pair -->
+  <g fill="none" stroke="#f2c396" stroke-width="26" stroke-linecap="round">
+    <path d="M262 248 L326 252"/>
+  </g>
+
+  <!-- Dhad -->
+  <path d="M148 240 L268 248" fill="none" stroke="#8b6cf0" stroke-width="46" stroke-linecap="round"/>
+
+  <!-- Haath body ke paas -->
+  <path d="M176 258 C204 266 232 268 252 264" fill="none" stroke="#f2c396" stroke-width="20" stroke-linecap="round"/>
+
+  <!-- Sar -->
+  <circle cx="116" cy="236" r="31" fill="#f2c396"/>
+  <path d="M88 224 C96 198 144 200 148 226 C138 214 96 210 88 224 Z" fill="#3f3a52"/>
+</svg>

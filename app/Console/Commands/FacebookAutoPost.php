@@ -173,7 +173,7 @@ class FacebookAutoPost extends Command
             if (! $story->targetsPlatform('facebook')) {
                 continue; // ye story Facebook ke liye target nahi
             }
-            $isCollection = in_array($story->type, ['shayari', 'joke', 'quote', 'quiz', 'status', 'fact'], true);
+            $isCollection = in_array($story->type, ['shayari', 'joke', 'quote', 'quiz', 'status', 'fact', 'yoga'], true);
             foreach ($story->parts as $part) {
                 foreach ($part->cards as $card) {
                     if ($card->fb_status !== null) {
