@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Models\Setting;
 use App\Models\Story;
 use App\Services\InstagramService;
+use App\Services\PixabayService;
 use App\Services\QuizReelService;
 use App\Services\ShayariStudioAiService;
 use Illuminate\Http\Request;
@@ -143,6 +144,42 @@ class QuizController extends Controller
             'collection' => $story->id,
             'redirect'   => route('admin.quiz.show', $story),
         ]);
+    }
+
+    /**
+     * Card background ke liye Pixabay par photo dhoondo.
+     * Query topic ki ho sakti hai ya ek-ek sawaal ki — frontend decide karta hai.
+     */
+    public function bgSearch(Request $request, PixabayService $pixabay)
+    {
+        $data = $request->validate([
+            'query' => ['required', 'string', 'max:120'],
+        ]);
+
+        try {
+            return response()->json(['ok' => true, 'results' => $pixabay->searchPhotos($data['query'], 12)]);
+        } catch (\Throwable $e) {
+            return response()->json(['ok' => false, 'error' => $e->getMessage()], 422);
+        }
+    }
+
+    /**
+     * Chuni hui Pixabay photo apne server par le aao — cross-origin image
+     * canvas ko taint kar deti hai aur card save hi nahi hota.
+     */
+    public function bgPick(Request $request, PixabayService $pixabay)
+    {
+        $data = $request->validate([
+            'url' => ['required', 'url', 'max:500'],
+        ]);
+
+        try {
+            $path = $pixabay->download($data['url'], 'bg');
+
+            return response()->json(['ok' => true, 'url' => asset('storage/' . $path)]);
+        } catch (\Throwable $e) {
+            return response()->json(['ok' => false, 'error' => $e->getMessage()], 422);
+        }
     }
 
     /**

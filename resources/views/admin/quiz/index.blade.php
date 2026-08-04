@@ -76,6 +76,15 @@
                 <input type="text" id="handle" placeholder="@yourpage"
                        class="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm">
             </div>
+            <div>
+                <label class="block text-sm font-medium mb-1">🖼️ Background photo</label>
+                <select id="bgMode" class="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm">
+                    <option value="off">Nahi chahiye (theme gradient)</option>
+                    <option value="question">Har sawaal ke hisaab se</option>
+                    <option value="topic">Topic ke hisaab se (ek hi photo)</option>
+                </select>
+                <p class="text-[11px] text-slate-400 mt-1">Pixabay se free photo, upar dark overlay</p>
+            </div>
             <div class="flex items-end">
                 <button id="genBtn" class="w-full bg-violet-600 hover:bg-violet-700 text-white font-medium rounded-lg px-5 py-2.5 text-sm">🎯 Generate Quiz</button>
             </div>
@@ -116,6 +125,8 @@
 const CSRF = document.querySelector('meta[name=csrf-token]').content;
 const GEN_URL  = @json(route('admin.quiz.generate'));
 const SAVE_URL = @json(route('admin.quiz.save'));
+const BG_SEARCH_URL = @json(route('admin.quiz.bg.search'));
+const BG_PICK_URL   = @json(route('admin.quiz.bg.pick'));
 const el = id => document.getElementById(id);
 const W = 1080, H = 1920;
 
@@ -167,7 +178,8 @@ function drawDeco(ctx,t){
 
 // Quiz bg — clean gradient + soft top glow (theme ka bhaari deco NAHI, taaki
 // quiz saaf professional lage)
-function bgAndDeco(ctx, t){
+function bgAndDeco(ctx, t, img){
+    if (drawQuizBg(ctx, img)) return; // photo + scrim laga diya
     const g = ctx.createLinearGradient(0, 0, W, H);
     g.addColorStop(0, t.bg[0]); g.addColorStop(1, t.bg[1]);
     ctx.fillStyle = g; ctx.fillRect(0, 0, W, H);
@@ -175,18 +187,28 @@ function bgAndDeco(ctx, t){
     gl.addColorStop(0, 'rgba(255,255,255,0.09)'); gl.addColorStop(1, 'rgba(255,255,255,0)');
     ctx.fillStyle = gl; ctx.fillRect(0, 0, W, H);
 }
+
+/**
+ * Photo background par theme ka text-rang chal nahi sakta — light themes (Paper,
+ * White) ka gehra text scrim par gayab ho jaata hai. Isliye photo hone par theme
+ * ki ek copy deti hai jisme text safed ho. Baaki rang (accent) wahi rehte hain.
+ */
+function quizTheme(themeKey, img){
+    const t = THEMES[themeKey] || THEMES.night;
+    return img ? Object.assign({}, t, { text: '#ffffff' }) : t;
+}
 function handleAt(ctx, t, handle){ const hh=(handle||'').trim(); if(!hh)return; ctx.textAlign='center'; ctx.fillStyle=t.accent; ctx.globalAlpha=0.9; ctx.font=`600 34px ${sans}`; ctx.fillText(hh, W/2, H-95); ctx.globalAlpha=1; }
 
 // ---------- Question card (exam-serious, clean) ----------
 function renderQuestion(canvas, item, themeKey, handle, category) {
-    const t = THEMES[themeKey] || THEMES.night;
+    const t = quizTheme(themeKey, item.bg);
     canvas.width=W; canvas.height=H;
     const ctx = canvas.getContext('2d');
     const fam = t.serif ? serif : sans;
     const dark = lum(t.text) > 140;
     const panel = dark ? 'rgba(255,255,255,0.09)' : 'rgba(0,0,0,0.045)';
     const panelBd = dark ? 'rgba(255,255,255,0.22)' : 'rgba(0,0,0,0.12)';
-    bgAndDeco(ctx, t);
+    bgAndDeco(ctx, t, item.bg);
 
     const pad = 90, maxW = W - pad*2;
     ctx.textAlign='left'; ctx.textBaseline='top';
@@ -254,13 +276,13 @@ function renderQuestion(canvas, item, themeKey, handle, category) {
 
 // ---------- Answer card (exam-serious, clean) ----------
 function renderAnswer(canvas, item, themeKey, handle) {
-    const t = THEMES[themeKey] || THEMES.night;
+    const t = quizTheme(themeKey, item.bg);
     canvas.width=W; canvas.height=H;
     const ctx = canvas.getContext('2d');
     const fam = t.serif ? serif : sans;
     const dark = lum(t.text) > 140;
     const panelBd = dark ? 'rgba(255,255,255,0.22)' : 'rgba(0,0,0,0.12)';
-    bgAndDeco(ctx, t);
+    bgAndDeco(ctx, t, item.bg);
 
     const pad = 90, maxW = W - pad*2;
     const ansIdx = (item.answer||'A').charCodeAt(0) - 65;
@@ -307,6 +329,111 @@ function renderAnswer(canvas, item, themeKey, handle) {
     }
 
     handleAt(ctx, t, handle);
+}
+
+// ---------- Background photo (Pixabay) ----------
+// items[i].bg = us card ki Image object (ya null). "topic" mode me sab par ek hi.
+
+/**
+ * Photo ko poore card par "cover" ki tarah bharo, phir dark scrim — warna
+ * photo ke upar text padha nahi jaata.
+ */
+function drawQuizBg(ctx, img) {
+    if (!img) return false;
+    const iw = img.naturalWidth || img.width, ih = img.naturalHeight || img.height;
+    if (!iw || !ih) return false;
+
+    // BLUR sabse zaroori hai. Bina blur ke photo ki detail (jahaz ki rassiyan,
+    // patte, bheed) text ke peeche shor macha deti hai aur sawaal padha nahi
+    // jaata. Blur ke baad photo sirf "mahaul" deti hai, dhyan nahi kheenchti.
+    // Image thodi badi draw karte hain warna blur se kinaare halke pad jaate hain.
+    const r = Math.max(W / iw, H / ih) * 1.12;
+    ctx.save();
+    ctx.filter = 'blur(26px)';
+    ctx.drawImage(img, (W - iw * r) / 2, (H - ih * r) / 2, iw * r, ih * r);
+    ctx.restore();
+    ctx.filter = 'none'; // save/restore ke baad bhi kuch browsers me reh jaata hai
+
+    // Gehra scrim — halka scrim har photo par kaam nahi karta (safed baadal,
+    // registaan, barf par safed text gayab ho jaata hai)
+    const s = ctx.createLinearGradient(0, 0, 0, H);
+    s.addColorStop(0,    'rgba(0,0,0,0.80)');
+    s.addColorStop(0.45, 'rgba(0,0,0,0.68)');
+    s.addColorStop(1,    'rgba(0,0,0,0.82)');
+    ctx.fillStyle = s; ctx.fillRect(0, 0, W, H);
+    return true;
+}
+
+function quizLoadImage(url) {
+    return new Promise((res, rej) => {
+        const img = new Image();
+        img.onload = () => res(img);
+        img.onerror = () => rej(new Error('load fail'));
+        img.src = url; // apni site se — warna canvas taint
+    });
+}
+
+const qPost = (url, body) => fetch(url, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'X-CSRF-TOKEN': CSRF, 'Accept': 'application/json' },
+    body: JSON.stringify(body),
+}).then(r => r.json());
+
+/** Query English lagti hai ya nahi — Pixabay sirf English samajhta hai. */
+function isEnglish(s) {
+    return !!s && !/[^\x00-\x7F]/.test(s) && /[a-zA-Z]{3}/.test(s);
+}
+
+/**
+ * Ek query par pehli photo laao (server par download hoke).
+ *
+ * Kuch na mile to null — koi photo na hone se behtar hai bilkul galat photo
+ * lagana. (Pehle "Police Exam GK" jaisi query par Pixabay ko kuch nahi milta
+ * tha aur wo random popular photo — purana jahaz — de deta tha.)
+ */
+async function fetchBgFor(query) {
+    if (!isEnglish(query)) return null;
+
+    const d = await qPost(BG_SEARCH_URL, { query: query.trim() });
+    if (!d.ok || !d.results || !d.results.length) return null;
+
+    const p = await qPost(BG_PICK_URL, { url: d.results[0].full });
+    if (!p.ok) return null;
+
+    try { return await quizLoadImage(p.url); } catch (e) { return null; }
+}
+
+/** Chune hue mode ke hisaab se saare cards ke background lao. */
+async function loadBackgrounds(onProgress) {
+    const mode = el('bgMode').value;
+    items.forEach(it => { it.bg = null; });
+    if (mode === 'off' || !items.length) return;
+
+    let missing = 0;
+
+    if (mode === 'topic') {
+        // Category pehle SIRF tab jab wo English ho. "Police Exam GK" jaisi
+        // exam-specific query par Pixabay ko kuch nahi milta, isliye AI ke
+        // English image_query par gir jaate hain.
+        const cat = el('category').value.trim();
+        const q = isEnglish(cat) ? cat : (items[0].image_query || '');
+
+        onProgress('🖼️ Topic ki photo laa rahe hain…');
+        const img = await fetchBgFor(q);
+        items.forEach(it => { it.bg = img; });
+        if (!img) missing = items.length;
+    } else {
+        // Har sawaal ke liye alag — ek-ek karke (free API par ek saath na jaayein)
+        for (let i = 0; i < items.length; i++) {
+            onProgress(`🖼️ Photo ${i + 1} / ${items.length}…`);
+            items[i].bg = await fetchBgFor(items[i].image_query || '');
+            if (!items[i].bg) missing++;
+        }
+    }
+
+    if (missing) {
+        onProgress(`⚠ ${missing} card par photo nahi mili — un par theme gradient lagega.`);
+    }
 }
 
 // ---------- "Simple" design ----------
@@ -389,15 +516,17 @@ function simpleFooter(ctx, t, handle, language, cta) {
 }
 
 function renderSimple(canvas, item, themeKey, handle, category, language, headerText) {
-    const t = THEMES[themeKey] || THEMES.night;
+    const t = quizTheme(themeKey, item.bg);
     canvas.width = W; canvas.height = H;
     const ctx = canvas.getContext('2d');
     const dark = lum(t.text) > 140; // light text = dark background
 
-    // Plain gradient — koi deco nahi (yahi "simple" ka matlab hai)
-    const g = ctx.createLinearGradient(0, 0, 0, H);
-    g.addColorStop(0, t.bg[0]); g.addColorStop(1, t.bg[1]);
-    ctx.fillStyle = g; ctx.fillRect(0, 0, W, H);
+    // Photo (agar chuni ho) warna plain gradient — koi deco nahi
+    if (!drawQuizBg(ctx, item.bg)) {
+        const g = ctx.createLinearGradient(0, 0, 0, H);
+        g.addColorStop(0, t.bg[0]); g.addColorStop(1, t.bg[1]);
+        ctx.fillStyle = g; ctx.fillRect(0, 0, W, H);
+    }
 
     let y = simpleHeader(ctx, t, headerText) + 62;
 
@@ -416,8 +545,11 @@ function renderSimple(canvas, item, themeKey, handle, category, language, header
     ctx.textAlign = 'left'; ctx.textBaseline = 'top';
     const q = fitLines(ctx, item.question, maxW - 40, 430, sans, '700', 62);
     ctx.fillStyle = t.text; ctx.font = `700 ${q.size}px ${sans}`;
+    // Photo par gehri shadow — sawaal ke peeche koi box nahi hai
+    if (item.bg) { ctx.shadowColor = 'rgba(0,0,0,0.9)'; ctx.shadowBlur = 18; ctx.shadowOffsetY = 2; }
     let qy = y + 20;
     q.lines.forEach(l => { ctx.fillText(l, pad, qy); qy += q.lh; });
+    ctx.shadowColor = 'transparent'; ctx.shadowBlur = 0; ctx.shadowOffsetY = 0;
 
     // ---- Options ----
     const opts = (item.options || []).slice(0, 4);
@@ -430,11 +562,18 @@ function renderSimple(canvas, item, themeKey, handle, category, language, header
     let oy = top + Math.max(0, (bottom - top - blockH) / 2);
 
     opts.forEach((opt, i) => {
-        // Halka box — border theme ke text rang ka, bahut halka
+        // Photo ke upar box SOLID gehra hona chahiye. 7% opacity wala halka box
+        // gradient par theek lagta hai par photo par gayab ho jaata hai aur
+        // option ka text background se ladta hai.
         roundRect(ctx, pad, oy, maxW, boxH, 18);
-        ctx.fillStyle = dark ? 'rgba(255,255,255,0.07)' : 'rgba(0,0,0,0.05)'; ctx.fill();
+        ctx.fillStyle = item.bg
+            ? 'rgba(0,0,0,0.55)'
+            : (dark ? 'rgba(255,255,255,0.07)' : 'rgba(0,0,0,0.05)');
+        ctx.fill();
         ctx.lineWidth = 2.5;
-        ctx.strokeStyle = dark ? 'rgba(255,255,255,0.22)' : 'rgba(0,0,0,0.16)';
+        ctx.strokeStyle = item.bg
+            ? 'rgba(255,255,255,0.40)'
+            : (dark ? 'rgba(255,255,255,0.22)' : 'rgba(0,0,0,0.16)');
         roundRect(ctx, pad, oy, maxW, boxH, 18); ctx.stroke();
 
         // A / B / C / D
@@ -456,15 +595,17 @@ function renderSimple(canvas, item, themeKey, handle, category, language, header
 
 /** Simple design ka answer card — reel me countdown ke baad yahi dikhta hai. */
 function renderSimpleAnswer(canvas, item, themeKey, handle, category, language, headerText) {
-    const t = THEMES[themeKey] || THEMES.night;
+    const t = quizTheme(themeKey, item.bg);
     canvas.width = W; canvas.height = H;
     const ctx = canvas.getContext('2d');
     const dark = lum(t.text) > 140;
     const GREEN = '#22c55e';
 
-    const g = ctx.createLinearGradient(0, 0, 0, H);
-    g.addColorStop(0, t.bg[0]); g.addColorStop(1, t.bg[1]);
-    ctx.fillStyle = g; ctx.fillRect(0, 0, W, H);
+    if (!drawQuizBg(ctx, item.bg)) {
+        const g = ctx.createLinearGradient(0, 0, 0, H);
+        g.addColorStop(0, t.bg[0]); g.addColorStop(1, t.bg[1]);
+        ctx.fillStyle = g; ctx.fillRect(0, 0, W, H);
+    }
 
     let y = simpleHeader(ctx, t, headerText) + 70;
 
@@ -494,7 +635,11 @@ function renderSimpleAnswer(canvas, item, themeKey, handle, category, language, 
     // kaafi upar jaate hain, isliye label aur jawab ke beech khula rakhna padta hai.
     const boxH = 156 + a.lines.length * a.lh;
     roundRect(ctx, pad, y, maxW, boxH, 22);
-    ctx.fillStyle = dark ? 'rgba(34,197,94,0.16)' : 'rgba(34,197,94,0.14)'; ctx.fill();
+    // Photo par 16% green box gayab ho jaata hai — wahan gehra solid chahiye
+    ctx.fillStyle = item.bg
+        ? 'rgba(6,46,24,0.82)'
+        : (dark ? 'rgba(34,197,94,0.16)' : 'rgba(34,197,94,0.14)');
+    ctx.fill();
     ctx.lineWidth = 3; ctx.strokeStyle = GREEN; roundRect(ctx, pad, y, maxW, boxH, 22); ctx.stroke();
 
     ctx.fillStyle = GREEN; ctx.font = `700 32px ${sans}`;
@@ -662,15 +807,19 @@ function packQuizPages(quizItems, showOptions, targetPages) {
 }
 
 function renderList(canvas, page, themeKey, handle, category, language, headerText, showOptions, pageNo, totalPages) {
-    const t = THEMES[themeKey] || THEMES.night;
+    // Ek card me kai sawaal hain — pehle sawaal ki photo poore card ka background
+    const pageBg = (page.items[0] || {}).bg || null;
+    const t = quizTheme(themeKey, pageBg);
     canvas.width = W; canvas.height = H;
     const ctx = canvas.getContext('2d');
     const dark = lum(t.text) > 140;
     const GREEN = dark ? '#4ade80' : '#15803d';
 
-    const g = ctx.createLinearGradient(0, 0, 0, H);
-    g.addColorStop(0, t.bg[0]); g.addColorStop(1, t.bg[1]);
-    ctx.fillStyle = g; ctx.fillRect(0, 0, W, H);
+    if (!drawQuizBg(ctx, pageBg)) {
+        const g = ctx.createLinearGradient(0, 0, 0, H);
+        g.addColorStop(0, t.bg[0]); g.addColorStop(1, t.bg[1]);
+        ctx.fillStyle = g; ctx.fillRect(0, 0, W, H);
+    }
 
     simpleHeader(ctx, t, headerText);
 
@@ -1166,6 +1315,7 @@ el('genBtn').addEventListener('click', async () => {
             const res = await collectForCards(base, wanted, el('listOptions').checked, t => { msg.textContent = t; });
             items = res.items;
             await Promise.all([ensureFonts(), ensureLogo()]);
+            await loadBackgrounds(t => { msg.textContent = t; });
             renderPreviews();
             msg.textContent = res.short
                 ? `⚠ Sirf ${res.pages.length} card ban paaye (${items.length} sawaal) — AI is topic par aur naye sawaal nahi de paaya.`
@@ -1174,6 +1324,7 @@ el('genBtn').addEventListener('click', async () => {
             // Baaki designs me 1 sawaal = 1 card
             items = await fetchQuizBatch(base, Math.min(30, wanted), []);
             await Promise.all([ensureFonts(), ensureLogo()]);
+            await loadBackgrounds(t => { msg.textContent = t; });
             renderPreviews();
             msg.textContent = `✓ ${items.length} cards ready — theme badal ke dekho, phir Save karo.`;
         }
@@ -1194,6 +1345,15 @@ el('style').addEventListener('change', syncStyleFields);
 syncStyleFields();
 
 ['theme','handle','style','category','language','headerText','listOptions'].forEach(id => el(id).addEventListener('change', () => { if(items.length) renderPreviews(); }));
+
+// Background mode badle → nayi photos laao (Generate dobara dabane ki zaroorat nahi)
+el('bgMode').addEventListener('change', async () => {
+    if (!items.length) return;
+    const msg = el('msg');
+    await loadBackgrounds(t => { msg.textContent = t; });
+    renderPreviews();
+    msg.textContent = el('bgMode').value === 'off' ? '✓ Background hata diya.' : '✓ Background lag gaya.';
+});
 
 // ---------- Save (2 cards per quiz, sequence me) ----------
 el('saveBtn').addEventListener('click', async () => {

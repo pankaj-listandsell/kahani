@@ -592,9 +592,10 @@ class InstagramService
         // Reel frame 720x1280 (9:16). Card ko fit karke black background par
         // center me pad karo. in_range=full:out_range=tv → JPEG ke full-range ko
         // TV/limited range me badlo, warna output yuvj420p ban jaata hai jise
-        // Instagram reject karta hai.
-        $vfilter = '[0:v]scale=720:1280:force_original_aspect_ratio=decrease:in_range=full:out_range=tv,'
-            . 'pad=720:1280:(ow-iw)/2:(oh-ih)/2:color=black,format=yuv420p[v]';
+        // Instagram reject karta hai. Motion ON ho to halka Ken Burns zoom bhi.
+        $motion  = ReelMotion::enabled($card->part?->story?->user_id);
+        $motDur  = $voice ? max(3.0, $voice['seconds'] + 0.6) : (float) $seconds;
+        $vfilter = '[0:v]' . ReelMotion::chain(720, 1280, $motDur, (int) $card->id, $motion) . '[v]';
 
         // Instagram Reels spec: H.264 High profile, closed GOP, yuv420p, AAC 44.1k stereo.
         // ultrafast + stillimage + single thread → sabse kam RAM/CPU (shared host safe).
@@ -700,7 +701,7 @@ class InstagramService
     {
         $type = $card->part?->story?->type;
 
-        return in_array($type, ['shayari', 'quote', 'joke', 'yoga'], true) ? $type : 'story';
+        return in_array($type, ['shayari', 'quote', 'joke', 'yoga', 'ukhana'], true) ? $type : 'story';
     }
 
     /**

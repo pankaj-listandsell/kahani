@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Models\Story;
 use App\Services\ImageService;
 use App\Services\InstagramService;
+use App\Services\PixabayService;
 use App\Services\Scraper\StoryImporter;
 use App\Services\StoryAiService;
 use Illuminate\Http\Request;
@@ -218,6 +219,60 @@ class StoryController extends Controller
         $story->update(['platforms' => $list ?: null]);
 
         return response()->json(['ok' => true]);
+    }
+
+    /**
+     * Cover ke liye Pixabay par photo dhoondo — AI cover ka free alternative.
+     * Query na di ho to story ke title/category se hi dhoondh lete hain.
+     */
+    public function coverSearch(Request $request, Story $story, PixabayService $pixabay)
+    {
+        $this->authorize('update', $story);
+
+        $data = $request->validate([
+            'query' => ['nullable', 'string', 'max:80'],
+        ]);
+
+        $query = trim((string) ($data['query'] ?? '')) ?: trim($story->category . ' ' . $story->title);
+
+        try {
+            return response()->json([
+                'ok'      => true,
+                'query'   => $query,
+                'results' => $pixabay->searchPhotos($query),
+            ]);
+        } catch (\Throwable $e) {
+            return response()->json(['ok' => false, 'error' => $e->getMessage()], 422);
+        }
+    }
+
+    /** Chuni hui Pixabay photo ko is story ka cover bana do. */
+    public function coverPick(Request $request, Story $story, PixabayService $pixabay)
+    {
+        $this->authorize('update', $story);
+
+        $data = $request->validate([
+            'url' => ['required', 'url', 'max:500'],
+        ]);
+
+        try {
+            $path = $pixabay->download($data['url'], 'covers');
+        } catch (\Throwable $e) {
+            return response()->json(['ok' => false, 'error' => $e->getMessage()], 422);
+        }
+
+        // Purani cover + uska JPEG cache hata do
+        if ($story->cover_image) {
+            Storage::disk('public')->delete($story->cover_image);
+            $old = preg_replace('/\.[a-z0-9]+$/i', '.jpg', $story->cover_image);
+            if ($old && $old !== $story->cover_image) {
+                Storage::disk('public')->delete($old);
+            }
+        }
+
+        $story->update(['cover_image' => $path]);
+
+        return response()->json(['ok' => true, 'url' => asset('storage/' . $path)]);
     }
 
     /**

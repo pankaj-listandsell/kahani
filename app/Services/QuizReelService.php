@@ -89,6 +89,7 @@ class QuizReelService
             $aDur,
             $timer,
             $disk->path($mp4),
+            ReelMotion::enabled($userId),
         );
 
         $result = Process::timeout(600)->run($cmd);
@@ -158,6 +159,7 @@ class QuizReelService
         float $aDur,
         int $timer,
         string $out,
+        bool $motion = true,
     ): array {
         $ffmpeg = config('services.ffmpeg.path', 'ffmpeg');
 
@@ -172,12 +174,14 @@ class QuizReelService
         $qAudio   = $this->addAudioInput($cmd, $audioIdx, $qVoice, $qDur);
         $aAudio   = $this->addAudioInput($cmd, $audioIdx, $aVoice, $aDur);
 
-        $fit = 'scale=720:1280:force_original_aspect_ratio=decrease:in_range=full:out_range=tv,'
-            . 'pad=720:1280:(ow-iw)/2:(oh-ih)/2:color=black';
+        // Countdown zoom ke BAAD lagta hai — warna number bhi zoom hota rehta aur
+        // kinaare par ja kar kat jaata. Isliye chain me motion pehle, drawtext baad me.
+        $qFit = ReelMotion::chain(720, 1280, $qDur, 0, $motion);
+        $aFit = ReelMotion::chain(720, 1280, $aDur, 1, $motion);
 
         // Question par countdown; answer par kuch nahi
-        $filter = '[0:v]' . $fit . $this->countdownFilter($timer, $qDur) . ',format=yuv420p,setsar=1[v0];'
-            . '[1:v]' . $fit . ',format=yuv420p,setsar=1[v1];'
+        $filter = '[0:v]' . $qFit . $this->countdownFilter($timer, $qDur) . '[v0];'
+            . '[1:v]' . $aFit . '[v1];'
             . '[v0][v1]concat=n=2:v=1:a=0[v];'
             . $qAudio . $aAudio
             . '[aq][aa]concat=n=2:v=0:a=1[a]';
@@ -245,11 +249,16 @@ class QuizReelService
         // iske eif value truncate kar deta hai aur countdown 4 se shuru lagta hai.
         $text = sprintf('%%{eif\\:ceil(max(0\\,%d-t))\\:d}', $timer);
 
+        // Countdown UPAR-DAAYE kone me. Pehle ye neeche beech me tha (y=h-th-118)
+        // jahan card ka apna footer ("jawab comment me...") aur handle hote hain —
+        // number seedha unke upar chadh jaata tha aur dono padhe nahi jaate the.
+        // Upar-daaya kona khaali rehta hai kyunki header text center-aligned hai.
+        //
         // fontfile ko quote karna zaroori hai — bina quote ke ffmpeg escaped colon
         // ke baawajood path ko "C:" par tod deta hai ("No option name near ...").
         $filter = ',drawtext=fontfile=\'' . $font . '\':text=\'' . $text . '\''
-            . ':fontcolor=white:fontsize=104:box=1:boxcolor=black@0.55:boxborderw=26'
-            . ':x=(w-tw)/2:y=h-th-118:enable=\'lt(t,' . $timer . ')\'';
+            . ':fontcolor=white:fontsize=84:box=1:boxcolor=black@0.62:boxborderw=22'
+            . ':x=w-tw-46:y=42:enable=\'lt(t,' . $timer . ')\'';
 
         for ($i = 0; $i < $timer; $i++) {
             $width = number_format(1 - $i / $timer, 4, '.', '');

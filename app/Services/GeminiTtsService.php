@@ -140,6 +140,8 @@ class GeminiTtsService
                 . 'pyaar bhare andaaz me padho. Har step ke baad chhota pause do taaki bachcha follow kar sake:',
             'quiz'    => "Tum ek quiz-master ho. Is {$lang} sawaal ko saaf, spasht aur thoda dramatic andaaz me padho — "
                 . 'har option ke baad chhota pause do taaki sunne wala soch sake:',
+            'ukhana'  => "Ye {$lang} paheli bachchon ko suna rahe ho — chulbule, khilandare andaaz me, "
+                . 'har line ke baad chhota pause dete hue padho, aur aakhir me utsukta banaye rakho:',
             default   => "Is {$lang} kahani ko ek natural, expressive kahani-sunane wale andaaz me padho:",
         };
     }

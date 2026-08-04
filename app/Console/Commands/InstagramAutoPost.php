@@ -183,7 +183,7 @@ class InstagramAutoPost extends Command
             if (! $story->targetsPlatform('instagram')) {
                 continue; // ye story Instagram ke liye target nahi
             }
-            $isCollection = in_array($story->type, ['shayari', 'joke', 'quote', 'quiz', 'status', 'fact', 'yoga'], true);
+            $isCollection = in_array($story->type, ['shayari', 'joke', 'quote', 'quiz', 'status', 'fact', 'yoga', 'ukhana'], true);
             foreach ($story->parts as $part) {
                 foreach ($part->cards as $card) {
                     // Sirf fresh cards (jo abhi tak kabhi post/queue/fail nahi hue).

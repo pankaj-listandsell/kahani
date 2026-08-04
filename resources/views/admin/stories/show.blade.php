@@ -47,9 +47,82 @@
                     📤 Upload Cover Image
                 </button>
             </form>
+
+            {{-- Pixabay se free cover photo --}}
+            <div class="border-t border-slate-100 pt-4"
+                 id="coverPix"
+                 data-search="{{ route('admin.stories.cover.search', $story) }}"
+                 data-pick="{{ route('admin.stories.cover.pick', $story) }}">
+                <label class="block text-sm font-medium mb-1">🔍 Ya Pixabay se free photo chuno</label>
+                <div class="flex gap-2">
+                    <input type="text" id="pixQ" list="pixList" placeholder="{{ trim($story->category . ' ' . $story->title) }}"
+                           class="flex-1 rounded-lg border border-slate-300 px-3 py-2 text-sm">
+                    <datalist id="pixList">
+                        @foreach ([
+                            'lonely road', 'night sky moon', 'rain window', 'foggy forest', 'old temple',
+                            'village india', 'candle dark', 'sunrise mountain', 'empty house', 'train track',
+                            'children playing', 'grandmother hands', 'diya lamp', 'river sunset',
+                        ] as $s)
+                            <option value="{{ $s }}">
+                        @endforeach
+                    </datalist>
+                    <button type="button" id="pixGo"
+                            class="bg-amber-600 hover:bg-amber-700 text-white rounded-lg px-4 py-2 text-sm">Search</button>
+                </div>
+                <p class="text-[11px] text-slate-400 mt-1">
+                    💡 Pixabay ANGREZI me hi theek dhoondhta hai — box par click karo to suggestions dikhengi.
+                </p>
+                <p id="pixMsg" class="text-xs text-slate-500 mt-2"></p>
+                <div id="pixGrid" class="grid grid-cols-4 sm:grid-cols-6 gap-2 mt-2"></div>
+                <p class="text-[11px] text-slate-400 mt-2">
+                    Pixabay License — commercial use allowed, attribution zaroori nahi. Sirf khadi (9:16 jaisi) photos.
+                </p>
+            </div>
         </div>
     </div>
 </div>
+
+@push('scripts')
+<script>
+(function () {
+    const box = document.getElementById('coverPix');
+    if (!box) return;
+    const CSRF = document.querySelector('meta[name=csrf-token]').content;
+    const msg = document.getElementById('pixMsg'), grid = document.getElementById('pixGrid');
+
+    const post = (url, body) => fetch(url, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'X-CSRF-TOKEN': CSRF, 'Accept': 'application/json' },
+        body: JSON.stringify(body),
+    }).then(r => r.json());
+
+    async function search() {
+        msg.textContent = '🔍 Dhoondh rahe hain…'; grid.innerHTML = '';
+        const d = await post(box.dataset.search, { query: document.getElementById('pixQ').value.trim() });
+        if (!d.ok) { msg.textContent = '⚠ ' + (d.error || 'Fail'); return; }
+        if (!d.results.length) { msg.textContent = 'Kuch nahi mila — dusre shabd try karo.'; return; }
+        msg.textContent = `"${d.query}" — jo pasand ho us par click karo.`;
+        grid.innerHTML = d.results.map(r =>
+            `<button type="button" class="pk border border-slate-200 rounded-lg overflow-hidden hover:border-amber-500"
+                     data-url="${r.full}" title="${r.tags}">
+                <img src="${r.preview}" class="w-full h-20 object-cover" alt="">
+             </button>`).join('');
+    }
+
+    document.getElementById('pixGo').addEventListener('click', search);
+    document.getElementById('pixQ').addEventListener('keydown', e => { if (e.key === 'Enter') search(); });
+
+    grid.addEventListener('click', async (e) => {
+        const b = e.target.closest('.pk');
+        if (!b) return;
+        msg.textContent = '⏳ Cover set kar rahe hain…';
+        const d = await post(box.dataset.pick, { url: b.dataset.url });
+        msg.textContent = d.ok ? '✅ Cover set ho gaya!' : '⚠ ' + (d.error || 'Fail');
+        if (d.ok) setTimeout(() => window.location.reload(), 700);
+    });
+})();
+</script>
+@endpush
 
 @php($part = $story->parts->first())
 

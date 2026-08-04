@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Admin;
 
 use App\Http\Controllers\Controller;
+use App\Models\Setting;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Hash;
@@ -30,6 +31,20 @@ class SettingsController extends Controller
         $user->update($data);
 
         return back()->with('success', 'Profile updated.');
+    }
+
+    /**
+     * Reel me halka Ken Burns zoom on/off (per-user).
+     * Reels har baar naye sire se banti hain, isliye badalne ke baad bas
+     * "Generate Reel" dobara dabana hota hai.
+     */
+    public function updateReelMotion(Request $request)
+    {
+        $request->validate(['motion' => ['required', 'boolean']]);
+
+        Setting::putFor(Auth::id(), 'reel_motion', $request->boolean('motion') ? '1' : '0');
+
+        return response()->json(['ok' => true]);
     }
 
     /**

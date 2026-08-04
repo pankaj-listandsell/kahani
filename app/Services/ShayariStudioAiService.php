@@ -31,7 +31,7 @@ class ShayariStudioAiService
      */
     public function generateBatch(string $type, string $category, int $count, string $language = 'hindi'): array
     {
-        $type     = in_array($type, ['shayari', 'joke', 'quote', 'status', 'fact'], true) ? $type : 'shayari';
+        $type     = in_array($type, ['shayari', 'joke', 'quote', 'status', 'fact', 'ukhana'], true) ? $type : 'shayari';
         $count    = max(1, min(30, $count));
         $category = trim($category) ?: 'general';
 
@@ -105,9 +105,12 @@ class ShayariStudioAiService
         - "reason" me ek chhoti 1-line wajah do (kyun sahi hai).
         - EMOJI: "question" me 1-2 topic-relevant emoji daalo (jaise 🤔🧠📚🌍🔬🏆) aur "reason" me
           1 emoji (jaise ✅💡). Options plain rakho — unme emoji mat daalo.
+        - "image_query" me 2-4 shabd ANGREZI (English) me do — is sawaal se judi photo dhoondhne ke liye
+          (jaise "himalaya mountains", "indian parliament", "solar system", "cricket stadium").
+          Sirf aisi cheez likho jiski asli photo milti ho — abstract baat nahi.
         - Har item ke saath 6-10 safe, relevant hashtags "hashtags" me (banned/sensitive nahi).
         SIRF ek valid JSON array return karo (koi markdown, koi backticks nahi), bilkul is format me:
-        [{"question":"prashn yahan? 🤔", "options":["pehla","dusra","teesra","chautha"], "answer":"B", "reason":"chhoti wajah ✅", "hashtags":"#quiz #gk #exam"}]
+        [{"question":"prashn yahan? 🤔", "options":["pehla","dusra","teesra","chautha"], "answer":"B", "reason":"chhoti wajah ✅", "image_query":"himalaya mountains", "hashtags":"#quiz #gk #exam"}]
         TXT;
     }
 
@@ -149,6 +152,23 @@ class ShayariStudioAiService
             {$tagRule}
             SIRF ek valid JSON array return karo (koi markdown, koi backticks nahi):
             [{"text":"status line yahan 🔥", "hashtags":"#status #whatsappstatus #attitude #viral #trending"}]
+            TXT,
+            'ukhana' => <<<TXT
+            Tum bachchon ke liye ukhana/paheli (riddle) likhne wale ho — "ઓળખી બતાવો" wali paramparik shaili.
+            "{$category}" par {$count} chhoti, mazedaar paheliyan likho.
+            {$lang}
+            Har paheli ke rules:
+            - 1 se 3 line ki ho, laya/tuk (rhyme) ke saath — bachcha sun kar yaad rakh le.
+            - Cheez ka naam SEEDHA mat likhna — sirf uske ishaare do (rang, aawaz, kaam, jagah).
+            - Jawab ek hi shabd ya do shabd ka ho, aur bilkul saaf ho — do jawab wali paheli nahi.
+            - Jawab roz-marra ki cheez ho jo bachcha jaanta ho (jeebh, chaand, aankh, ghadi, aag, kitaab...).
+            - "answer" me sirf jawab likho, koi wakya nahi.
+            - EMOJI BILKUL NAHI — na paheli me, na jawab me. Koi bhi emoji/symbol/pictograph mat likho.
+              (Emoji se jawab ka ishaara mil jaata hai aur paheli ka maza khatam ho jaata hai.)
+            {$tagRule}
+            SIRF ek valid JSON array return karo (koi markdown, koi backticks nahi):
+            [{"text":"paheli ki pehli line\\ndusri line", "answer":"jawab", "hashtags":"#ukhana #paheli #riddle #kids #gujarati"}]
+            Koi darawni ya adult cheez nahi — sab bachchon ke layak.
             TXT,
             'fact' => <<<TXT
             Tum ek rochak-tathya (interesting facts) writer ho. "{$category}" par {$count} chaunkane wale, sacche aur verified facts likho.
@@ -332,10 +352,12 @@ class ShayariStudioAiService
                 $text  = trim($row);
                 $punch = null;
                 $tags  = '';
+                $ans   = '';
             } elseif (is_array($row)) {
-                $text  = trim((string) ($row['text'] ?? $row['setup'] ?? $row['shayari'] ?? $row['quote'] ?? ''));
+                $text  = trim((string) ($row['text'] ?? $row['setup'] ?? $row['shayari'] ?? $row['quote'] ?? $row['paheli'] ?? ''));
                 $punch = isset($row['punchline']) ? trim((string) $row['punchline']) : null;
                 $tags  = trim((string) ($row['hashtags'] ?? ''));
+                $ans   = $this->asString($row['answer'] ?? $row['jawab'] ?? $row['jawaab'] ?? '');
             } else {
                 continue;
             }
@@ -347,6 +369,17 @@ class ShayariStudioAiService
             $item = ['text' => $text];
             if ($type === 'joke' && filled($punch)) {
                 $item['punchline'] = $punch;
+            }
+            // Paheli me emoji jawab ka ishaara de deta hai (👅 dekh kar "jeebh"
+            // saaf pata chal jaata hai). Prompt me mana kiya hua hai, par model
+            // aksar phir bhi daal deta hai — isliye yahan zabardasti hata dete hain.
+            if ($type === 'ukhana') {
+                $item['text'] = $this->stripEmoji($item['text']);
+                if (filled($ans)) {
+                    // Jawab card par NAHI aata — caption me jaata hai taaki log
+                    // comment me guess karein (isi se engagement aata hai).
+                    $item['answer'] = $this->stripEmoji($ans);
+                }
             }
             $tags = $this->withTrending($tags);
             if (filled($tags)) {
@@ -415,6 +448,9 @@ class ShayariStudioAiService
                 'options'  => $options,
                 'answer'   => $ans,
                 'reason'   => $this->asString($row['reason'] ?? $row['explanation'] ?? $row['reasoning'] ?? ''),
+                // Pixabay English me hi theek dhoondhta hai — Gujarati/Hindi sawaal
+                // se kuch nahi milta, isliye AI se alag English keyword lete hain
+                'image_query' => $this->asString($row['image_query'] ?? $row['imageQuery'] ?? ''),
                 'hashtags' => $this->withTrending($this->asString($row['hashtags'] ?? $row['tags'] ?? '')),
             ];
         }
@@ -448,6 +484,26 @@ class ShayariStudioAiService
         }
 
         return trim($tags . ' ' . implode(' ', $toAdd));
+    }
+
+    /**
+     * Emoji / pictograph / symbol hata do (Devanagari-Gujarati text aur normal
+     * punctuation waise hi rehte hain). Same range jo TTS bhi use karta hai.
+     */
+    protected function stripEmoji(string $text): string
+    {
+        $clean = preg_replace(
+            '/[\x{1F000}-\x{1FAFF}\x{2600}-\x{27BF}\x{2B00}-\x{2BFF}\x{2300}-\x{23FF}'
+            . '\x{2190}-\x{21FF}\x{FE00}-\x{FE0F}\x{200D}\x{20E3}\x{1F1E6}-\x{1F1FF}]/u',
+            '',
+            $text
+        ) ?? $text;
+
+        // Emoji hatne se bache extra space saaf karo (newlines rehne do)
+        $clean = preg_replace('/[ \t]{2,}/', ' ', $clean);
+        $clean = preg_replace('/[ \t]+(\R)/', '$1', $clean);
+
+        return trim($clean) !== '' ? trim($clean) : trim($text);
     }
 
     /**

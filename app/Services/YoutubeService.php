@@ -408,7 +408,7 @@ class YoutubeService
     {
         $type = $card->part?->story?->type;
 
-        return in_array($type, ['shayari', 'quote', 'joke', 'yoga'], true) ? $type : 'story';
+        return in_array($type, ['shayari', 'quote', 'joke', 'yoga', 'ukhana'], true) ? $type : 'story';
     }
 
     /**
@@ -447,12 +447,13 @@ class YoutubeService
             $cmd = array_merge($cmd, ['-loop', '1', '-t', $this->fnum((float) $seg['dur']), '-i', $seg['path']]);
         }
 
-        // Video chain (dono cases me same)
-        $chain = '';
+        // Video chain (dono cases me same). Motion ON ho to har slide par halka
+        // Ken Burns zoom — baari-baari andar/bahar, taaki sab slides ek jaisi na lagein.
+        $motion  = ReelMotion::enabled($this->settingsUserId);
+        $chain   = '';
         $vlabels = '';
-        foreach ($segments as $i => $_) {
-            $chain .= "[{$i}:v]scale={$w}:{$h}:force_original_aspect_ratio=decrease:in_range=full:out_range=tv,"
-                . "pad={$w}:{$h}:(ow-iw)/2:(oh-ih)/2:color=black,setsar=1,format=yuv420p[v{$i}];";
+        foreach ($segments as $i => $seg) {
+            $chain .= "[{$i}:v]" . ReelMotion::chain($w, $h, (float) $seg['dur'], $i, $motion) . "[v{$i}];";
             $vlabels .= "[v{$i}]";
         }
         $chain .= $vlabels . "concat=n={$n}:v=1:a=0[v]";

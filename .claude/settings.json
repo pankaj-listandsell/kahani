@@ -1,0 +1,14 @@
+{
+  "permissions": {
+    "allow": [
+      "WebSearch",
+      "Bash(perl -0pi -e \"s/'shayari', 'joke', 'quote', 'status', 'fact'\\\\]/'shayari', 'joke', 'quote', 'status', 'fact', 'ukhana']/; s/in:shayari,joke,quote,status,fact/in:shayari,joke,quote,status,fact,ukhana/g; s/'fact'    => 'Facts',/'fact'    => 'Facts',\\\\n        'ukhana'  => 'Ukhana',/\" app/Http/Controllers/Admin/StudioController.php)",
+      "Bash(perl -pi -e \"s/'fact'=>'🤯'\\\\]/'fact'=>'🤯','ukhana'=>'🧩']/\" resources/views/admin/studio/index.blade.php resources/views/admin/studio/show.blade.php)",
+      "Bash(grep -n \"public function save\\\\|^    /\\\\*\\\\*\" app/Http/Controllers/Admin/StudioController.php)",
+      "Bash(grep -n \"^use App\\\\\\\\\\\\\\\\Services\" app/Http/Controllers/Admin/StoryController.php)",
+      "Bash(python -)",
+      "Bash(grep -c \"App\\\\\\\\\\\\\\\\Models\\\\\\\\\\\\\\\\Setting\" app/Services/PixabayService.php)",
+      "Bash(curl -sL https://cms.listandsell.eu/story/public/storage/cards/0af1f292-2612-4bf9-987b-64dd8814fdf0.png -o C:/Users/PC/AppData/Local/Temp/claude/d--xampp-htdocs-story/f7917e08-7138-42d9-a6ec-82f37c468254/scratchpad/live_card.png -w 'http:%{http_code} bytes:%{size_download} type:%{content_type}\\\\n')"
+    ]
+  }
+}

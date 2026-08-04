@@ -61,6 +61,19 @@
             <span id="audioSaved" class="text-green-600 text-xs font-medium"></span>
             <p class="text-xs text-slate-400">"Default" = aapki global voice-over setting. Voice tabhi aayegi jab Gemini TTS quota bacha ho.</p>
         </div>
+
+        {{-- Ken Burns motion (per-user setting) --}}
+        <div class="border-t border-slate-100 pt-4" id="motionBox" data-url="{{ route('admin.settings.reelmotion') }}">
+            <label class="flex items-center gap-2 cursor-pointer">
+                <input type="checkbox" id="reelMotion" class="accent-violet-600"
+                       @checked(\App\Services\ReelMotion::enabled(auth()->id()))>
+                <span class="text-sm font-medium">🎞️ Halka zoom (Ken Burns)</span>
+                <span id="motionSaved" class="text-green-600 text-xs font-medium"></span>
+            </label>
+            <p class="text-xs text-slate-400 mt-1">
+                Still card par dheema zoom — video "zinda" lagti hai. Badalne ke baad "Generate Reel" dobara dabao.
+            </p>
+        </div>
     </div>
 </div>
 
@@ -121,6 +134,25 @@
         mode.addEventListener('change', () => { syncVoice(); saveAudio(); });
         voice.addEventListener('change', saveAudio);
         syncVoice();
+    }
+
+    // ---------- Ken Burns motion ----------
+    const mbox = document.getElementById('motionBox');
+    if (mbox) {
+        const chk = document.getElementById('reelMotion');
+        const saved = document.getElementById('motionSaved');
+        chk.addEventListener('change', async () => {
+            saved.textContent = '…';
+            try {
+                const r = await fetch(mbox.dataset.url, {
+                    method: 'POST',
+                    headers: { 'X-CSRF-TOKEN': CSRF, 'Accept': 'application/json', 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ motion: chk.checked }),
+                });
+                saved.textContent = (await r.json()).ok ? '✓ saved' : '⚠ fail';
+            } catch (e) { saved.textContent = '⚠ error'; }
+            setTimeout(() => { saved.textContent = ''; }, 2500);
+        });
     }
 })();
 </script>

@@ -49,6 +49,7 @@ Route::middleware('auth')->prefix('admin')->name('admin.')->group(function () {
     Route::get('settings', [SettingsController::class, 'index'])->name('settings.index');
     Route::put('settings/profile', [SettingsController::class, 'updateProfile'])->name('settings.profile');
     Route::put('settings/password', [SettingsController::class, 'updatePassword'])->name('settings.password');
+    Route::post('settings/reel-motion', [SettingsController::class, 'updateReelMotion'])->name('settings.reelmotion');
 
     // Instagram
     Route::get('instagram', [InstagramController::class, 'index'])->name('instagram.index');
@@ -96,6 +97,9 @@ Route::middleware('auth')->prefix('admin')->name('admin.')->group(function () {
     Route::get('studio', [StudioController::class, 'index'])->name('studio.index');
     Route::post('studio/generate', [StudioController::class, 'generate'])->name('studio.generate');
     Route::post('studio/save', [StudioController::class, 'save'])->name('studio.save');
+    // Card background ke liye Pixabay photo
+    Route::post('studio/bg/search', [StudioController::class, 'bgSearch'])->name('studio.bg.search');
+    Route::post('studio/bg/pick', [StudioController::class, 'bgPick'])->name('studio.bg.pick');
     Route::get('studio/{story}', [StudioController::class, 'show'])->name('studio.show');
     Route::delete('studio/{story}', [StudioController::class, 'destroy'])->name('studio.destroy');
 
@@ -104,6 +108,9 @@ Route::middleware('auth')->prefix('admin')->name('admin.')->group(function () {
     Route::post('quiz/generate', [QuizController::class, 'generate'])->name('quiz.generate');
     Route::post('quiz/save', [QuizController::class, 'save'])->name('quiz.save');
     Route::post('quiz/timer', [QuizController::class, 'timer'])->name('quiz.timer');
+    // Card background ke liye Pixabay photo (topic-wise ya har sawaal ke hisaab se)
+    Route::post('quiz/bg/search', [QuizController::class, 'bgSearch'])->name('quiz.bg.search');
+    Route::post('quiz/bg/pick', [QuizController::class, 'bgPick'])->name('quiz.bg.pick');
     Route::get('quiz/{story}', [QuizController::class, 'show'])->name('quiz.show');
     Route::delete('quiz/{story}', [QuizController::class, 'destroy'])->name('quiz.destroy');
 
@@ -130,6 +137,9 @@ Route::middleware('auth')->prefix('admin')->name('admin.')->group(function () {
 
     // Cover image khud se upload karo (9:16)
     Route::post('stories/{story}/cover/upload', [StoryController::class, 'uploadCover'])->name('stories.cover.upload');
+    // Pixabay se free cover photo (AI cover ka alternative)
+    Route::post('stories/{story}/cover/search', [StoryController::class, 'coverSearch'])->name('stories.cover.search');
+    Route::post('stories/{story}/cover/pick', [StoryController::class, 'coverPick'])->name('stories.cover.pick');
 
     // Per-story/collection reel audio mode (voice / voice_music / music)
     Route::put('stories/{story}/audio-mode', [StoryController::class, 'audioMode'])->name('stories.audiomode');

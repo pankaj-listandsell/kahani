@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Admin;
 use App\Http\Controllers\Controller;
 use App\Models\Story;
 use App\Services\InstagramService;
+use App\Services\PixabayService;
 use App\Services\ShayariStudioAiService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Storage;
@@ -19,7 +20,7 @@ use Illuminate\Support\Str;
 class StudioController extends Controller
 {
     /** @var list<string> */
-    private const TYPES = ['shayari', 'joke', 'quote', 'status', 'fact'];
+    private const TYPES = ['shayari', 'joke', 'quote', 'status', 'fact', 'ukhana'];
 
     private const LABELS = [
         'shayari' => 'Shayari',
@@ -27,6 +28,7 @@ class StudioController extends Controller
         'quote'   => 'Suvichar',
         'status'  => 'Status',
         'fact'    => 'Facts',
+        'ukhana'  => 'Ukhana',
     ];
 
     public function __construct(private InstagramService $instagram)
@@ -95,7 +97,7 @@ class StudioController extends Controller
     public function generate(Request $request, ShayariStudioAiService $ai)
     {
         $data = $request->validate([
-            'type'     => ['required', 'in:shayari,joke,quote,status,fact'],
+            'type'     => ['required', 'in:shayari,joke,quote,status,fact,ukhana'],
             'category' => ['nullable', 'string', 'max:100'],
             'count'    => ['required', 'integer', 'min:1', 'max:30'],
             'language' => ['nullable', 'in:hindi,gujarati,hinglish'],
@@ -111,6 +113,45 @@ class StudioController extends Controller
     }
 
     /**
+     * Card ke background ke liye Pixabay par photo dhoondo. Shayari/suvichar ke
+     * peeche asli photo (barish, sunset, chai) gradient se kahin behtar dikhti hai.
+     */
+    public function bgSearch(Request $request, PixabayService $pixabay)
+    {
+        $data = $request->validate([
+            'query' => ['required', 'string', 'max:80'],
+        ]);
+
+        try {
+            return response()->json(['ok' => true, 'results' => $pixabay->searchPhotos($data['query'])]);
+        } catch (\Throwable $e) {
+            return response()->json(['ok' => false, 'error' => $e->getMessage()], 422);
+        }
+    }
+
+    /**
+     * Chuni hui Pixabay photo apne server par le aao.
+     *
+     * Seedha Pixabay URL canvas me daalne se canvas "taint" ho jaata hai aur
+     * `toDataURL()` fail kar deta hai — yaani card save hi nahi hota. Isliye
+     * image pehle apni site par laani zaroori hai.
+     */
+    public function bgPick(Request $request, PixabayService $pixabay)
+    {
+        $data = $request->validate([
+            'url' => ['required', 'url', 'max:500'],
+        ]);
+
+        try {
+            $path = $pixabay->download($data['url'], 'bg');
+
+            return response()->json(['ok' => true, 'url' => asset('storage/' . $path), 'path' => $path]);
+        } catch (\Throwable $e) {
+            return response()->json(['ok' => false, 'error' => $e->getMessage()], 422);
+        }
+    }
+
+    /**
      * Browser se ek rendered card (PNG base64) save karo. Pehli card ke saath nayi
      * collection banti hai; baaki cards `collection` id ke saath usi me add hote
      * hain. (Per-card save taaki bade PNG post_max_size cross na karein.)
@@ -118,7 +159,7 @@ class StudioController extends Controller
     public function save(Request $request)
     {
         $data = $request->validate([
-            'type'       => ['required', 'in:shayari,joke,quote,status,fact'],
+            'type'       => ['required', 'in:shayari,joke,quote,status,fact,ukhana'],
             'category'   => ['nullable', 'string', 'max:100'],
             'language'   => ['nullable', 'in:hindi,gujarati,hinglish'],
             'collection' => ['nullable', 'integer', 'exists:stories,id'],
@@ -126,6 +167,8 @@ class StudioController extends Controller
             'text'       => ['required', 'string'],
             'hashtags'   => ['nullable', 'string', 'max:1000'],
             'image'      => ['required', 'string'], // data:image/png;base64,...
+            // Ukhana ka jawab — card par nahi, sirf caption me
+            'answer'     => ['nullable', 'string', 'max:200'],
         ]);
 
         // Existing collection me add karo (owner check), warna nayi banao.
@@ -162,9 +205,15 @@ class StudioController extends Controller
         Storage::disk('public')->put($path, $binary);
 
         // Instagram caption = shayari/joke text + hashtags (sirf Instagram ke liye;
-        // YouTube/Facebook ke liye set nahi karte).
+        // YouTube/Facebook ke liye set nahi karte). Ukhana ka jawab bhi yahin
+        // jaata hai — card par nahi, taaki log comment me guess karein.
         $tags    = trim((string) ($data['hashtags'] ?? ''));
-        $caption = trim($data['text'] . ($tags !== '' ? "\n\n" . $tags : ''));
+        $answer  = trim((string) ($data['answer'] ?? ''));
+        $caption = trim(
+            $data['text']
+            . ($answer !== '' ? "\n\n✅ જવાબ / जवाब: " . $answer : '')
+            . ($tags !== '' ? "\n\n" . $tags : '')
+        );
 
         // Har item = ek card (usi part me) → auto-post ek-ek karke post karega
         $part->cards()->create([
