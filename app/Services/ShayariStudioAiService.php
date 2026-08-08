@@ -108,9 +108,14 @@ class ShayariStudioAiService
         - "image_query" me 2-4 shabd ANGREZI (English) me do — is sawaal se judi photo dhoondhne ke liye
           (jaise "himalaya mountains", "indian parliament", "solar system", "cricket stadium").
           Sirf aisi cheez likho jiski asli photo milti ho — abstract baat nahi.
-        - Har item ke saath 6-10 safe, relevant hashtags "hashtags" me (banned/sensitive nahi).
+        - "caption" me ek chhoti, curiosity/challenge wali HOOK line do — usi bhasha me jo upar rule me
+          di gayi hai. Social media par log ruk kar padhein aisi. 1 line, max 12 shabd, 1-2 emoji.
+          Jaise: "90% લોકો આ સવાલમાં ખોટા પડે છે! 🤯" / "તમે GPSC ની તૈયારી કરો છો? આ સવાલ ટ્રાય કરો 🎯"
+          BAHUT ZAROORI: caption me sawaal ya jawab BILKUL mat likhna — sirf hook.
+        - "hashtags" SIRF ANGREZI/Roman letters me — Gujarati/Hindi lipi me ek bhi hashtag nahi.
+          6-10 safe, relevant tags (banned/sensitive nahi).
         SIRF ek valid JSON array return karo (koi markdown, koi backticks nahi), bilkul is format me:
-        [{"question":"prashn yahan? 🤔", "options":["pehla","dusra","teesra","chautha"], "answer":"B", "reason":"chhoti wajah ✅", "image_query":"himalaya mountains", "hashtags":"#quiz #gk #exam"}]
+        [{"question":"prashn yahan? 🤔", "options":["pehla","dusra","teesra","chautha"], "answer":"B", "reason":"chhoti wajah ✅", "image_query":"himalaya mountains", "caption":"hook line yahan 🤯", "hashtags":"#gpsc #talati #gujaratgk"}]
         TXT;
     }
 
@@ -451,11 +456,62 @@ class ShayariStudioAiService
                 // Pixabay English me hi theek dhoondhta hai — Gujarati/Hindi sawaal
                 // se kuch nahi milta, isliye AI se alag English keyword lete hain
                 'image_query' => $this->asString($row['image_query'] ?? $row['imageQuery'] ?? ''),
-                'hashtags' => $this->withTrending($this->asString($row['hashtags'] ?? $row['tags'] ?? '')),
+                // Caption ki hook line (sawaal/jawab nahi — sirf dhyan kheenchne wali line)
+                'caption'  => $this->asString($row['caption'] ?? $row['hook'] ?? ''),
+                'hashtags' => $this->withQuizTags($this->asString($row['hashtags'] ?? $row['tags'] ?? '')),
             ];
         }
 
         return $items;
+    }
+
+    /**
+     * Quiz ke hashtags — Gujarat exam + viral, isi PRIORITY order me.
+     *
+     * Order maayne rakhta hai: Instagram par 30 tag ki limit hai aur AI ke apne
+     * tags pehle jud jaate hain, isliye list ke aakhir wale tags kat sakte hain.
+     * Exam ke naam sabse pehle (wahan se sahi audience aati hai), phir viral
+     * tags (reach), aur shehar ke naam aakhir me (sabse pehle katne wale).
+     */
+    private const QUIZ_HASHTAGS = [
+        // 1) Exams — sabse targeted
+        '#gpsc', '#gsssb', '#talati', '#binsachivalay', '#gujaratpolice',
+        '#psi', '#constable', '#forestguard', '#tet', '#tat', '#ojas',
+        // 2) Subject / prep
+        '#gujaratgk', '#gkquiz', '#currentaffairs', '#competitiveexam', '#examprep',
+        // 3) Viral — reach ke liye
+        '#viral', '#trending', '#reels', '#explore', '#foryou', '#fyp', '#shorts',
+        // 4) State / geo — jagah bache to
+        '#gujarat', '#ahmedabad', '#surat', '#rajkot', '#vadodara', '#gandhinagar',
+    ];
+
+    /**
+     * Quiz item ke hashtags — sirf English tags rakho aur Gujarat exam set jodo.
+     * AI kabhi Gujarati lipi ke tag de deta hai; unse reach nahi milti kyunki
+     * students English me hi search/follow karte hain.
+     */
+    protected function withQuizTags(string $tags): string
+    {
+        // Devanagari/Gujarati wale tags hata do
+        preg_match_all('/#[\p{L}\p{N}_]+/u', trim($tags), $m);
+        $kept = array_values(array_filter(
+            $m[0],
+            fn ($t) => ! preg_match('/[^\x00-\x7F]/', $t)
+        ));
+
+        $existing = array_map(fn ($t) => Str::lower($t), $kept);
+
+        foreach (self::QUIZ_HASHTAGS as $tag) {
+            if (count($kept) >= 30) {
+                break;
+            }
+            if (! in_array(Str::lower($tag), $existing, true)) {
+                $kept[]     = $tag;
+                $existing[] = Str::lower($tag);
+            }
+        }
+
+        return implode(' ', $kept);
     }
 
     /**

@@ -34,6 +34,31 @@ class SettingsController extends Controller
     }
 
     /**
+     * Quiz ka default caption (per-user).
+     *
+     * Set ho to har quiz card par yahi jaata hai; khaali chhodo to AI har sawaal
+     * ke liye apni hook line banata hai. Hashtags dono case me apne aap judte hain.
+     */
+    public function updateQuizCaption(Request $request)
+    {
+        $data = $request->validate([
+            'quiz_caption' => ['nullable', 'string', 'max:1000'],
+        ]);
+
+        $caption = trim((string) ($data['quiz_caption'] ?? ''));
+
+        if ($caption === '') {
+            Setting::removeFor(Auth::id(), 'quiz_caption');
+
+            return back()->with('success', 'Default caption hata diya — ab AI khud banayega.');
+        }
+
+        Setting::putFor(Auth::id(), 'quiz_caption', $caption);
+
+        return back()->with('success', 'Quiz caption save ho gaya! 🎯');
+    }
+
+    /**
      * Reel me halka Ken Burns zoom on/off (per-user).
      * Reels har baar naye sire se banti hain, isliye badalne ke baad bas
      * "Generate Reel" dobara dabana hota hai.

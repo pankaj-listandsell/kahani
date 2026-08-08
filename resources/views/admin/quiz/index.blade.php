@@ -1246,6 +1246,10 @@ function renderPreviews() {
 }
 
 // ---------- Generate ----------
+// Pichhle generate ka hisaab — is topic par kitne sawaal pehle se ban chuke hain
+// aur is baar kitne repeat nikaale gaye.
+let genStats = { asked: 0, dropped: 0 };
+
 /** AI se ek batch sawaal maango. `exclude` me pehle mile sawaal — dobara na aayein. */
 async function fetchQuizBatch(base, count, exclude) {
     const r = await fetch(GEN_URL, {
@@ -1255,7 +1259,19 @@ async function fetchQuizBatch(base, count, exclude) {
     });
     const d = await r.json();
     if (!d.ok || !d.items) throw new Error(d.error || 'Kuch nahi bana.');
+
+    genStats.asked = d.asked || 0;
+    genStats.dropped += d.dropped || 0;
+
     return d.items;
+}
+
+/** "is topic par pehle se X sawaal, Y repeat hataye" — message ke liye. */
+function repeatNote() {
+    const bits = [];
+    if (genStats.asked) bits.push(`is topic par pehle se ${genStats.asked} sawaal ban chuke hain`);
+    if (genStats.dropped) bits.push(`${genStats.dropped} repeat hata diye`);
+    return bits.length ? ' (' + bits.join(', ') + ')' : '';
 }
 
 /**
@@ -1308,6 +1324,7 @@ el('genBtn').addEventListener('click', async () => {
 
     btn.disabled=true; const lbl=btn.textContent; btn.textContent='⏳ Ban raha hai…'; msg.textContent='AI quiz bana raha hai…';
     el('previewWrap').classList.add('hidden');
+    genStats = { asked: 0, dropped: 0 };
 
     try {
         if (isList) {
@@ -1318,15 +1335,15 @@ el('genBtn').addEventListener('click', async () => {
             await loadBackgrounds(t => { msg.textContent = t; });
             renderPreviews();
             msg.textContent = res.short
-                ? `⚠ Sirf ${res.pages.length} card ban paaye (${items.length} sawaal) — AI is topic par aur naye sawaal nahi de paaya.`
-                : `✓ ${res.pages.length} cards ready — kul ${items.length} sawaal. Theme badal ke dekho, phir Save karo.`;
+                ? `⚠ Sirf ${res.pages.length} card ban paaye (${items.length} sawaal) — AI is topic par aur naye sawaal nahi de paaya${repeatNote()}.`
+                : `✓ ${res.pages.length} cards ready — kul ${items.length} sawaal${repeatNote()}. Theme badal ke dekho, phir Save karo.`;
         } else {
             // Baaki designs me 1 sawaal = 1 card
             items = await fetchQuizBatch(base, Math.min(30, wanted), []);
             await Promise.all([ensureFonts(), ensureLogo()]);
             await loadBackgrounds(t => { msg.textContent = t; });
             renderPreviews();
-            msg.textContent = `✓ ${items.length} cards ready — theme badal ke dekho, phir Save karo.`;
+            msg.textContent = `✓ ${items.length} cards ready${repeatNote()} — theme badal ke dekho, phir Save karo.`;
         }
     } catch(e){ msg.textContent = '⚠ ' + (e.message || 'Error aaya, dobara try karo.'); }
     btn.disabled=false; btn.textContent=lbl;
@@ -1377,6 +1394,10 @@ el('saveBtn').addEventListener('click', async () => {
                 order++;
                 await postCard({
                     collection, order, text: listText(pages[p]),
+                    // List card me sab jawab pehle se dikh rahe hain — hook pehle
+                    // sawaal wali hi le lete hain
+                    caption: (pages[p].items[0] || {}).caption || '',
+                    questions: pages[p].items.map(i => i.question),
                     hashtags: listHashtags(pages[p]), image: off.toDataURL('image/png'),
                     category, language,
                 });
@@ -1405,7 +1426,7 @@ el('saveBtn').addEventListener('click', async () => {
             if (style === 'simple') renderSimpleAnswer(ansOff, item, theme, handle, category, language, headerText);
             else renderAnswer(ansOff, item, theme, handle);
             order++;
-            await postCard({ collection, order, text: item.question + '\n\n' + optsText, answer: answerBlock, hashtags: item.hashtags||'', image: off.toDataURL('image/png'), answer_image: ansOff.toDataURL('image/png'), category, language });
+            await postCard({ collection, order, text: item.question + '\n\n' + optsText, answer: answerBlock, caption: item.caption || '', questions: [item.question], hashtags: item.hashtags||'', image: off.toDataURL('image/png'), answer_image: ansOff.toDataURL('image/png'), category, language });
             el('bar').style.width = Math.round((order/total)*100)+'%';
             el('progressText').textContent = `${order} / ${total} cards saved…`;
         }

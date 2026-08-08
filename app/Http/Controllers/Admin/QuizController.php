@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Admin;
 
 use App\Http\Controllers\Controller;
+use App\Models\AskedQuestion;
 use App\Models\Setting;
 use App\Models\Story;
 use App\Services\InstagramService;
@@ -49,15 +50,33 @@ class QuizController extends Controller
             'exclude.*' => ['string', 'max:300'],
         ]);
 
+        $topic = trim((string) ($data['category'] ?? ''));
+
         try {
+            // Pehle post ho chuke sawaal AI ko dikha do — warna wahi sawaal
+            // baar-baar aate hain (ye record collection delete hone par bhi rehta hai)
+            $asked   = AskedQuestion::recentFor(auth()->id(), $topic);
+            $exclude = array_merge($data['exclude'] ?? [], $asked);
+
             $items = $ai->generateQuiz(
-                $data['category'] ?? '',
+                $topic,
                 $data['count'],
                 $data['language'] ?? 'hindi',
-                $data['exclude'] ?? [],
+                $exclude,
             );
 
-            return response()->json(['ok' => true, 'items' => $items]);
+            // AI ko mana karne ke baad bhi wo repeat kar deta hai — isliye yahan
+            // hash se pakka check. Topic koi bhi ho, ek sawaal ek hi baar.
+            $before = count($items);
+            $items  = AskedQuestion::filterNew(auth()->id(), $items);
+            $dropped = $before - count($items);
+
+            return response()->json([
+                'ok'      => true,
+                'items'   => array_values($items),
+                'dropped' => $dropped,           // repeat nikal diye
+                'asked'   => count($asked),      // is topic par pehle se kitne
+            ]);
         } catch (\Throwable $e) {
             return response()->json(['ok' => false, 'error' => $e->getMessage()], 422);
         }
@@ -75,7 +94,12 @@ class QuizController extends Controller
             'collection' => ['nullable', 'integer', 'exists:stories,id'],
             'order'      => ['required', 'integer', 'min:1'],
             'text'       => ['required', 'string'],
-            'answer'     => ['nullable', 'string', 'max:600'], // caption me answer+reason
+            'answer'     => ['nullable', 'string', 'max:600'], // reel ke answer-reveal ki voice
+            'caption'    => ['nullable', 'string', 'max:300'], // AI ki hook line
+            // Is card ke sawaal — permanent record ke liye (repeat rokne ko).
+            // List card me kai sawaal hote hain, isliye array.
+            'questions'   => ['nullable', 'array', 'max:30'],
+            'questions.*' => ['string', 'max:500'],
             'hashtags'   => ['nullable', 'string', 'max:1000'],
             'image'      => ['required', 'string'], // data:image/png;base64,...
             // Answer-reveal card — timer reel (question → countdown → answer) ke liye
@@ -119,16 +143,28 @@ class QuizController extends Controller
             }
         }
 
-        // Instagram caption = question + answer/reason + hashtags. Card ki IMAGE
-        // par sirf question dikhta hai; answer caption me jaata hai (voice card.text
-        // se banti hai jisme answer nahi — reel question hi rehta hai).
-        $answer  = trim((string) ($data['answer'] ?? ''));
-        $tags    = trim((string) ($data['hashtags'] ?? ''));
+        // Caption me sawaal aur jawab JAAN-BOOJH KAR nahi jaate:
+        //  - sawaal image/reel me pehle se dikh raha hai, caption me dohrana bekaar
+        //  - jawab caption me ho to koi comment nahi karta; reel ke andar reveal
+        //    hota hai, isliye log guess karke comment karte hain
+        $answer = trim((string) ($data['answer'] ?? ''));
+        $tags   = trim((string) ($data['hashtags'] ?? ''));
+
         $caption = trim(
-            $data['text']
-            . ($answer !== '' ? "\n\n" . $answer : '')
+            $this->captionBody($data['caption'] ?? '', $data['language'] ?? 'hindi')
             . ($tags !== '' ? "\n\n" . $tags : '')
         );
+
+        // Sawaal permanently record karo — collection delete hone par bhi ye
+        // record rehta hai, isliye wahi sawaal dobara kabhi generate nahi hoga.
+        foreach ($data['questions'] ?? [] as $q) {
+            AskedQuestion::remember(
+                auth()->id(),
+                trim((string) ($data['category'] ?? '')),
+                $data['language'] ?? 'hindi',
+                $q,
+            );
+        }
 
         $part->cards()->create([
             'sort_order'        => $data['order'],
@@ -144,6 +180,33 @@ class QuizController extends Controller
             'collection' => $story->id,
             'redirect'   => route('admin.quiz.show', $story),
         ]);
+    }
+
+    /** "Jawab comment me likho" — content ki bhasha me. */
+    private const CTA = [
+        'hindi'    => '👇 अपना जवाब कमेंट में लिखो',
+        'gujarati' => '👇 તમારો જવાબ કોમેન્ટમાં લખો',
+        'hinglish' => '👇 Apna answer comment me likho',
+    ];
+
+    /**
+     * Caption ka text hissa (hashtags ke bina).
+     *
+     * Settings me default caption set ho to wahi — jaisa hai waisa, taaki user
+     * ka apna CTA/branding na tute. Warna AI ki hook line + comment wali CTA.
+     */
+    private function captionBody(string $aiHook, string $language): string
+    {
+        $default = trim((string) Setting::getFor(auth()->id(), 'quiz_caption', ''));
+
+        if ($default !== '') {
+            return $default;
+        }
+
+        $hook = trim($aiHook);
+        $cta  = self::CTA[$language] ?? self::CTA['hindi'];
+
+        return $hook !== '' ? $hook . "\n\n" . $cta : $cta;
     }
 
     /**
