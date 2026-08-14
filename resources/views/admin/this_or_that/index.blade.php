@@ -151,6 +151,9 @@
         const ctx = c.getContext('2d');
         const W = 1080, H = 1920;
 
+        const optA = String(item.option_a || item.optionA || item.option_1 || item.a || '');
+        const optB = String(item.option_b || item.optionB || item.option_2 || item.b || '');
+
         // Background Dark
         ctx.fillStyle = '#0a0d14';
         ctx.fillRect(0, 0, W, H);
@@ -159,6 +162,7 @@
         ctx.fillStyle = '#fbbf24';
         ctx.font = 'bold 58px "Noto Sans Devanagari", "Noto Sans Gujarati", sans-serif';
         ctx.textAlign = 'center';
+        ctx.textBaseline = 'alphabetic';
         ctx.fillText(item.title || 'તમે શું પસંદ કરશો? 🤔', W / 2, 180);
 
         ctx.fillStyle = 'rgba(255,255,255,0.7)';
@@ -169,6 +173,7 @@
         const boxW = W - 160, boxH = 580;
         const boxX = 80, boxY_A = 340;
 
+        ctx.beginPath();
         const gradA = ctx.createLinearGradient(boxX, boxY_A, boxX + boxW, boxY_A + boxH);
         gradA.addColorStop(0, '#e11d48');
         gradA.addColorStop(1, '#9333ea');
@@ -179,19 +184,28 @@
         ctx.lineWidth = 4;
         ctx.stroke();
 
+        // Option A Badge
+        ctx.beginPath();
         ctx.fillStyle = 'rgba(255,255,255,0.2)';
-        ctx.roundRect(boxX + 40, boxY_A + 40, 180, 70, 18);
+        ctx.roundRect(boxX + 40, boxY_A + 40, 220, 70, 18);
         ctx.fill();
-        ctx.fillStyle = '#ffffff';
-        ctx.font = 'bold 44px sans-serif';
-        ctx.fillText('OPTION A', boxX + 130, boxY_A + 88);
 
         ctx.fillStyle = '#ffffff';
+        ctx.font = 'bold 40px sans-serif';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillText('OPTION A', boxX + 150, boxY_A + 75);
+
+        // Option A Text
+        ctx.fillStyle = '#ffffff';
         ctx.font = 'bold 54px "Noto Sans Devanagari", "Noto Sans Gujarati", sans-serif';
-        wrapText(ctx, item.option_a, W / 2, boxY_A + 280, boxW - 80, 75);
+        ctx.textBaseline = 'alphabetic';
+        wrapText(ctx, optA, W / 2, boxY_A + 320, boxW - 80, 75);
 
         // OPTION B BOX (Bottom Half)
         const boxY_B = 1040;
+
+        ctx.beginPath();
         const gradB = ctx.createLinearGradient(boxX, boxY_B, boxX + boxW, boxY_B + boxH);
         gradB.addColorStop(0, '#059669');
         gradB.addColorStop(1, '#0284c7');
@@ -202,16 +216,23 @@
         ctx.lineWidth = 4;
         ctx.stroke();
 
+        // Option B Badge
+        ctx.beginPath();
         ctx.fillStyle = 'rgba(255,255,255,0.2)';
-        ctx.roundRect(boxX + 40, boxY_B + 40, 180, 70, 18);
+        ctx.roundRect(boxX + 40, boxY_B + 40, 220, 70, 18);
         ctx.fill();
-        ctx.fillStyle = '#ffffff';
-        ctx.font = 'bold 44px sans-serif';
-        ctx.fillText('OPTION B', boxX + 130, boxY_B + 88);
 
         ctx.fillStyle = '#ffffff';
+        ctx.font = 'bold 40px sans-serif';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillText('OPTION B', boxX + 150, boxY_B + 75);
+
+        // Option B Text
+        ctx.fillStyle = '#ffffff';
         ctx.font = 'bold 54px "Noto Sans Devanagari", "Noto Sans Gujarati", sans-serif';
-        wrapText(ctx, item.option_b, W / 2, boxY_B + 280, boxW - 80, 75);
+        ctx.textBaseline = 'alphabetic';
+        wrapText(ctx, optB, W / 2, boxY_B + 320, boxW - 80, 75);
 
         // GLOWING "VS" CIRCLE IN CENTER
         ctx.save();
@@ -228,11 +249,14 @@
 
         ctx.fillStyle = '#000000';
         ctx.font = 'extrabold 82px sans-serif';
-        ctx.fillText('VS', W / 2, 1008);
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillText('VS', W / 2, 982);
 
         // BOTTOM CTA
         ctx.fillStyle = '#fbbf24';
         ctx.font = 'bold 44px "Noto Sans Devanagari", "Noto Sans Gujarati", sans-serif';
+        ctx.textBaseline = 'alphabetic';
         ctx.fillText('👇 તમારી પસંદગી કમેન્ટ બોક્સમાં લખો! 👇', W / 2, 1720);
 
         ctx.fillStyle = 'rgba(255,255,255,0.7)';
@@ -241,7 +265,8 @@
     }
 
     function wrapText(ctx, text, x, y, maxWidth, lineHeight) {
-        const words = text.split(' ');
+        if (!text) return;
+        const words = String(text).split(' ');
         let line = '';
         const lines = [];
         for (let n = 0; n < words.length; n++) {
