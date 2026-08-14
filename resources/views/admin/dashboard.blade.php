@@ -117,6 +117,34 @@
             <p class="text-[11px] text-violet-100">Visual Multi-Part AI</p>
         </div>
     </a>
+    <a href="{{ route('admin.puzzle.index') }}" class="flex items-center gap-3 p-3.5 bg-gradient-to-r from-orange-500 to-amber-600 hover:from-orange-600 hover:to-amber-700 text-white rounded-xl shadow-sm transition">
+        <span class="text-2xl">🔍</span>
+        <div>
+            <p class="font-bold text-sm">Puzzle Studio</p>
+            <p class="text-[11px] text-amber-100">Find The Odd One</p>
+        </div>
+    </a>
+    <a href="{{ route('admin.mind_reader.index') }}" class="flex items-center gap-3 p-3.5 bg-gradient-to-r from-purple-600 to-indigo-700 hover:from-purple-700 hover:to-indigo-800 text-white rounded-xl shadow-sm transition">
+        <span class="text-2xl">🔮</span>
+        <div>
+            <p class="font-bold text-sm">Mind Reader</p>
+            <p class="text-[11px] text-purple-100">Magic Math Tricks</p>
+        </div>
+    </a>
+    <a href="{{ route('admin.this_or_that.index') }}" class="flex items-center gap-3 p-3.5 bg-gradient-to-r from-teal-600 to-cyan-600 hover:from-teal-700 hover:to-cyan-700 text-white rounded-xl shadow-sm transition">
+        <span class="text-2xl">⚖️</span>
+        <div>
+            <p class="font-bold text-sm">This or That</p>
+            <p class="text-[11px] text-teal-100">Choose 1 Debate</p>
+        </div>
+    </a>
+    <a href="{{ route('admin.name_secret.index') }}" class="flex items-center gap-3 p-3.5 bg-gradient-to-r from-pink-600 to-rose-600 hover:from-pink-700 hover:to-rose-700 text-white rounded-xl shadow-sm transition">
+        <span class="text-2xl">🔤</span>
+        <div>
+            <p class="font-bold text-sm">Name Secrets</p>
+            <p class="text-[11px] text-pink-100">Personality Traits</p>
+        </div>
+    </a>
     <a href="{{ route('admin.yoga.index') }}" class="flex items-center gap-3 p-3.5 bg-gradient-to-r from-emerald-500 to-emerald-600 hover:from-emerald-600 hover:to-emerald-700 text-white rounded-xl shadow-sm transition">
         <span class="text-2xl">🧘</span>
         <div>

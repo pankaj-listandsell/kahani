@@ -6,11 +6,15 @@ use App\Http\Controllers\Admin\CardController;
 use App\Http\Controllers\Admin\DashboardController;
 use App\Http\Controllers\Admin\FacebookController;
 use App\Http\Controllers\Admin\InstagramController;
+use App\Http\Controllers\Admin\MindReaderController;
+use App\Http\Controllers\Admin\NameSecretController;
 use App\Http\Controllers\Admin\PartController;
+use App\Http\Controllers\Admin\PuzzleController;
 use App\Http\Controllers\Admin\SettingsController;
 use App\Http\Controllers\Admin\StoryController;
 use App\Http\Controllers\Admin\QuizController;
 use App\Http\Controllers\Admin\StudioController;
+use App\Http\Controllers\Admin\ThisOrThatController;
 use App\Http\Controllers\Admin\UserManagementController;
 use App\Http\Controllers\Admin\YogaController;
 use App\Http\Controllers\Admin\YoutubeController;
@@ -130,6 +134,26 @@ Route::middleware('auth')->prefix('admin')->name('admin.')->group(function () {
     Route::post('yoga/save', [YogaController::class, 'save'])->name('yoga.save');
     Route::get('yoga/{story}', [YogaController::class, 'show'])->name('yoga.show');
     Route::delete('yoga/{story}', [YogaController::class, 'destroy'])->name('yoga.destroy');
+
+    // 1. 🔍 Puzzle Studio (Find Odd One Out)
+    Route::get('puzzle', [PuzzleController::class, 'index'])->name('puzzle.index');
+    Route::post('puzzle/generate', [PuzzleController::class, 'generate'])->name('puzzle.generate');
+    Route::post('puzzle/save', [PuzzleController::class, 'save'])->name('puzzle.save');
+
+    // 2. 🔮 Mind Reader Studio (Magic Math & Psychology)
+    Route::get('mind-reader', [MindReaderController::class, 'index'])->name('mind_reader.index');
+    Route::post('mind-reader/generate', [MindReaderController::class, 'generate'])->name('mind_reader.generate');
+    Route::post('mind-reader/save', [MindReaderController::class, 'save'])->name('mind_reader.save');
+
+    // 3. ⚖️ This or That Studio (Choose 1 Debate Challenge)
+    Route::get('this-or-that', [ThisOrThatController::class, 'index'])->name('this_or_that.index');
+    Route::post('this-or-that/generate', [ThisOrThatController::class, 'generate'])->name('this_or_that.generate');
+    Route::post('this-or-that/save', [ThisOrThatController::class, 'save'])->name('this_or_that.save');
+
+    // 4. 🔤 Name & Personality Secrets Studio
+    Route::get('name-secret', [NameSecretController::class, 'index'])->name('name_secret.index');
+    Route::post('name-secret/generate', [NameSecretController::class, 'generate'])->name('name_secret.generate');
+    Route::post('name-secret/save', [NameSecretController::class, 'save'])->name('name_secret.save');
 
     // Topic se AI kahani generate (create form bharne ke liye) — resource se pehle
     Route::post('stories/generate', [StoryController::class, 'generateFromTopic'])->name('stories.generate');
