@@ -173,39 +173,67 @@
         const W = 1080, H = 1920;
 
         // Gradient Background
+        ctx.fillStyle = '#0a0d14';
+        ctx.fillRect(0, 0, W, H);
         const grad = ctx.createLinearGradient(0, 0, 0, H);
         grad.addColorStop(0, t.bg[0]);
         grad.addColorStop(1, t.bg[1]);
         ctx.fillStyle = grad;
         ctx.fillRect(0, 0, W, H);
 
-        // Header Box
+        // Header Box (Dynamic Height & Padding)
+        const headerY = 120;
+        const headerW = W - 140;
+        const headerX = 70;
+
+        // Auto-scale hook text font size
+        let hookFont = 48;
+        ctx.font = `bold ${hookFont}px "Noto Sans Devanagari", "Noto Sans Gujarati", sans-serif`;
+        while (ctx.measureText(item.hook).width > (headerW - 60) && hookFont > 32) {
+            hookFont -= 2;
+            ctx.font = `bold ${hookFont}px "Noto Sans Devanagari", "Noto Sans Gujarati", sans-serif`;
+        }
+
+        const isMultiLine = ctx.measureText(item.hook).width > (headerW - 60);
+        const headerH = isMultiLine ? 170 : 130;
+
+        ctx.beginPath();
         ctx.fillStyle = t.hookBg;
-        ctx.roundRect(80, 160, W - 160, 130, 24);
+        ctx.roundRect(headerX, headerY, headerW, headerH, 26);
         ctx.fill();
+        ctx.strokeStyle = 'rgba(255,255,255,0.4)';
+        ctx.lineWidth = 3;
+        ctx.stroke();
 
         ctx.fillStyle = '#ffffff';
-        ctx.font = 'bold 52px "Noto Sans Devanagari", "Noto Sans Gujarati", sans-serif';
         ctx.textAlign = 'center';
         ctx.textBaseline = 'middle';
-        ctx.fillText(item.hook, W / 2, 225);
+
+        if (isMultiLine) {
+            wrapText(ctx, item.hook, W / 2, headerY + headerH / 2, headerW - 60, hookFont * 1.25);
+        } else {
+            ctx.font = `bold ${hookFont}px "Noto Sans Devanagari", "Noto Sans Gujarati", sans-serif`;
+            ctx.fillText(item.hook, W / 2, headerY + headerH / 2);
+        }
 
         // Subtitle instructions
+        const subY = headerY + headerH + 60;
         ctx.fillStyle = t.oddBg;
-        ctx.font = 'bold 40px sans-serif';
-        ctx.fillText(isAnswer ? '✅ આ રહ્યો સાચો જવાબ!' : '⏱️ ૫ સેકન્ડમાં શોધીને કમેન્ટ કરો!', W / 2, 340);
+        ctx.font = 'bold 42px "Noto Sans Devanagari", "Noto Sans Gujarati", sans-serif';
+        ctx.fillText(isAnswer ? '✅ આ રહ્યો સાચો જવાબ!' : '⏱️ ૫ સેકન્ડમાં શોધીને કમેન્ટ કરો!', W / 2, subY);
 
         // Puzzle Grid Container
-        const startX = 100, startY = 430;
-        const gridW = W - 200, gridH = 1180;
+        const startX = 90, startY = subY + 70;
+        const gridW = W - 180, gridH = 1140;
         const rows = item.grid_rows || 7, cols = item.grid_cols || 8;
         const cellW = gridW / cols, cellH = gridH / rows;
 
         // Background box for grid
-        ctx.fillStyle = 'rgba(255,255,255,0.03)';
-        ctx.roundRect(startX - 20, startY - 20, gridW + 40, gridH + 40, 24);
+        ctx.beginPath();
+        ctx.fillStyle = 'rgba(255,255,255,0.04)';
+        ctx.roundRect(startX - 20, startY - 20, gridW + 40, gridH + 40, 28);
         ctx.fill();
-        ctx.strokeStyle = 'rgba(255,255,255,0.1)';
+        ctx.strokeStyle = 'rgba(255,255,255,0.12)';
         ctx.lineWidth = 2;
         ctx.stroke();
 
@@ -242,6 +270,29 @@
         ctx.fillStyle = 'rgba(255,255,255,0.85)';
         ctx.font = 'bold 38px sans-serif';
         ctx.fillText('LIKE • SHARE • FOLLOW FOR MORE', W / 2, 1780);
+    }
+
+    function wrapText(ctx, text, x, y, maxWidth, lineHeight) {
+        if (!text) return;
+        const words = String(text).split(' ');
+        let line = '';
+        const lines = [];
+        for (let n = 0; n < words.length; n++) {
+            const testLine = line + words[n] + ' ';
+            const metrics = ctx.measureText(testLine);
+            if (metrics.width > maxWidth && n > 0) {
+                lines.push(line);
+                line = words[n] + ' ';
+            } else {
+                line = testLine;
+            }
+        }
+        lines.push(line);
+
+        const startY = y - ((lines.length - 1) * lineHeight) / 2;
+        lines.forEach((l, i) => {
+            ctx.fillText(l.trim(), x, startY + i * lineHeight);
+        });
     }
 
     // Save All Puzzles
