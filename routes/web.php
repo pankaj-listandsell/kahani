@@ -1,5 +1,6 @@
 <?php
 
+use App\Http\Controllers\Admin\AnalyticsController;
 use App\Http\Controllers\Admin\AuthController;
 use App\Http\Controllers\Admin\CardController;
 use App\Http\Controllers\Admin\DashboardController;
@@ -36,20 +37,26 @@ Route::get('/login', [AuthController::class, 'showLogin'])->name('login');
 Route::post('/login', [AuthController::class, 'login'])->name('login.attempt');
 Route::post('/logout', [AuthController::class, 'logout'])->name('logout');
 
+Route::get('/privacy-policy', function () {
+    return view('privacy');
+})->name('privacy');
+
 /*
 |--------------------------------------------------------------------------
 | Admin routes — sirf logged-in admin (middleware 'auth')
 |--------------------------------------------------------------------------
 */
 Route::middleware('auth')->prefix('admin')->name('admin.')->group(function () {
-    // Dashboard
+    // Dashboard & Analytics
     Route::get('/', [DashboardController::class, 'index'])->name('dashboard');
+    Route::get('analytics', [AnalyticsController::class, 'index'])->name('analytics.index');
 
     // Settings
     Route::get('settings', [SettingsController::class, 'index'])->name('settings.index');
     Route::put('settings/profile', [SettingsController::class, 'updateProfile'])->name('settings.profile');
     Route::put('settings/password', [SettingsController::class, 'updatePassword'])->name('settings.password');
     Route::post('settings/reel-motion', [SettingsController::class, 'updateReelMotion'])->name('settings.reelmotion');
+    Route::post('settings/reel-audio', [SettingsController::class, 'updateReelAudio'])->name('settings.reelaudio');
     Route::put('settings/quiz-caption', [SettingsController::class, 'updateQuizCaption'])->name('settings.quizcaption');
 
     // Instagram
@@ -109,9 +116,6 @@ Route::middleware('auth')->prefix('admin')->name('admin.')->group(function () {
     Route::post('quiz/generate', [QuizController::class, 'generate'])->name('quiz.generate');
     Route::post('quiz/save', [QuizController::class, 'save'])->name('quiz.save');
     Route::post('quiz/timer', [QuizController::class, 'timer'])->name('quiz.timer');
-    // Card background ke liye Pixabay photo (topic-wise ya har sawaal ke hisaab se)
-    Route::post('quiz/bg/search', [QuizController::class, 'bgSearch'])->name('quiz.bg.search');
-    Route::post('quiz/bg/pick', [QuizController::class, 'bgPick'])->name('quiz.bg.pick');
     Route::get('quiz/{story}', [QuizController::class, 'show'])->name('quiz.show');
     Route::delete('quiz/{story}', [QuizController::class, 'destroy'])->name('quiz.destroy');
 
@@ -175,3 +179,7 @@ Route::middleware('auth')->prefix('admin')->name('admin.')->group(function () {
     // Impersonation ke dauraan hi chalega — isliye role:admin ke bahar
     Route::post('return-to-admin', [UserManagementController::class, 'returnToAdmin'])->name('users.returnToAdmin');
 });
+
+// Instagram Meta Webhook for Comment Auto-Reply (Public verification + listener)
+Route::get('webhook/instagram', [\App\Http\Controllers\Admin\InstagramWebhookController::class, 'verify'])->name('instagram.webhook.verify');
+Route::post('webhook/instagram', [\App\Http\Controllers\Admin\InstagramWebhookController::class, 'handle'])->name('instagram.webhook.handle');

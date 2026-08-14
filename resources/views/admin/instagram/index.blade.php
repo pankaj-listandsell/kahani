@@ -110,6 +110,32 @@
                               class="w-full rounded-lg border border-slate-300 px-3 py-2 focus:ring-2 focus:ring-rose-400 focus:outline-none"
                               placeholder="#hindistory #kahani">{{ old('ig_caption_suffix', $settings['ig_caption_suffix']) }}</textarea>
                 </div>
+                <div>
+                    <label class="block text-sm font-medium mb-1">Default Collaborator Username <span class="text-slate-400">(Instagram username — optional)</span></label>
+                    <input type="text" name="ig_collaborators" value="{{ old('ig_collaborators', $settings['ig_collaborators'] ?? '') }}"
+                           class="w-full rounded-lg border border-slate-300 px-3 py-2 focus:ring-2 focus:ring-rose-400 focus:outline-none" placeholder="e.g. partner_account">
+                </div>
+
+                {{-- Auto-Reply & Comment Engagement Section --}}
+                <div class="border-t border-slate-100 pt-4 mt-4">
+                    <div class="flex items-center justify-between mb-2">
+                        <label class="block text-sm font-semibold text-slate-800">🤖 Comment Auto-Reply &amp; Engagement</label>
+                        <label class="flex items-center gap-2 cursor-pointer">
+                            <input type="checkbox" name="ig_auto_reply_enabled" value="1" class="accent-rose-600 w-4 h-4" @checked($settings['ig_auto_reply_enabled'] === '1')>
+                            <span class="text-xs font-semibold text-slate-600">Enable Auto-Reply</span>
+                        </label>
+                    </div>
+                    <p class="text-xs text-slate-500 mb-2">Jab koi user Quiz reel par option (A, B, C, D) ya comment karega, system unhe automatic reply karega.</p>
+                    <textarea name="ig_auto_reply_template" rows="2"
+                              class="w-full rounded-lg border border-slate-300 px-3 py-2 text-xs focus:ring-2 focus:ring-rose-400 focus:outline-none"
+                              placeholder="✅ Aapka jawab note ho gaya hai! Sahi jawab janne ke liye reel ko end tak dekhein 🎯">{{ old('ig_auto_reply_template', $settings['ig_auto_reply_template']) }}</textarea>
+                    <div class="mt-2 p-2.5 bg-slate-50 border border-slate-200 rounded-lg text-[11px] text-slate-500">
+                        <p class="font-semibold text-slate-700">Meta Webhook Callback URL:</p>
+                        <code class="text-rose-600 select-all">{{ url('webhook/instagram') }}</code>
+                        <p class="mt-1">Verify Token: <code class="text-slate-700 font-bold">kahani_auto_engagement_token</code></p>
+                    </div>
+                </div>
+
                 <button class="bg-rose-600 hover:bg-rose-700 text-white font-medium rounded-lg px-5 py-2.5">Save Settings</button>
             </form>
         </div>

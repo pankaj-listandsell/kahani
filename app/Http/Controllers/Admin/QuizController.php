@@ -61,7 +61,7 @@ class QuizController extends Controller
             $items = $ai->generateQuiz(
                 $topic,
                 $data['count'],
-                $data['language'] ?? 'hindi',
+                $data['language'] ?? 'gujarati',
                 $exclude,
             );
 
@@ -89,28 +89,50 @@ class QuizController extends Controller
     public function save(Request $request)
     {
         $data = $request->validate([
-            'category'   => ['nullable', 'string', 'max:100'],
-            'language'   => ['nullable', 'in:hindi,gujarati,hinglish'],
-            'collection' => ['nullable', 'integer', 'exists:stories,id'],
-            'order'      => ['required', 'integer', 'min:1'],
-            'text'       => ['required', 'string'],
-            'answer'     => ['nullable', 'string', 'max:600'], // reel ke answer-reveal ki voice
-            'caption'    => ['nullable', 'string', 'max:300'], // AI ki hook line
-            // Is card ke sawaal — permanent record ke liye (repeat rokne ko).
-            // List card me kai sawaal hote hain, isliye array.
-            'questions'   => ['nullable', 'array', 'max:30'],
-            'questions.*' => ['string', 'max:500'],
-            'hashtags'   => ['nullable', 'string', 'max:1000'],
-            'image'      => ['required', 'string'], // data:image/png;base64,...
-            // Answer-reveal card — timer reel (question → countdown → answer) ke liye
-            'answer_image' => ['nullable', 'string'],
+            'category'             => ['nullable', 'string', 'max:100'],
+            'language'             => ['nullable', 'in:hindi,gujarati,hinglish'],
+            'collection'           => ['nullable', 'integer', 'exists:stories,id'],
+            'cards'                => ['nullable', 'array', 'min:1', 'max:60'],
+            'cards.*.order'        => ['required_with:cards', 'integer', 'min:1'],
+            'cards.*.text'         => ['required_with:cards', 'string'],
+            'cards.*.answer'       => ['nullable', 'string', 'max:600'],
+            'cards.*.caption'      => ['nullable', 'string', 'max:300'],
+            'cards.*.questions'    => ['nullable', 'array', 'max:30'],
+            'cards.*.questions.*'  => ['string', 'max:500'],
+            'cards.*.hashtags'     => ['nullable', 'string', 'max:1000'],
+            'cards.*.image'        => ['required_with:cards', 'string'],
+            'cards.*.answer_image' => ['nullable', 'string'],
+
+            // Single card fallback
+            'order'                => ['required_without:cards', 'integer', 'min:1'],
+            'text'                 => ['required_without:cards', 'string'],
+            'answer'               => ['nullable', 'string', 'max:600'],
+            'caption'              => ['nullable', 'string', 'max:300'],
+            'questions'            => ['nullable', 'array', 'max:30'],
+            'questions.*'          => ['string', 'max:500'],
+            'hashtags'             => ['nullable', 'string', 'max:1000'],
+            'image'                => ['required_without:cards', 'string'],
+            'answer_image'         => ['nullable', 'string'],
         ]);
+
+        $cardsInput = $data['cards'] ?? [
+            [
+                'order'        => $data['order'],
+                'text'         => $data['text'],
+                'answer'       => $data['answer'] ?? null,
+                'caption'      => $data['caption'] ?? null,
+                'questions'    => $data['questions'] ?? [],
+                'hashtags'     => $data['hashtags'] ?? null,
+                'image'        => $data['image'],
+                'answer_image' => $data['answer_image'] ?? null,
+            ],
+        ];
 
         if (! empty($data['collection'])) {
             $story = Story::findOrFail($data['collection']);
             abort_unless($story->user_id === auth()->id() || auth()->user()->isAdmin(), 403);
             $part = $story->parts()->orderBy('sort_order')->first()
-                ?? $story->parts()->create(['sort_order' => 1, 'body' => $data['text']]);
+                ?? $story->parts()->create(['sort_order' => 1, 'body' => $cardsInput[0]['text'] ?? 'Quiz']);
         } else {
             $cat   = trim((string) ($data['category'] ?? ''));
             $title = trim(($cat !== '' ? Str::title($cat) . ' — ' : '') . 'Quiz');
@@ -119,61 +141,55 @@ class QuizController extends Controller
                 'title'    => $title,
                 'type'     => 'quiz',
                 'category' => $cat !== '' ? $cat : null,
-                'language' => $data['language'] ?? 'hindi',
+                'language' => $data['language'] ?? 'gujarati',
                 'status'   => 'published',
             ]);
-            $part = $story->parts()->create(['sort_order' => 1, 'body' => $data['text']]);
+            $part = $story->parts()->create(['sort_order' => 1, 'body' => $cardsInput[0]['text'] ?? 'Quiz']);
         }
 
-        $binary = $this->decodeDataUrl($data['image']);
-        if ($binary === null) {
-            return response()->json(['ok' => false, 'error' => 'Invalid image data'], 422);
-        }
-
-        $path = 'cards/' . Str::uuid() . '.png';
-        Storage::disk('public')->put($path, $binary);
-
-        // Answer-reveal image (optional) — isi se ek hi reel me answer dikhta hai
-        $answerPath = null;
-        if (filled($data['answer_image'] ?? null)) {
-            $answerBinary = $this->decodeDataUrl($data['answer_image']);
-            if ($answerBinary !== null) {
-                $answerPath = 'cards/' . Str::uuid() . '-a.png';
-                Storage::disk('public')->put($answerPath, $answerBinary);
+        foreach ($cardsInput as $cardItem) {
+            $decoded = $this->decodeDataUrl($cardItem['image']);
+            if ($decoded === null) {
+                continue;
             }
-        }
 
-        // Caption me sawaal aur jawab JAAN-BOOJH KAR nahi jaate:
-        //  - sawaal image/reel me pehle se dikh raha hai, caption me dohrana bekaar
-        //  - jawab caption me ho to koi comment nahi karta; reel ke andar reveal
-        //    hota hai, isliye log guess karke comment karte hain
-        $answer = trim((string) ($data['answer'] ?? ''));
-        $tags   = trim((string) ($data['hashtags'] ?? ''));
+            $path = 'cards/' . Str::uuid() . '.' . $decoded['ext'];
+            Storage::disk('public')->put($path, $decoded['binary']);
 
-        $caption = trim(
-            $this->captionBody($data['caption'] ?? '', $data['language'] ?? 'hindi')
-            . ($tags !== '' ? "\n\n" . $tags : '')
-        );
+            $answerPath = null;
+            if (filled($cardItem['answer_image'] ?? null)) {
+                $ansDecoded = $this->decodeDataUrl($cardItem['answer_image']);
+                if ($ansDecoded !== null) {
+                    $answerPath = 'cards/' . Str::uuid() . '-a.' . $ansDecoded['ext'];
+                    Storage::disk('public')->put($answerPath, $ansDecoded['binary']);
+                }
+            }
 
-        // Sawaal permanently record karo — collection delete hone par bhi ye
-        // record rehta hai, isliye wahi sawaal dobara kabhi generate nahi hoga.
-        foreach ($data['questions'] ?? [] as $q) {
-            AskedQuestion::remember(
-                auth()->id(),
-                trim((string) ($data['category'] ?? '')),
-                $data['language'] ?? 'hindi',
-                $q,
+            $answer = trim((string) ($cardItem['answer'] ?? ''));
+            $tags   = trim((string) ($cardItem['hashtags'] ?? ''));
+            $caption = trim(
+                $this->captionBody($cardItem['caption'] ?? '', $data['language'] ?? 'gujarati')
+                . ($tags !== '' ? "\n\n" . $tags : '')
             );
-        }
 
-        $part->cards()->create([
-            'sort_order'        => $data['order'],
-            'image_path'        => $path,
-            'answer_image_path' => $answerPath,
-            'text'              => $data['text'], // voice: sirf question + options
-            'answer_text'       => $answer !== '' ? $answer : null, // answer-reveal ki voice
-            'ig_caption'        => $caption !== '' ? $caption : null,
-        ]);
+            foreach ($cardItem['questions'] ?? [] as $q) {
+                AskedQuestion::remember(
+                    auth()->id(),
+                    trim((string) ($data['category'] ?? '')),
+                    $data['language'] ?? 'gujarati',
+                    $q,
+                );
+            }
+
+            $part->cards()->create([
+                'sort_order'        => $cardItem['order'],
+                'image_path'        => $path,
+                'answer_image_path' => $answerPath,
+                'text'              => $cardItem['text'],
+                'answer_text'       => $answer !== '' ? $answer : null,
+                'ig_caption'        => $caption !== '' ? $caption : null,
+            ]);
+        }
 
         return response()->json([
             'ok'         => true,
@@ -209,41 +225,7 @@ class QuizController extends Controller
         return $hook !== '' ? $hook . "\n\n" . $cta : $cta;
     }
 
-    /**
-     * Card background ke liye Pixabay par photo dhoondo.
-     * Query topic ki ho sakti hai ya ek-ek sawaal ki — frontend decide karta hai.
-     */
-    public function bgSearch(Request $request, PixabayService $pixabay)
-    {
-        $data = $request->validate([
-            'query' => ['required', 'string', 'max:120'],
-        ]);
 
-        try {
-            return response()->json(['ok' => true, 'results' => $pixabay->searchPhotos($data['query'], 12)]);
-        } catch (\Throwable $e) {
-            return response()->json(['ok' => false, 'error' => $e->getMessage()], 422);
-        }
-    }
-
-    /**
-     * Chuni hui Pixabay photo apne server par le aao — cross-origin image
-     * canvas ko taint kar deti hai aur card save hi nahi hota.
-     */
-    public function bgPick(Request $request, PixabayService $pixabay)
-    {
-        $data = $request->validate([
-            'url' => ['required', 'url', 'max:500'],
-        ]);
-
-        try {
-            $path = $pixabay->download($data['url'], 'bg');
-
-            return response()->json(['ok' => true, 'url' => asset('storage/' . $path)]);
-        } catch (\Throwable $e) {
-            return response()->json(['ok' => false, 'error' => $e->getMessage()], 422);
-        }
-    }
 
     /**
      * Timer reel ka countdown kitne second ka ho — per-user setting.
@@ -309,14 +291,19 @@ class QuizController extends Controller
         return redirect()->route('admin.quiz.index')->with('success', 'Quiz collection delete ho gayi.');
     }
 
-    private function decodeDataUrl(string $dataUrl): ?string
+    private function decodeDataUrl(string $dataUrl): ?array
     {
-        if (! preg_match('/^data:image\/png;base64,/', $dataUrl)) {
+        if (! preg_match('/^data:image\/(png|jpeg|jpg|webp);base64,/', $dataUrl, $m)) {
             return null;
         }
 
+        $ext = $m[1] === 'jpeg' ? 'jpg' : $m[1];
         $binary = base64_decode(substr($dataUrl, strpos($dataUrl, ',') + 1), true);
 
-        return $binary === false ? null : $binary;
+        if ($binary === false) {
+            return null;
+        }
+
+        return ['binary' => $binary, 'ext' => $ext];
     }
 }

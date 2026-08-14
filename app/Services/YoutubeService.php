@@ -244,6 +244,32 @@ class YoutubeService
         }
     }
 
+    /**
+     * Check YouTube token health for dashboard badges.
+     *
+     * @return array{status: 'active'|'expired'|'missing', message: string, channel: ?string}
+     */
+    public function checkTokenHealth(): array
+    {
+        if (! $this->setting('yt_refresh_token')) {
+            return [
+                'status'  => 'missing',
+                'message' => 'YouTube not connected',
+                'channel' => null,
+            ];
+        }
+
+        try {
+            $channel = $this->fetchChannel();
+
+            return $channel
+                ? ['status' => 'active', 'message' => 'Connected: ' . $channel['title'], 'channel' => $channel['title']]
+                : ['status' => 'expired', 'message' => 'Channel access expired. Reconnect YouTube.', 'channel' => null];
+        } catch (\Throwable $e) {
+            return ['status' => 'expired', 'message' => $e->getMessage(), 'channel' => null];
+        }
+    }
+
     /* ===================================================================
      |  VIDEO GENERATION (ffmpeg)
      * =================================================================== */
@@ -707,27 +733,43 @@ class YoutubeService
         $part ??= $card?->part;
         $story = $part?->story;
 
-        // YouTube caption set hai to wahi as-is (usme hashtags pehle se hote hain).
+        // 1. YouTube caption set hai to wahi as-is
         if (filled($card?->yt_caption)) {
             return $this->ensureShorts(trim($card->yt_caption));
         }
 
-        $lines = [];
-        if (filled($card?->ig_caption)) {
-            $lines[] = $card->ig_caption;
-        } else {
-            $lines[] = $story?->title;
-            if ($part) {
-                $lines[] = 'Part ' . $part->sort_order;
+        // 2. Agar YouTube Default Caption Suffix (yt_title_suffix) set hai, to wahi jana chahiye
+        $suffix = $this->setting('yt_title_suffix');
+        if (filled($suffix)) {
+            return $this->ensureShorts(trim($suffix));
+        }
+
+        // 3. Agar nahi dala hai, to AI se create kar ke jaye
+        if ($card) {
+            if (blank($card->ig_caption)) {
+                try {
+                    $caption = app(AiCaptionService::class)->forCard($card);
+                    if (filled($caption)) {
+                        $card->update(['ig_caption' => $caption]);
+                    }
+                } catch (\Throwable $e) {
+                    Log::warning('AI caption generation failed during YouTube post', ['error' => $e->getMessage()]);
+                }
+            }
+
+            if (filled($card->ig_caption)) {
+                return $this->ensureShorts(trim($card->ig_caption));
             }
         }
 
-        // Hashtags — #Shorts hona zaroori hai taaki YouTube ise Short maane
-        $tags = trim((string) $this->setting('yt_title_suffix')) ?: '#Shorts #hindi #kahani #story';
-        $lines[] = '';
-        $lines[] = $tags;
+        // Fallback description
+        $lines = [];
+        $lines[] = $story?->title;
+        if ($part) {
+            $lines[] = 'Part ' . $part->sort_order;
+        }
 
-        return $this->ensureShorts(trim(implode("\n", array_filter($lines, fn ($l) => $l !== null))));
+        return $this->ensureShorts(trim(implode("\n", array_filter($lines))));
     }
 
     /** #Shorts na ho to add kar do (YouTube ise Short maane iske liye zaroori). */

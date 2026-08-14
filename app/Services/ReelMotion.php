@@ -36,7 +36,7 @@ class ReelMotion
 
     public static function enabled(?int $userId): bool
     {
-        return (string) Setting::getFor($userId, 'reel_motion', '1') === '1';
+        return false;
     }
 
     /**

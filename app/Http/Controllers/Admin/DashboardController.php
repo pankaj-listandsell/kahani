@@ -6,10 +6,12 @@ use App\Http\Controllers\Controller;
 use App\Models\Part;
 use App\Models\PartCard;
 use App\Models\Story;
+use App\Services\InstagramService;
+use App\Services\YoutubeService;
 
 class DashboardController extends Controller
 {
-    public function index()
+    public function index(InstagramService $instagramService, YoutubeService $youtubeService)
     {
         $user = auth()->user();
 
@@ -30,6 +32,22 @@ class DashboardController extends Controller
         }
         $recent = $recentQuery->get();
 
-        return view('admin.dashboard', compact('stats', 'recent'));
+        // Social Media Token Health Checks
+        $igHealth = $instagramService->forUser($user->id)->checkTokenHealth();
+        $ytHealth = $youtubeService->forUser($user->id)->checkTokenHealth();
+
+        // Failed auto-post cards for 1-click retry
+        $failedCards = PartCard::with(['part.story'])
+            ->whereHas('part', fn ($q) => $q->whereIn('story_id', $storyIds))
+            ->where(function ($q) {
+                $q->where('ig_status', 'failed')
+                  ->orWhere('yt_status', 'failed')
+                  ->orWhere('fb_status', 'failed');
+            })
+            ->latest()
+            ->take(6)
+            ->get();
+
+        return view('admin.dashboard', compact('stats', 'recent', 'igHealth', 'ytHealth', 'failedCards'));
     }
 }

@@ -319,21 +319,25 @@ class FacebookService
      */
     public function buildCaption(PartCard $card): string
     {
-        if (filled($card->ig_caption)) {
-            return $card->ig_caption;
+        // 1. Agar Facebook Default Caption Suffix dala hua hai, to caption me hamesha vahi jana chahiye
+        $suffix = $this->setting('fb_caption_suffix');
+        if (filled($suffix)) {
+            return $suffix;
         }
 
+        // 2. Agar suffix nahi hai, to Instagram ki custom/AI caption use karein
+        $igCaption = $this->instagram->buildCaption($card);
+        if (filled($igCaption)) {
+            return $igCaption;
+        }
+
+        // Fallback agar dono na milein
         $part  = $card->part;
         $story = $part->story;
         $total = $part->cards()->count();
 
         $lines = [$story->title];
         $lines[] = 'Part ' . $part->sort_order . ' (' . $card->sort_order . '/' . $total . ')';
-
-        if ($suffix = $this->setting('fb_caption_suffix')) {
-            $lines[] = '';
-            $lines[] = $suffix;
-        }
 
         return implode("\n", $lines);
     }

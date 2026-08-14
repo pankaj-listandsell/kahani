@@ -21,6 +21,7 @@
 @php
     $nav = [
         ['route' => 'admin.dashboard',      'active' => 'admin.dashboard',   'icon' => '🏠', 'label' => 'Dashboard'],
+        ['route' => 'admin.analytics.index','active' => 'admin.analytics.*', 'icon' => '📊', 'label' => 'Analytics'],
         ['route' => 'admin.stories.index',  'active' => 'admin.stories.*',   'icon' => '📚', 'label' => 'Stories'],
         ['route' => 'admin.studio.index',   'active' => 'admin.studio.*',    'icon' => '✨', 'label' => 'Shayari & Jokes'],
         ['route' => 'admin.quiz.index',     'active' => 'admin.quiz.*',      'icon' => '🎯', 'label' => 'Quiz'],

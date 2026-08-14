@@ -36,8 +36,8 @@
             <div>
                 <label class="block text-sm font-medium mb-1">🌐 Language</label>
                 <select id="language" class="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm">
+                    <option value="gujarati" selected>ગુજરાતી Gujarati</option>
                     <option value="hindi">हिंदी Hindi</option>
-                    <option value="gujarati">ગુજરાતી Gujarati</option>
                     <option value="hinglish">Hindi-English (Roman)</option>
                 </select>
             </div>
@@ -52,13 +52,14 @@
                 <select id="theme" class="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm"></select>
             </div>
         </div>
-        <div class="grid sm:grid-cols-3 gap-4">
+        <div class="grid sm:grid-cols-2 lg:grid-cols-4 gap-4">
             <div>
                 <label class="block text-sm font-medium mb-1">🖼 Card Design</label>
                 <select id="style" class="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm">
                     <option value="simple">✨ Simple (header + footer)</option>
                     <option value="list">📋 Q&amp;A List (kai sawaal ek card me)</option>
                     <option value="poster">🏆 Daily GK Quiz</option>
+                    <option value="sahitya">🪶 Sahitya Parchment (2×2 grid)</option>
                     <option value="clean">📝 Classic (theme)</option>
                 </select>
                 <label id="listOptsWrap" class="hidden items-center gap-2 mt-2 text-xs text-slate-600 cursor-pointer">
@@ -75,15 +76,6 @@
                 <label class="block text-sm font-medium mb-1">Watermark / Handle <span class="text-slate-400">(optional)</span></label>
                 <input type="text" id="handle" placeholder="@yourpage"
                        class="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm">
-            </div>
-            <div>
-                <label class="block text-sm font-medium mb-1">🖼️ Background photo</label>
-                <select id="bgMode" class="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm">
-                    <option value="off">Nahi chahiye (theme gradient)</option>
-                    <option value="question">Har sawaal ke hisaab se</option>
-                    <option value="topic">Topic ke hisaab se (ek hi photo)</option>
-                </select>
-                <p class="text-[11px] text-slate-400 mt-1">Pixabay se free photo, upar dark overlay</p>
             </div>
             <div class="flex items-end">
                 <button id="genBtn" class="w-full bg-violet-600 hover:bg-violet-700 text-white font-medium rounded-lg px-5 py-2.5 text-sm">🎯 Generate Quiz</button>
@@ -125,8 +117,6 @@
 const CSRF = document.querySelector('meta[name=csrf-token]').content;
 const GEN_URL  = @json(route('admin.quiz.generate'));
 const SAVE_URL = @json(route('admin.quiz.save'));
-const BG_SEARCH_URL = @json(route('admin.quiz.bg.search'));
-const BG_PICK_URL   = @json(route('admin.quiz.bg.pick'));
 const el = id => document.getElementById(id);
 const W = 1080, H = 1920;
 
@@ -150,6 +140,7 @@ const THEMES = {
     forest:  { name: '🌿 Forest',      bg: ['#0f2027', '#203a43'], text: '#eafff0', accent: '#a7e8bd', serif: true,  deco: 'corner' },
     neon:    { name: '💫 Neon',        bg: ['#0d0d0d', '#1a1a2e'], text: '#ffffff', accent: '#00f5d4', serif: false, deco: 'glow'   },
     gold:    { name: '✨ Black Gold',  bg: ['#0a0a0a', '#1c1c1c'], text: '#f7e7b4', accent: '#d4af37', serif: true,  deco: 'frame'  },
+    parch:   { name: '🪶 Parchment',   bg: ['#f7ead0', '#e9d3a8'], text: '#2b1a0e', accent: '#c2410c', serif: true,  deco: 'border' },
 };
 Object.entries(THEMES).forEach(([k, t]) => { const o = document.createElement('option'); o.value = k; o.textContent = t.name; el('theme').appendChild(o); });
 el('theme').value = 'night';
@@ -176,10 +167,8 @@ function drawDeco(ctx,t){
     ctx.restore();
 }
 
-// Quiz bg — clean gradient + soft top glow (theme ka bhaari deco NAHI, taaki
-// quiz saaf professional lage)
-function bgAndDeco(ctx, t, img){
-    if (drawQuizBg(ctx, img)) return; // photo + scrim laga diya
+// Quiz bg — clean gradient + soft top glow
+function bgAndDeco(ctx, t){
     const g = ctx.createLinearGradient(0, 0, W, H);
     g.addColorStop(0, t.bg[0]); g.addColorStop(1, t.bg[1]);
     ctx.fillStyle = g; ctx.fillRect(0, 0, W, H);
@@ -188,27 +177,21 @@ function bgAndDeco(ctx, t, img){
     ctx.fillStyle = gl; ctx.fillRect(0, 0, W, H);
 }
 
-/**
- * Photo background par theme ka text-rang chal nahi sakta — light themes (Paper,
- * White) ka gehra text scrim par gayab ho jaata hai. Isliye photo hone par theme
- * ki ek copy deti hai jisme text safed ho. Baaki rang (accent) wahi rehte hain.
- */
-function quizTheme(themeKey, img){
-    const t = THEMES[themeKey] || THEMES.night;
-    return img ? Object.assign({}, t, { text: '#ffffff' }) : t;
+function quizTheme(themeKey){
+    return THEMES[themeKey] || THEMES.night;
 }
 function handleAt(ctx, t, handle){ const hh=(handle||'').trim(); if(!hh)return; ctx.textAlign='center'; ctx.fillStyle=t.accent; ctx.globalAlpha=0.9; ctx.font=`600 34px ${sans}`; ctx.fillText(hh, W/2, H-95); ctx.globalAlpha=1; }
 
 // ---------- Question card (exam-serious, clean) ----------
 function renderQuestion(canvas, item, themeKey, handle, category) {
-    const t = quizTheme(themeKey, item.bg);
+    const t = quizTheme(themeKey);
     canvas.width=W; canvas.height=H;
     const ctx = canvas.getContext('2d');
     const fam = t.serif ? serif : sans;
     const dark = lum(t.text) > 140;
     const panel = dark ? 'rgba(255,255,255,0.09)' : 'rgba(0,0,0,0.045)';
     const panelBd = dark ? 'rgba(255,255,255,0.22)' : 'rgba(0,0,0,0.12)';
-    bgAndDeco(ctx, t, item.bg);
+    bgAndDeco(ctx, t);
 
     const pad = 90, maxW = W - pad*2;
     ctx.textAlign='left'; ctx.textBaseline='top';
@@ -276,13 +259,13 @@ function renderQuestion(canvas, item, themeKey, handle, category) {
 
 // ---------- Answer card (exam-serious, clean) ----------
 function renderAnswer(canvas, item, themeKey, handle) {
-    const t = quizTheme(themeKey, item.bg);
+    const t = quizTheme(themeKey);
     canvas.width=W; canvas.height=H;
     const ctx = canvas.getContext('2d');
     const fam = t.serif ? serif : sans;
     const dark = lum(t.text) > 140;
     const panelBd = dark ? 'rgba(255,255,255,0.22)' : 'rgba(0,0,0,0.12)';
-    bgAndDeco(ctx, t, item.bg);
+    bgAndDeco(ctx, t);
 
     const pad = 90, maxW = W - pad*2;
     const ansIdx = (item.answer||'A').charCodeAt(0) - 65;
@@ -329,111 +312,6 @@ function renderAnswer(canvas, item, themeKey, handle) {
     }
 
     handleAt(ctx, t, handle);
-}
-
-// ---------- Background photo (Pixabay) ----------
-// items[i].bg = us card ki Image object (ya null). "topic" mode me sab par ek hi.
-
-/**
- * Photo ko poore card par "cover" ki tarah bharo, phir dark scrim — warna
- * photo ke upar text padha nahi jaata.
- */
-function drawQuizBg(ctx, img) {
-    if (!img) return false;
-    const iw = img.naturalWidth || img.width, ih = img.naturalHeight || img.height;
-    if (!iw || !ih) return false;
-
-    // BLUR sabse zaroori hai. Bina blur ke photo ki detail (jahaz ki rassiyan,
-    // patte, bheed) text ke peeche shor macha deti hai aur sawaal padha nahi
-    // jaata. Blur ke baad photo sirf "mahaul" deti hai, dhyan nahi kheenchti.
-    // Image thodi badi draw karte hain warna blur se kinaare halke pad jaate hain.
-    const r = Math.max(W / iw, H / ih) * 1.12;
-    ctx.save();
-    ctx.filter = 'blur(26px)';
-    ctx.drawImage(img, (W - iw * r) / 2, (H - ih * r) / 2, iw * r, ih * r);
-    ctx.restore();
-    ctx.filter = 'none'; // save/restore ke baad bhi kuch browsers me reh jaata hai
-
-    // Gehra scrim — halka scrim har photo par kaam nahi karta (safed baadal,
-    // registaan, barf par safed text gayab ho jaata hai)
-    const s = ctx.createLinearGradient(0, 0, 0, H);
-    s.addColorStop(0,    'rgba(0,0,0,0.80)');
-    s.addColorStop(0.45, 'rgba(0,0,0,0.68)');
-    s.addColorStop(1,    'rgba(0,0,0,0.82)');
-    ctx.fillStyle = s; ctx.fillRect(0, 0, W, H);
-    return true;
-}
-
-function quizLoadImage(url) {
-    return new Promise((res, rej) => {
-        const img = new Image();
-        img.onload = () => res(img);
-        img.onerror = () => rej(new Error('load fail'));
-        img.src = url; // apni site se — warna canvas taint
-    });
-}
-
-const qPost = (url, body) => fetch(url, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json', 'X-CSRF-TOKEN': CSRF, 'Accept': 'application/json' },
-    body: JSON.stringify(body),
-}).then(r => r.json());
-
-/** Query English lagti hai ya nahi — Pixabay sirf English samajhta hai. */
-function isEnglish(s) {
-    return !!s && !/[^\x00-\x7F]/.test(s) && /[a-zA-Z]{3}/.test(s);
-}
-
-/**
- * Ek query par pehli photo laao (server par download hoke).
- *
- * Kuch na mile to null — koi photo na hone se behtar hai bilkul galat photo
- * lagana. (Pehle "Police Exam GK" jaisi query par Pixabay ko kuch nahi milta
- * tha aur wo random popular photo — purana jahaz — de deta tha.)
- */
-async function fetchBgFor(query) {
-    if (!isEnglish(query)) return null;
-
-    const d = await qPost(BG_SEARCH_URL, { query: query.trim() });
-    if (!d.ok || !d.results || !d.results.length) return null;
-
-    const p = await qPost(BG_PICK_URL, { url: d.results[0].full });
-    if (!p.ok) return null;
-
-    try { return await quizLoadImage(p.url); } catch (e) { return null; }
-}
-
-/** Chune hue mode ke hisaab se saare cards ke background lao. */
-async function loadBackgrounds(onProgress) {
-    const mode = el('bgMode').value;
-    items.forEach(it => { it.bg = null; });
-    if (mode === 'off' || !items.length) return;
-
-    let missing = 0;
-
-    if (mode === 'topic') {
-        // Category pehle SIRF tab jab wo English ho. "Police Exam GK" jaisi
-        // exam-specific query par Pixabay ko kuch nahi milta, isliye AI ke
-        // English image_query par gir jaate hain.
-        const cat = el('category').value.trim();
-        const q = isEnglish(cat) ? cat : (items[0].image_query || '');
-
-        onProgress('🖼️ Topic ki photo laa rahe hain…');
-        const img = await fetchBgFor(q);
-        items.forEach(it => { it.bg = img; });
-        if (!img) missing = items.length;
-    } else {
-        // Har sawaal ke liye alag — ek-ek karke (free API par ek saath na jaayein)
-        for (let i = 0; i < items.length; i++) {
-            onProgress(`🖼️ Photo ${i + 1} / ${items.length}…`);
-            items[i].bg = await fetchBgFor(items[i].image_query || '');
-            if (!items[i].bg) missing++;
-        }
-    }
-
-    if (missing) {
-        onProgress(`⚠ ${missing} card par photo nahi mili — un par theme gradient lagega.`);
-    }
 }
 
 // ---------- "Simple" design ----------
@@ -516,17 +394,14 @@ function simpleFooter(ctx, t, handle, language, cta) {
 }
 
 function renderSimple(canvas, item, themeKey, handle, category, language, headerText) {
-    const t = quizTheme(themeKey, item.bg);
+    const t = quizTheme(themeKey);
     canvas.width = W; canvas.height = H;
     const ctx = canvas.getContext('2d');
     const dark = lum(t.text) > 140; // light text = dark background
 
-    // Photo (agar chuni ho) warna plain gradient — koi deco nahi
-    if (!drawQuizBg(ctx, item.bg)) {
-        const g = ctx.createLinearGradient(0, 0, 0, H);
-        g.addColorStop(0, t.bg[0]); g.addColorStop(1, t.bg[1]);
-        ctx.fillStyle = g; ctx.fillRect(0, 0, W, H);
-    }
+    const g = ctx.createLinearGradient(0, 0, 0, H);
+    g.addColorStop(0, t.bg[0]); g.addColorStop(1, t.bg[1]);
+    ctx.fillStyle = g; ctx.fillRect(0, 0, W, H);
 
     let y = simpleHeader(ctx, t, headerText) + 62;
 
@@ -545,35 +420,23 @@ function renderSimple(canvas, item, themeKey, handle, category, language, header
     ctx.textAlign = 'left'; ctx.textBaseline = 'top';
     const q = fitLines(ctx, item.question, maxW - 40, 430, sans, '700', 62);
     ctx.fillStyle = t.text; ctx.font = `700 ${q.size}px ${sans}`;
-    // Photo par gehri shadow — sawaal ke peeche koi box nahi hai
-    if (item.bg) { ctx.shadowColor = 'rgba(0,0,0,0.9)'; ctx.shadowBlur = 18; ctx.shadowOffsetY = 2; }
     let qy = y + 20;
     q.lines.forEach(l => { ctx.fillText(l, pad, qy); qy += q.lh; });
-    ctx.shadowColor = 'transparent'; ctx.shadowBlur = 0; ctx.shadowOffsetY = 0;
 
     // ---- Options ----
     const opts = (item.options || []).slice(0, 4);
     const n = opts.length || 4;
     const top = qy + 70, bottom = 1590, gap = 26;
     const boxH = Math.min(160, (bottom - top - (n - 1) * gap) / n);
-    // Chhote question par options upar chipak jaate the aur neeche bada khali
-    // gap reh jaata tha — isliye block ko bache hue space me center karo.
     const blockH = n * boxH + (n - 1) * gap;
     let oy = top + Math.max(0, (bottom - top - blockH) / 2);
 
     opts.forEach((opt, i) => {
-        // Photo ke upar box SOLID gehra hona chahiye. 7% opacity wala halka box
-        // gradient par theek lagta hai par photo par gayab ho jaata hai aur
-        // option ka text background se ladta hai.
         roundRect(ctx, pad, oy, maxW, boxH, 18);
-        ctx.fillStyle = item.bg
-            ? 'rgba(0,0,0,0.55)'
-            : (dark ? 'rgba(255,255,255,0.07)' : 'rgba(0,0,0,0.05)');
+        ctx.fillStyle = dark ? 'rgba(255,255,255,0.07)' : 'rgba(0,0,0,0.05)';
         ctx.fill();
         ctx.lineWidth = 2.5;
-        ctx.strokeStyle = item.bg
-            ? 'rgba(255,255,255,0.40)'
-            : (dark ? 'rgba(255,255,255,0.22)' : 'rgba(0,0,0,0.16)');
+        ctx.strokeStyle = dark ? 'rgba(255,255,255,0.22)' : 'rgba(0,0,0,0.16)';
         roundRect(ctx, pad, oy, maxW, boxH, 18); ctx.stroke();
 
         // A / B / C / D
@@ -595,17 +458,15 @@ function renderSimple(canvas, item, themeKey, handle, category, language, header
 
 /** Simple design ka answer card — reel me countdown ke baad yahi dikhta hai. */
 function renderSimpleAnswer(canvas, item, themeKey, handle, category, language, headerText) {
-    const t = quizTheme(themeKey, item.bg);
+    const t = quizTheme(themeKey);
     canvas.width = W; canvas.height = H;
     const ctx = canvas.getContext('2d');
     const dark = lum(t.text) > 140;
     const GREEN = '#22c55e';
 
-    if (!drawQuizBg(ctx, item.bg)) {
-        const g = ctx.createLinearGradient(0, 0, 0, H);
-        g.addColorStop(0, t.bg[0]); g.addColorStop(1, t.bg[1]);
-        ctx.fillStyle = g; ctx.fillRect(0, 0, W, H);
-    }
+    const g = ctx.createLinearGradient(0, 0, 0, H);
+    g.addColorStop(0, t.bg[0]); g.addColorStop(1, t.bg[1]);
+    ctx.fillStyle = g; ctx.fillRect(0, 0, W, H);
 
     let y = simpleHeader(ctx, t, headerText) + 70;
 
@@ -620,8 +481,7 @@ function renderSimpleAnswer(canvas, item, themeKey, handle, category, language, 
     q.lines.forEach(l => { ctx.fillText(l, pad, y); y += q.lh; });
     ctx.globalAlpha = 1;
 
-    // Answer block ko question ke neeche bache hue space me center karo —
-    // warna sab upar chipak jaata hai aur footer se pehle bada gap dikhta hai.
+    // Answer block ko question ke neeche bache hue space me center karo
     const reasonLines = (item.reason || '').trim() !== ''
         ? fitLines(ctx, item.reason, maxW, 400, sans, '500', 44) : null;
     const aPre = fitLines(ctx, (item.answer || 'A') + ')  ' + ansOpt, maxW - 80, 300, sans, '800', 66);
@@ -631,14 +491,9 @@ function renderSimpleAnswer(canvas, item, themeKey, handle, category, language, 
 
     // ---- Sahi jawab (green box) ----
     const a = fitLines(ctx, (item.answer || 'A') + ')  ' + ansOpt, maxW - 80, 300, sans, '800', 66);
-    // 156 = label + uske aage khula space. Gujarati/Hindi ke matras baseline se
-    // kaafi upar jaate hain, isliye label aur jawab ke beech khula rakhna padta hai.
     const boxH = 156 + a.lines.length * a.lh;
     roundRect(ctx, pad, y, maxW, boxH, 22);
-    // Photo par 16% green box gayab ho jaata hai — wahan gehra solid chahiye
-    ctx.fillStyle = item.bg
-        ? 'rgba(6,46,24,0.82)'
-        : (dark ? 'rgba(34,197,94,0.16)' : 'rgba(34,197,94,0.14)');
+    ctx.fillStyle = dark ? 'rgba(34,197,94,0.16)' : 'rgba(34,197,94,0.14)';
     ctx.fill();
     ctx.lineWidth = 3; ctx.strokeStyle = GREEN; roundRect(ctx, pad, y, maxW, boxH, 22); ctx.stroke();
 
@@ -807,19 +662,15 @@ function packQuizPages(quizItems, showOptions, targetPages) {
 }
 
 function renderList(canvas, page, themeKey, handle, category, language, headerText, showOptions, pageNo, totalPages) {
-    // Ek card me kai sawaal hain — pehle sawaal ki photo poore card ka background
-    const pageBg = (page.items[0] || {}).bg || null;
-    const t = quizTheme(themeKey, pageBg);
+    const t = quizTheme(themeKey);
     canvas.width = W; canvas.height = H;
     const ctx = canvas.getContext('2d');
     const dark = lum(t.text) > 140;
     const GREEN = dark ? '#4ade80' : '#15803d';
 
-    if (!drawQuizBg(ctx, pageBg)) {
-        const g = ctx.createLinearGradient(0, 0, 0, H);
-        g.addColorStop(0, t.bg[0]); g.addColorStop(1, t.bg[1]);
-        ctx.fillStyle = g; ctx.fillRect(0, 0, W, H);
-    }
+    const g = ctx.createLinearGradient(0, 0, 0, H);
+    g.addColorStop(0, t.bg[0]); g.addColorStop(1, t.bg[1]);
+    ctx.fillStyle = g; ctx.fillRect(0, 0, W, H);
 
     simpleHeader(ctx, t, headerText);
 
@@ -1093,6 +944,311 @@ function drawLogo(ctx, cx, top, box){
     return box;
 }
 
+// ---------- "Sahitya" parchment poster ----------
+// Purane kaagaz jaisa cream background, upar suraj-kirno wala badge + logo,
+// beech me bada sajawati title aur sawaal, aur options 4 vertical box ke bajaye
+// 2×2 grid me (har ek par gol A/B/C/D badge). Culture/literature quiz ke liye.
+//
+// Is design me photo background NAHI lagta — parchment ka poora look photo ke
+// upar bikhar jaata hai. Isliye item.bg yahan jaan-boojh kar ignore hota hai.
+const SAH = {
+    bg1:    '#f7ead0',   // parchment — upar
+    bg2:    '#e9d3a8',   // parchment — neeche
+    title1: '#7a3b12',   // title gradient
+    title2: '#c2410c',
+    body:   '#1f2937',   // sawaal ka text
+    opt:    '#8e1b1b',   // option ka maroon text
+    badge:  '#123a63',   // A/B/C/D ka gol badge
+    accent: '#d2691e',   // option border / flourish
+    pill:   '#fffaf0',   // option ke andar ka rang
+    ok:     '#15803d',   // sahi jawab
+    okBg:   '#e7f8ec',
+};
+
+/** Purana kaagaz — halki tirchhi lakeeren + kinaron par gehra vignette. */
+function sahBackground(ctx) {
+    const g = ctx.createLinearGradient(0, 0, W, H);
+    g.addColorStop(0, SAH.bg1); g.addColorStop(0.5, '#f2e0bd'); g.addColorStop(1, SAH.bg2);
+    ctx.fillStyle = g; ctx.fillRect(0, 0, W, H);
+
+    // Likhawat jaisi texture. Random nahi — fixed formula, taaki question aur
+    // answer card ka background bilkul ek jaisa bane (reel me jhilmilata nahi).
+    ctx.save();
+    ctx.strokeStyle = 'rgba(120,85,40,0.07)'; ctx.lineWidth = 2;
+    for (let i = 0; i < 110; i++) {
+        const y = (i * 197) % H, x = (i * 313) % W, len = 120 + (i * 37) % 280;
+        ctx.beginPath(); ctx.moveTo(x, y);
+        ctx.quadraticCurveTo(x + len / 2, y - 14, x + len, y);
+        ctx.stroke();
+    }
+    ctx.restore();
+
+    const v = ctx.createRadialGradient(W / 2, H / 2, H * 0.30, W / 2, H / 2, H * 0.74);
+    v.addColorStop(0, 'rgba(140,100,50,0)'); v.addColorStop(1, 'rgba(140,100,50,0.30)');
+    ctx.fillStyle = v; ctx.fillRect(0, 0, W, H);
+}
+
+/** Top-left badge (jaise "Soulful Saturday") — peechhe suraj ki kirnein. */
+function sahBadge(ctx, text) {
+    const words = (text || '').trim().split(/\s+/).filter(Boolean);
+    if (!words.length) return;
+    const half = Math.ceil(words.length / 2);
+    const l1 = words.length > 1 ? words.slice(0, half).join(' ') : words[0];
+    const l2 = words.length > 1 ? words.slice(half).join(' ') : '';
+
+    const cx = 182, cy = 138;
+    ctx.save();
+    ctx.strokeStyle = 'rgba(226,113,29,0.5)'; ctx.lineWidth = 8; ctx.lineCap = 'round';
+    for (let i = 0; i < 12; i++) {
+        const a = (i * Math.PI) / 6;
+        ctx.beginPath();
+        ctx.moveTo(cx + Math.cos(a) * 112, cy + Math.sin(a) * 100);
+        ctx.lineTo(cx + Math.cos(a) * 152, cy + Math.sin(a) * 136);
+        ctx.stroke();
+    }
+    ctx.restore();
+
+    ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+    const fs = Math.min(fitOne(ctx, l1, 250, sans, '800', 38), l2 ? fitOne(ctx, l2, 250, sans, '800', 38) : 38);
+    ctx.font = `800 ${fs}px ${sans}`;
+    const bw = Math.max(ctx.measureText(l1).width, l2 ? ctx.measureText(l2).width : 0) + 68;
+    const bh = l2 ? 122 : 80;
+
+    const g = ctx.createLinearGradient(cx - bw / 2, cy - bh / 2, cx + bw / 2, cy + bh / 2);
+    g.addColorStop(0, '#f5a623'); g.addColorStop(1, '#e2711d');
+    roundRect(ctx, cx - bw / 2, cy - bh / 2, bw, bh, 26); ctx.fillStyle = g; ctx.fill();
+    ctx.lineWidth = 5; ctx.strokeStyle = '#fff3d6';
+    roundRect(ctx, cx - bw / 2, cy - bh / 2, bw, bh, 26); ctx.stroke();
+
+    ctx.fillStyle = '#ffffff';
+    if (l2) { ctx.fillText(l1, cx, cy - 28); ctx.fillText(l2, cx, cy + 28); }
+    else ctx.fillText(l1, cx, cy);
+}
+
+/** Top-right logo — sirf tab jab img/quiz-logo.png maujood ho. */
+function sahLogo(ctx) {
+    if (!logoReady || !QUIZ_LOGO.naturalWidth) return;
+    const box = 150;
+    const s = Math.min(box / QUIZ_LOGO.naturalWidth, box / QUIZ_LOGO.naturalHeight);
+    const w = QUIZ_LOGO.naturalWidth * s, h = QUIZ_LOGO.naturalHeight * s;
+    ctx.drawImage(QUIZ_LOGO, W - 60 - w, 62, w, h);
+}
+
+/** Bada sajawati title (topic) — 2 line tak, neeche sunehri flourish. Bottom Y return. */
+function sahTitle(ctx, topic, top) {
+    const txt = (topic || '').trim();
+    if (txt === '') return top;
+
+    const fit = fitLines(ctx, txt, W - 320, 300, serif, '800', 112);
+    const lines = fit.lines.slice(0, 2);
+    ctx.textAlign = 'center'; ctx.textBaseline = 'top';
+    ctx.font = `800 ${fit.size}px ${serif}`;
+
+    let y = top;
+    lines.forEach(l => {
+        const g = ctx.createLinearGradient(0, y, 0, y + fit.size);
+        g.addColorStop(0, SAH.title1); g.addColorStop(1, SAH.title2);
+        ctx.save();
+        ctx.shadowColor = 'rgba(255,250,240,0.9)'; ctx.shadowOffsetY = 3; ctx.shadowBlur = 2;
+        ctx.fillStyle = g; ctx.fillText(l, W / 2, y);
+        ctx.restore();
+        y += fit.lh;
+    });
+
+    // Quill — title ke dayein kinare par
+    ctx.font = `78px ${EMOJI}`; ctx.textAlign = 'left'; ctx.textBaseline = 'middle';
+    ctx.fillText('🪶', W - 176, top + fit.size * 0.55);
+
+    // Flourish: patli line + beech me heera
+    y += 18;
+    ctx.strokeStyle = SAH.accent; ctx.lineWidth = 4; ctx.lineCap = 'round';
+    ctx.beginPath(); ctx.moveTo(W / 2 - 190, y); ctx.lineTo(W / 2 - 26, y); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(W / 2 + 26, y); ctx.lineTo(W / 2 + 190, y); ctx.stroke();
+    ctx.fillStyle = SAH.accent;
+    ctx.beginPath(); ctx.moveTo(W / 2, y - 13); ctx.lineTo(W / 2 + 13, y); ctx.lineTo(W / 2, y + 13); ctx.lineTo(W / 2 - 13, y); ctx.closePath(); ctx.fill();
+
+    return y + 22;
+}
+
+/**
+ * Options 2×2 grid me. `revealIdx` de do to wo option hara ho jaata hai
+ * (answer card), warna sab ek jaise (question card).
+ * Aadhi chaudai me lamba Gujarati/Hindi option ek line me nahi aata, isliye
+ * har pill ke andar do line tak wrap hota hai.
+ */
+function sahOptions(ctx, opts, top, bottom, revealIdx) {
+    const list = (opts || []).slice(0, 4);
+    if (!list.length) return top;
+    const rows = Math.ceil(list.length / 2);
+    const pad = 58, colGap = 26, rowGap = 26;
+    const cw = (W - pad * 2 - colGap) / 2;
+    const ch = Math.min(168, (bottom - top - (rows - 1) * rowGap) / rows);
+
+    list.forEach((opt, i) => {
+        const x = pad + (i % 2) * (cw + colGap);
+        const y = top + ((i / 2) | 0) * (ch + rowGap);
+        const hit = revealIdx === i;
+
+        ctx.save();
+        ctx.shadowColor = 'rgba(90,60,20,0.22)'; ctx.shadowBlur = 14; ctx.shadowOffsetY = 6;
+        roundRect(ctx, x, y, cw, ch, ch / 2);
+        ctx.fillStyle = hit ? SAH.okBg : SAH.pill; ctx.fill();
+        ctx.restore();
+        roundRect(ctx, x, y, cw, ch, ch / 2);
+        ctx.lineWidth = 4; ctx.strokeStyle = hit ? SAH.ok : SAH.accent; ctx.stroke();
+
+        const bs = ch - 28, bcx = x + 14 + bs / 2, bcy = y + 14 + bs / 2;
+        pdot(ctx, bcx, bcy, bs / 2, hit ? SAH.ok : SAH.badge);
+        ctx.fillStyle = '#ffffff'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+        ctx.font = `800 ${Math.round(bs * 0.5)}px ${sans}`;
+        ctx.fillText(String.fromCharCode(65 + i), bcx, bcy + 2);
+
+        const tx = x + 14 + bs + 20, tw = cw - (tx - x) - 24;
+        const f = fitLines(ctx, opt, tw, ch - 30, sans, '700', 40);
+        ctx.fillStyle = hit ? '#14532d' : SAH.opt; ctx.textAlign = 'left'; ctx.textBaseline = 'middle';
+        ctx.font = `700 ${f.size}px ${sans}`;
+        let ty = y + ch / 2 - ((f.lines.length - 1) * f.lh) / 2;
+        f.lines.forEach(l => { ctx.fillText(l, tx, ty + 2); ty += f.lh; });
+    });
+
+    return top + rows * ch + (rows - 1) * rowGap;
+}
+
+/**
+ * Neeche kitaabein + phool, aur dayein taraf tirchha cream note.
+ * `noteText` khaali chhodo to sirf ek patli lakeer + handle aata hai — answer
+ * card par wajah wala box neeche tak aata hai, wahan poori sajawat nahi samati.
+ */
+function sahFooter(ctx, handle, language, noteText) {
+    if (!noteText) {
+        ctx.strokeStyle = SAH.accent; ctx.globalAlpha = 0.45; ctx.lineWidth = 3; ctx.lineCap = 'round';
+        ctx.beginPath(); ctx.moveTo(W / 2 - 140, H - 118); ctx.lineTo(W / 2 + 140, H - 118); ctx.stroke();
+        ctx.globalAlpha = 1;
+        const h0 = (handle || '').trim();
+        if (h0) {
+            ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+            ctx.fillStyle = SAH.title1; ctx.globalAlpha = 0.75; ctx.font = `700 34px ${sans}`;
+            ctx.fillText(h0, W / 2, H - 62);
+            ctx.globalAlpha = 1;
+        }
+        return;
+    }
+
+    ctx.textAlign = 'left'; ctx.textBaseline = 'alphabetic';
+    ctx.font = `188px ${EMOJI}`; ctx.fillText('📚', 56, H - 132);
+    ctx.font = `92px ${EMOJI}`;  ctx.fillText('🌼', 236, H - 128);
+    ctx.font = `66px ${EMOJI}`;  ctx.fillText('🌸', 318, H - 210);
+
+    const nw = 400, nh = 218, nx = W - nw - 70, ny = H - nh - 132;
+    ctx.save();
+    ctx.translate(nx + nw / 2, ny + nh / 2); ctx.rotate(-0.045); ctx.translate(-(nx + nw / 2), -(ny + nh / 2));
+    ctx.shadowColor = 'rgba(90,60,20,0.28)'; ctx.shadowBlur = 18; ctx.shadowOffsetY = 9;
+    roundRect(ctx, nx, ny, nw, nh, 14); ctx.fillStyle = '#fffaf0'; ctx.fill();
+    ctx.shadowColor = 'transparent'; ctx.shadowBlur = 0; ctx.shadowOffsetY = 0;
+    ctx.lineWidth = 2.5; ctx.strokeStyle = 'rgba(180,130,60,0.45)';
+    roundRect(ctx, nx, ny, nw, nh, 14); ctx.stroke();
+
+    const f = fitLines(ctx, noteText, nw - 56, nh - 56, serif, '700', 40);
+    ctx.fillStyle = SAH.title1; ctx.textAlign = 'center'; ctx.textBaseline = 'top';
+    ctx.font = `700 ${f.size}px ${serif}`;
+    let ty = ny + (nh - f.lines.length * f.lh) / 2;
+    f.lines.forEach(l => { ctx.fillText(l, nx + nw / 2, ty); ty += f.lh; });
+    ctx.restore();
+
+    const hh = (handle || '').trim();
+    if (hh) {
+        ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+        ctx.fillStyle = SAH.title1; ctx.globalAlpha = 0.75; ctx.font = `700 34px ${sans}`;
+        ctx.fillText(hh, W / 2, H - 48);
+        ctx.globalAlpha = 1;
+    }
+}
+
+const SAH_CTA = {
+    hindi:    'अपना जवाब\nकमेंट करें 👇',
+    gujarati: 'તમારો જવાબ\nકોમેન્ટ કરો 👇',
+    hinglish: 'Apna answer\ncomment karein 👇',
+};
+
+function renderSahitya(canvas, item, handle, category, language, headerText) {
+    canvas.width = W; canvas.height = H;
+    const ctx = canvas.getContext('2d');
+
+    sahBackground(ctx);
+    sahBadge(ctx, headerText);
+    sahLogo(ctx);
+
+    const topic = (category || item.category || '').trim();
+    const titleBottom = sahTitle(ctx, topic, 268);
+
+    // Options ka block neeche fix hai — sawaal beech ki bachi jagah me center hota hai
+    const optTop = 1140, optBottom = 1470;
+
+    const qTop = titleBottom + 46;
+    const q = fitLines(ctx, item.question, W - 150, optTop - qTop - 40, sans, '700', 62);
+    ctx.textAlign = 'center'; ctx.textBaseline = 'top';
+    ctx.fillStyle = SAH.body; ctx.font = `700 ${q.size}px ${sans}`;
+    let qy = qTop + Math.max(0, (optTop - qTop - 40 - q.lines.length * q.lh) / 2);
+    q.lines.forEach(l => { ctx.fillText(l, W / 2, qy); qy += q.lh; });
+
+    sahOptions(ctx, item.options, optTop, optBottom, -1);
+    sahFooter(ctx, handle, language, SAH_CTA[language] || SAH_CTA.hindi);
+}
+
+/** Sahitya ka answer card — wahi layout, sahi option hara, neeche wajah. */
+function renderSahityaAnswer(canvas, item, handle, category, language, headerText) {
+    canvas.width = W; canvas.height = H;
+    const ctx = canvas.getContext('2d');
+
+    sahBackground(ctx);
+    sahBadge(ctx, headerText);
+    sahLogo(ctx);
+
+    const topic = (category || item.category || '').trim();
+    const titleBottom = sahTitle(ctx, topic, 268);
+
+    const optTop = 1140, optBottom = 1470;
+    const ansIdx = (item.answer || 'A').charCodeAt(0) - 65;
+
+    // Sawaal — halka, sirf context ke liye (jagah jawab aur wajah ko chahiye)
+    const qTop = titleBottom + 40;
+    const q = fitLines(ctx, item.question, W - 150, 300, sans, '600', 50);
+    ctx.textAlign = 'center'; ctx.textBaseline = 'top';
+    ctx.fillStyle = SAH.body; ctx.globalAlpha = 0.7; ctx.font = `600 ${q.size}px ${sans}`;
+    let qy = qTop;
+    q.lines.forEach(l => { ctx.fillText(l, W / 2, qy); qy += q.lh; });
+    ctx.globalAlpha = 1;
+
+    // "SAHI JAWAB" ribbon
+    const ry = Math.min(qy + 60, optTop - 140);
+    ctx.font = `800 42px ${sans}`;
+    const label = { hindi: 'सही जवाब', gujarati: 'સાચો જવાબ', hinglish: 'SAHI JAWAB' }[language] || 'सही जवाब';
+    const lw = ctx.measureText(label).width + 90;
+    roundRect(ctx, W / 2 - lw / 2, ry, lw, 82, 41); ctx.fillStyle = SAH.ok; ctx.fill();
+    ctx.fillStyle = '#ffffff'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+    ctx.fillText(label, W / 2, ry + 43);
+
+    sahOptions(ctx, item.options, optTop, optBottom, ansIdx);
+
+    // Wajah — options ke neeche, footer se pehle
+    const reason = (item.reason || '').trim();
+    if (reason !== '') {
+        const bx = 58, bw = W - 116, by = optBottom + 34;
+        const f = fitLines(ctx, reason, bw - 64, 220, sans, '500', 40);
+        const bh = 56 + f.lines.length * f.lh;
+        roundRect(ctx, bx, by, bw, bh, 20); ctx.fillStyle = 'rgba(255,250,240,0.85)'; ctx.fill();
+        ctx.lineWidth = 3; ctx.strokeStyle = SAH.accent;
+        roundRect(ctx, bx, by, bw, bh, 20); ctx.stroke();
+        ctx.fillStyle = SAH.body; ctx.textAlign = 'left'; ctx.textBaseline = 'top';
+        ctx.font = `500 ${f.size}px ${sans}`;
+        let ty = by + 28;
+        f.lines.forEach(l => { ctx.fillText(l, bx + 32, ty); ty += f.lh; });
+    }
+
+    // Answer card par note/kitaabein nahi — wajah wala box wahi jagah leta hai
+    sahFooter(ctx, handle, language, null);
+}
+
 const POSTERS = {
     gkNavy:   { name: '🔵 GK Quiz — Navy (logo)',   bg: ['#0c1f3f', '#173a72'], accent: '#f9c21a', ink: '#0c1f3f', band: '#081428' },
     gkGreen:  { name: '🟢 GK Quiz — Green (logo)',  bg: ['#06281f', '#0e5240'], accent: '#ffd24a', ink: '#06281f', band: '#041c16' },
@@ -1235,6 +1391,7 @@ function renderPreviews() {
 
     items.forEach((item, i) => {
         if (style === 'simple') renderSimple(off, item, theme, handle, category, language, headerText);
+        else if (style === 'sahitya') renderSahitya(off, item, handle, category, language, headerText);
         else if (POSTERS[style]) renderLogoPoster(off, item, handle, category, language, POSTERS[style]);
         else if (style === 'poster') renderQuestionPoster(off, item, handle, category, language);
         else renderQuestion(off, item, theme, handle, category);
@@ -1332,7 +1489,6 @@ el('genBtn').addEventListener('click', async () => {
             const res = await collectForCards(base, wanted, el('listOptions').checked, t => { msg.textContent = t; });
             items = res.items;
             await Promise.all([ensureFonts(), ensureLogo()]);
-            await loadBackgrounds(t => { msg.textContent = t; });
             renderPreviews();
             msg.textContent = res.short
                 ? `⚠ Sirf ${res.pages.length} card ban paaye (${items.length} sawaal) — AI is topic par aur naye sawaal nahi de paaya${repeatNote()}.`
@@ -1341,17 +1497,17 @@ el('genBtn').addEventListener('click', async () => {
             // Baaki designs me 1 sawaal = 1 card
             items = await fetchQuizBatch(base, Math.min(30, wanted), []);
             await Promise.all([ensureFonts(), ensureLogo()]);
-            await loadBackgrounds(t => { msg.textContent = t; });
             renderPreviews();
             msg.textContent = `✓ ${items.length} cards ready${repeatNote()} — theme badal ke dekho, phir Save karo.`;
         }
     } catch(e){ msg.textContent = '⚠ ' + (e.message || 'Error aaya, dobara try karo.'); }
     btn.disabled=false; btn.textContent=lbl;
 });
-// Header text Simple + List dono me lagta hai; "Options bhi dikhao" sirf List me
+// Header text Simple + List + Sahitya me lagta hai (Sahitya me wo upar-left ka
+// badge banta hai); "Options bhi dikhao" sirf List me
 function syncStyleFields() {
     const s = el('style').value;
-    el('headerWrap').style.display = (s === 'simple' || s === 'list') ? '' : 'none';
+    el('headerWrap').style.display = (s === 'simple' || s === 'list' || s === 'sahitya') ? '' : 'none';
     el('listOptsWrap').classList.toggle('hidden', s !== 'list');
     el('listOptsWrap').classList.toggle('flex', s === 'list');
     el('countHint').textContent = s === 'list'
@@ -1363,84 +1519,100 @@ syncStyleFields();
 
 ['theme','handle','style','category','language','headerText','listOptions'].forEach(id => el(id).addEventListener('change', () => { if(items.length) renderPreviews(); }));
 
-// Background mode badle → nayi photos laao (Generate dobara dabane ki zaroorat nahi)
-el('bgMode').addEventListener('change', async () => {
-    if (!items.length) return;
-    const msg = el('msg');
-    await loadBackgrounds(t => { msg.textContent = t; });
-    renderPreviews();
-    msg.textContent = el('bgMode').value === 'off' ? '✓ Background hata diya.' : '✓ Background lag gaya.';
-});
+function getCanvasData(c) {
+    try {
+        const u = c.toDataURL('image/webp', 0.92);
+        if (u && u.startsWith('data:image/webp')) return u;
+    } catch(e){}
+    return c.toDataURL('image/png');
+}
 
-// ---------- Save (2 cards per quiz, sequence me) ----------
+// ---------- Save (Batch fast save) ----------
 el('saveBtn').addEventListener('click', async () => {
     if(!items.length) return;
     const btn=el('saveBtn'); btn.disabled=true; btn.classList.add('opacity-60'); el('progress').classList.remove('hidden');
+    el('bar').style.width = '35%';
+    el('progressText').textContent = 'Rendering cards…';
+
     await Promise.all([ensureFonts(), ensureLogo()]);
     const theme=el('theme').value, handle=el('handle').value, category=el('category').value.trim(), language=el('language').value, style=el('style').value, headerText=el('headerText').value;
     const off=document.createElement('canvas');
     const ansOff=document.createElement('canvas');
-    let collection=null, redirect=null, order=0;
-    let total = items.length;
+    const cardsToSave = [];
+
     try {
-        // Q&A List: har card me kai sawaal — ek card = ek post. Timer reel yahan
-        // nahi banti (jawab card par hi hai), isliye answer_image bhejte nahi.
         if (style === 'list') {
             const showOpts = el('listOptions').checked;
             const pages = packQuizPages(items, showOpts);
-            total = pages.length;
             for (let p = 0; p < pages.length; p++) {
                 renderList(off, pages[p], theme, handle, category, language, headerText, showOpts, p + 1, pages.length);
-                order++;
-                await postCard({
-                    collection, order, text: listText(pages[p]),
-                    // List card me sab jawab pehle se dikh rahe hain — hook pehle
-                    // sawaal wali hi le lete hain
+                cardsToSave.push({
+                    order: p + 1,
+                    text: listText(pages[p]),
                     caption: (pages[p].items[0] || {}).caption || '',
                     questions: pages[p].items.map(i => i.question),
-                    hashtags: listHashtags(pages[p]), image: off.toDataURL('image/png'),
-                    category, language,
+                    hashtags: listHashtags(pages[p]),
+                    image: getCanvasData(off),
                 });
-                el('bar').style.width = Math.round((order/total)*100)+'%';
-                el('progressText').textContent = `${order} / ${total} cards saved…`;
             }
-            el('progressText').textContent='✅ Saved! Redirecting…';
-            setTimeout(()=>{ window.location = redirect; }, 700);
-            return;
+        } else {
+            for (let i = 0; i < items.length; i++) {
+                const item = items[i];
+                const optsText = (item.options||[]).map((o,k)=>String.fromCharCode(65+k)+') '+o).join('\n');
+                const ansIdx = (item.answer||'A').charCodeAt(0)-65;
+                const ansOpt = (item.options && item.options[ansIdx]) ? item.options[ansIdx] : '';
+                const answerBlock = '✅ Sahi jawab: ' + (item.answer||'A') + ') ' + ansOpt + (item.reason ? '\n💡 ' + item.reason : '');
+
+                if (style === 'simple') renderSimple(off, item, theme, handle, category, language, headerText);
+                else if (style === 'sahitya') renderSahitya(off, item, handle, category, language, headerText);
+                else if (POSTERS[style]) renderLogoPoster(off, item, handle, category, language, POSTERS[style]);
+                else if (style === 'poster') renderQuestionPoster(off, item, handle, category, language);
+                else renderQuestion(off, item, theme, handle, category);
+
+                if (style === 'simple') renderSimpleAnswer(ansOff, item, theme, handle, category, language, headerText);
+                else if (style === 'sahitya') renderSahityaAnswer(ansOff, item, handle, category, language, headerText);
+                else renderAnswer(ansOff, item, theme, handle);
+
+                cardsToSave.push({
+                    order: i + 1,
+                    text: item.question + '\n\n' + optsText,
+                    answer: answerBlock,
+                    caption: item.caption || '',
+                    questions: [item.question],
+                    hashtags: item.hashtags || '',
+                    image: getCanvasData(off),
+                    answer_image: getCanvasData(ansOff),
+                });
+            }
         }
 
-        for (let i=0;i<items.length;i++) {
-            const item = items[i];
-            const optsText = (item.options||[]).map((o,k)=>String.fromCharCode(65+k)+') '+o).join('\n');
-            const ansIdx = (item.answer||'A').charCodeAt(0)-65;
-            const ansOpt = (item.options && item.options[ansIdx]) ? item.options[ansIdx] : '';
-            // Question card. Answer + reason caption me jaata hai (question image par nahi).
-            const answerBlock = '✅ Sahi jawab: ' + (item.answer||'A') + ') ' + ansOpt + (item.reason ? '\n💡 ' + item.reason : '');
-            if (style === 'simple') renderSimple(off, item, theme, handle, category, language, headerText);
-            else if (POSTERS[style]) renderLogoPoster(off, item, handle, category, language, POSTERS[style]);
-            else if (style === 'poster') renderQuestionPoster(off, item, handle, category, language);
-            else renderQuestion(off, item, theme, handle, category);
-            // Answer-reveal card — reel me countdown ke baad yahi dikhta hai.
-            // Simple design ka apna matching answer card hai taaki reel me
-            // question se answer par jaate waqt look na badle.
-            if (style === 'simple') renderSimpleAnswer(ansOff, item, theme, handle, category, language, headerText);
-            else renderAnswer(ansOff, item, theme, handle);
-            order++;
-            await postCard({ collection, order, text: item.question + '\n\n' + optsText, answer: answerBlock, caption: item.caption || '', questions: [item.question], hashtags: item.hashtags||'', image: off.toDataURL('image/png'), answer_image: ansOff.toDataURL('image/png'), category, language });
-            el('bar').style.width = Math.round((order/total)*100)+'%';
-            el('progressText').textContent = `${order} / ${total} cards saved…`;
-        }
-        el('progressText').textContent='✅ Saved! Redirecting…';
-        setTimeout(()=>{ window.location = redirect; }, 700);
-    } catch(e){ el('progressText').textContent='❌ Save fail: '+e.message; btn.disabled=false; btn.classList.remove('opacity-60'); }
+        el('bar').style.width = '75%';
+        el('progressText').textContent = 'Saving all cards…';
 
-    async function postCard(body) {
-        const r = await fetch(SAVE_URL, { method:'POST', headers:{'Content-Type':'application/json','X-CSRF-TOKEN':CSRF,'Accept':'application/json'}, body: JSON.stringify(body) });
+        const r = await fetch(SAVE_URL, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRF-TOKEN': CSRF,
+                'Accept': 'application/json'
+            },
+            body: JSON.stringify({
+                category,
+                language,
+                cards: cardsToSave,
+            })
+        });
+
         const d = await r.json();
-        if(!d.ok) throw new Error(d.error || 'card fail');
-        collection = d.collection; redirect = d.redirect;
-        // agli calls me collection bhej sako isliye closure var update
-        body.collection = collection;
+        if (!d.ok) throw new Error(d.error || 'Card save failed');
+
+        el('bar').style.width = '100%';
+        el('progressText').textContent = '✅ Saved! Redirecting…';
+        setTimeout(() => { window.location = d.redirect; }, 300);
+    } catch(e) {
+        el('progressText').textContent = '❌ Save fail: ' + e.message;
+        btn.disabled = false;
+        btn.classList.remove('opacity-60');
     }
 });
 </script>

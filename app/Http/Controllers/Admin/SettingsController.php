@@ -59,15 +59,21 @@ class SettingsController extends Controller
     }
 
     /**
-     * Reel me halka Ken Burns zoom on/off (per-user).
-     * Reels har baar naye sire se banti hain, isliye badalne ke baad bas
-     * "Generate Reel" dobara dabana hota hai.
+     * Reel me Background music aur Sound effects (Tick-Tick/Ding) setting.
      */
-    public function updateReelMotion(Request $request)
+    public function updateReelAudio(Request $request)
     {
-        $request->validate(['motion' => ['required', 'boolean']]);
+        $data = $request->validate([
+            'bgm_track'   => ['nullable', 'in:none,suspense,lofi,inspiration'],
+            'sfx_enabled' => ['nullable', 'boolean'],
+        ]);
 
-        Setting::putFor(Auth::id(), 'reel_motion', $request->boolean('motion') ? '1' : '0');
+        if (isset($data['bgm_track'])) {
+            Setting::putFor(Auth::id(), 'quiz_bgm_track', $data['bgm_track']);
+        }
+        if (isset($data['sfx_enabled'])) {
+            Setting::putFor(Auth::id(), 'quiz_sfx_enabled', $data['sfx_enabled'] ? '1' : '0');
+        }
 
         return response()->json(['ok' => true]);
     }

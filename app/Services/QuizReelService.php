@@ -80,28 +80,48 @@ class QuizReelService
         $qDur = round(max($timer, $qVoice ? $qVoice['seconds'] + 0.8 : 0), 2);
         $aDur = round(max(self::ANSWER_MIN_SECONDS, $aVoice ? $aVoice['seconds'] + 0.8 : 0), 2);
 
-        $cmd = $this->buildCommand(
-            $disk->path($card->image_path),
-            $disk->path($card->answer_image_path),
-            $qVoice ? $disk->path($qVoice['path']) : null,
-            $aVoice ? $disk->path($aVoice['path']) : null,
-            $qDur,
-            $aDur,
-            $timer,
-            $disk->path($mp4),
-            ReelMotion::enabled($userId),
-        );
+        // Resolution tiers: pehle 720p, OOM/fail par halki res par retry.
+        $tiers      = [[720, 1280], [540, 960], [480, 854]];
+        $lastErr    = '';
+        $sfxEnabled = (string) Setting::getFor($userId, 'quiz_sfx_enabled', '1') !== '0';
+        $bgmTrack   = (string) Setting::getFor($userId, 'quiz_bgm_track', 'suspense');
 
-        $result = Process::timeout(600)->run($cmd);
+        foreach ($tiers as [$w, $h]) {
+            $cmd = $this->buildCommand(
+                $disk->path($card->image_path),
+                $disk->path($card->answer_image_path),
+                $qVoice ? $disk->path($qVoice['path']) : null,
+                $aVoice ? $disk->path($aVoice['path']) : null,
+                $qDur,
+                $aDur,
+                $timer,
+                $disk->path($mp4),
+                ReelMotion::enabled($userId),
+                $w,
+                $h,
+                $sfxEnabled,
+                $bgmTrack,
+            );
 
-        if (! $result->successful() || ! $disk->exists($mp4)) {
-            $err = $result->errorOutput() ?: $result->output();
-            Log::error('Quiz timer reel ffmpeg fail', ['card' => $card->id, 'err' => Str::limit($err, 400)]);
+            try {
+                $result = Process::timeout(600)->run($cmd);
+            } catch (\Throwable $e) {
+                // Signal 9 (OOM kill) / timeout / process crash — agli chhoti res try karo
+                $lastErr = $e->getMessage();
+                Log::warning('Quiz ffmpeg process crash, lower-res retry', ['res' => "{$w}x{$h}", 'error' => $lastErr]);
+                continue;
+            }
 
-            throw new \RuntimeException('Quiz reel nahi ban paayi (ffmpeg). ' . Str::limit($err, 150));
+            if ($result->successful() && $disk->exists($mp4)) {
+                return $mp4;
+            }
+
+            $lastErr = $result->errorOutput() ?: $result->output();
+            Log::warning('Quiz ffmpeg failed, lower-res retry', ['res' => "{$w}x{$h}", 'err' => Str::limit($lastErr, 300)]);
         }
 
-        return $mp4;
+        Log::error('Quiz ffmpeg failed (all resolutions)', ['err' => $lastErr]);
+        throw new \RuntimeException('Quiz reel nahi ban paayi (ffmpeg signal 9 / OOM / crash). ' . Str::limit($lastErr, 150));
     }
 
     /** Countdown kitne second ka — Settings me badal sakte hain. */
@@ -142,11 +162,10 @@ class QuizReelService
     }
 
     /**
-     * ffmpeg command — 2 video segments concat, har ek ka apna audio.
+     * ffmpeg command — 2 video segments concat, voiceover + countdown tick/ding SFX + BGM mixing.
      *
      * Instagram Reels spec ke hisab se: 720x1280, H.264 high, yuv420p, TV range,
-     * AAC 44.1k stereo. (`in_range=full:out_range=tv` na ho to PNG/JPEG se
-     * yuvj420p ban jaata hai jise Instagram reject kar deta hai.)
+     * AAC 44.1k stereo.
      *
      * @return list<string>
      */
@@ -159,7 +178,11 @@ class QuizReelService
         float $aDur,
         int $timer,
         string $out,
-        bool $motion = true,
+        bool $motion = false,
+        int $w = 720,
+        int $h = 1280,
+        bool $sfx = true,
+        string $bgmTrack = 'suspense',
     ): array {
         $ffmpeg = config('services.ffmpeg.path', 'ffmpeg');
 
@@ -174,17 +197,67 @@ class QuizReelService
         $qAudio   = $this->addAudioInput($cmd, $audioIdx, $qVoice, $qDur);
         $aAudio   = $this->addAudioInput($cmd, $audioIdx, $aVoice, $aDur);
 
-        // Countdown zoom ke BAAD lagta hai — warna number bhi zoom hota rehta aur
-        // kinaare par ja kar kat jaata. Isliye chain me motion pehle, drawtext baad me.
-        $qFit = ReelMotion::chain(720, 1280, $qDur, 0, $motion);
-        $aFit = ReelMotion::chain(720, 1280, $aDur, 1, $motion);
+        $qFit = ReelMotion::chain($w, $h, $qDur, 0, $motion);
+        $aFit = ReelMotion::chain($w, $h, $aDur, 1, $motion);
 
-        // Question par countdown; answer par kuch nahi
-        $filter = '[0:v]' . $qFit . $this->countdownFilter($timer, $qDur) . '[v0];'
-            . '[1:v]' . $aFit . '[v1];'
-            . '[v0][v1]concat=n=2:v=1:a=0[v];'
-            . $qAudio . $aAudio
-            . '[aq][aa]concat=n=2:v=0:a=1[a]';
+        $totalDur = $qDur + $aDur;
+
+        // Video filter
+        $filterParts = [
+            '[0:v]' . $qFit . $this->countdownFilter($timer, $qDur) . '[v0]',
+            '[1:v]' . $aFit . '[v1]',
+            '[v0][v1]concat=n=2:v=1:a=0[v]',
+        ];
+
+        // Audio filter
+        $audioFilters = [
+            rtrim($qAudio, ';'),
+            rtrim($aAudio, ';'),
+            '[aq][aa]concat=n=2:v=0:a=1[avoice]',
+        ];
+
+        $currentAudioLabel = '[avoice]';
+
+        // 1. Sound Effects (Tick-Tick during countdown & Ding on Answer Reveal)
+        if ($sfx) {
+            $tickStart = max(0.0, $qDur - $timer);
+            $sfxNodes = [];
+            for ($k = 0; $k < $timer; $k++) {
+                $tTime = $tickStart + $k;
+                $delayMs = (int) round($tTime * 1000);
+                $sfxNodes[] = "sine=frequency=1600:duration=0.04,afade=t=out:st=0.01:d=0.03,volume=1.5,adelay={$delayMs}|{$delayMs}[sfx_t{$k}]";
+            }
+            // Ding at exact answer reveal ($qDur)
+            $dingDelayMs = (int) round($qDur * 1000);
+            $sfxNodes[] = "sine=frequency=1760:duration=1.1,afade=t=out:st=0.05:d=1.05,volume=1.9,adelay={$dingDelayMs}|{$dingDelayMs}[sfx_ding]";
+
+            $sfxInputsStr = '';
+            for ($k = 0; $k < $timer; $k++) {
+                $sfxInputsStr .= "[sfx_t{$k}]";
+            }
+            $sfxInputsStr .= '[sfx_ding]';
+            $sfxTotalCount = $timer + 1;
+
+            $audioFilters[] = implode(';', $sfxNodes);
+            $audioFilters[] = $sfxInputsStr . "amix=inputs={$sfxTotalCount}:duration=longest,aformat=sample_rates=44100:channel_layouts=stereo[sfx_all]";
+            $audioFilters[] = "[avoice][sfx_all]amix=inputs=2:duration=first[avoice_sfx]";
+            $currentAudioLabel = '[avoice_sfx]';
+        }
+
+        // 2. Background Music (BGM)
+        $bgmFile = public_path("audio/bgm/{$bgmTrack}.mp3");
+        if ($bgmTrack !== 'none' && file_exists($bgmFile)) {
+            $cmd = array_merge($cmd, ['-stream_loop', '-1', '-t', $this->num($totalDur), '-i', $bgmFile]);
+            $bgmIdx = $audioIdx;
+            $audioIdx++;
+
+            $audioFilters[] = "[{$bgmIdx}:a]atrim=duration={$this->num($totalDur)},volume=0.22,aformat=sample_rates=44100:channel_layouts=stereo[abgm]";
+            $audioFilters[] = "{$currentAudioLabel}[abgm]amix=inputs=2:duration=first:dropout_transition=2[afinal]";
+            $currentAudioLabel = '[afinal]';
+        }
+
+        $audioFilters[] = "{$currentAudioLabel}aformat=sample_rates=44100:channel_layouts=stereo[a]";
+        $filter = implode(';', array_merge($filterParts, array_filter($audioFilters)));
 
         return array_merge($cmd, [
             '-filter_complex', $filter,

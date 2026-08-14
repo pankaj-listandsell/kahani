@@ -155,6 +155,71 @@ class InstagramService
         return ['ok' => false, 'message' => $res->json('error.message') ?? 'Connection failed.'];
     }
 
+    /**
+     * Check Token validity and estimate remaining days.
+     *
+     * @return array{status: 'active'|'expiring_soon'|'expired'|'missing', days_left: ?int, message: string, username: ?string}
+     */
+    public function checkTokenHealth(): array
+    {
+        $token = $this->token();
+        if (! $token) {
+            return [
+                'status'    => 'missing',
+                'days_left' => null,
+                'message'   => 'Instagram not connected',
+                'username'  => null,
+            ];
+        }
+
+        try {
+            $res = Http::get($this->apiBase() . '/' . $this->nodeId(), [
+                'fields'       => 'username',
+                'access_token' => $token,
+            ]);
+
+            if (! $res->successful()) {
+                return [
+                    'status'    => 'expired',
+                    'days_left' => 0,
+                    'message'   => $res->json('error.message') ?? 'Token expired or invalid',
+                    'username'  => null,
+                ];
+            }
+
+            $username = $res->json('username');
+
+            $debugRes = Http::get('https://graph.facebook.com/debug_token', [
+                'input_token'  => $token,
+                'access_token' => $token,
+            ]);
+
+            $expiresAt = $debugRes->json('data.expires_at');
+            $daysLeft  = null;
+
+            if ($expiresAt && is_numeric($expiresAt) && $expiresAt > 0) {
+                $daysLeft = max(0, (int) round(($expiresAt - time()) / 86400));
+                $status   = $daysLeft <= 7 ? 'expiring_soon' : 'active';
+            } else {
+                $status = 'active';
+            }
+
+            return [
+                'status'    => $status,
+                'days_left' => $daysLeft,
+                'message'   => 'Connected as @' . $username,
+                'username'  => $username,
+            ];
+        } catch (\Throwable $e) {
+            return [
+                'status'    => 'expired',
+                'days_left' => 0,
+                'message'   => $e->getMessage(),
+                'username'  => null,
+            ];
+        }
+    }
+
     /* ===================================================================
      |  IMAGE POST
      * =================================================================== */
@@ -185,11 +250,20 @@ class InstagramService
         }
 
         try {
-            $create = Http::asForm()->post($this->apiBase() . '/' . $this->nodeId() . '/media', [
+            $params = [
                 'image_url'    => $imageUrl,
                 'caption'      => $caption,
                 'access_token' => $this->token(),
-            ]);
+            ];
+
+            if ($collab = $this->setting('ig_collaborators')) {
+                $usernames = array_values(array_filter(array_map('trim', explode(',', $collab))));
+                if (! empty($usernames)) {
+                    $params['collaborators'] = json_encode($usernames);
+                }
+            }
+
+            $create = Http::asForm()->post($this->apiBase() . '/' . $this->nodeId() . '/media', $params);
 
             if (! $create->successful() || ! $create->json('id')) {
                 Log::error('IG image container create failed', ['card' => $card->id, 'image_url' => $imageUrl, 'body' => $create->json()]);
@@ -254,6 +328,13 @@ class InstagramService
 
             if ($coverUrl = $this->coverUrlFor($card)) {
                 $params['cover_url'] = $coverUrl;
+            }
+
+            if ($collab = $this->setting('ig_collaborators')) {
+                $usernames = array_values(array_filter(array_map('trim', explode(',', $collab))));
+                if (! empty($usernames)) {
+                    $params['collaborators'] = json_encode($usernames);
+                }
             }
 
             // 3) REELS container banao
@@ -459,7 +540,8 @@ class InstagramService
         $disk = Storage::disk('public');
 
         if (! $disk->exists($jpegPath)) {
-            $src = @imagecreatefrompng($disk->path($path));
+            $raw = $disk->get($path);
+            $src = $raw ? @imagecreatefromstring($raw) : null;
             if (! $src) {
                 throw new \RuntimeException('Could not read card image for JPEG conversion.');
             }
@@ -922,22 +1004,35 @@ class InstagramService
      */
     public function buildCaption(PartCard $card): string
     {
-        // Saved caption ho to sabse pehle wahi
+        // 1. Agar Default Caption Suffix dala hua hai, to caption me hamesha vahi jana chahiye
+        $suffix = $this->setting('ig_caption_suffix');
+        if (filled($suffix)) {
+            return $suffix;
+        }
+
+        // 2. Agar card par manually saved ya already generated caption hai to use karein
         if (filled($card->ig_caption)) {
             return $card->ig_caption;
         }
 
+        // 3. Agar suffix nahi dala hai, to AI se create kar ke jaye
+        try {
+            $caption = app(AiCaptionService::class)->forCard($card);
+            if (filled($caption)) {
+                $card->update(['ig_caption' => $caption]);
+                return $caption;
+            }
+        } catch (\Throwable $e) {
+            Log::warning('AI caption generation failed during Instagram post', ['error' => $e->getMessage()]);
+        }
+
+        // Fallback agar AI fail ho jaye aur suffix na ho
         $part  = $card->part;
         $story = $part->story;
         $total = $part->cards()->count();
 
         $lines = [$story->title];
         $lines[] = 'Part ' . $part->sort_order . ' (' . $card->sort_order . '/' . $total . ')';
-
-        if ($suffix = $this->setting('ig_caption_suffix')) {
-            $lines[] = '';
-            $lines[] = $suffix;
-        }
 
         return implode("\n", $lines);
     }
