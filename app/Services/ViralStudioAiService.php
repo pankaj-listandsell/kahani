@@ -144,27 +144,39 @@ PROMPT;
             throw new \RuntimeException('Gemini API Key missing (.env me GEMINI_API_KEY).');
         }
 
-        $url = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=' . $this->apiKey;
+        $payload = [
+            'contents' => [
+                ['parts' => [['text' => $prompt]]],
+            ],
+            'generationConfig' => [
+                'temperature'      => 0.7,
+                'thinkingConfig'   => ['thinkingBudget' => 0],
+                'responseMimeType' => 'application/json',
+            ],
+        ];
 
-        $res = Http::withHeaders(['Content-Type' => 'application/json'])
-            ->timeout(25)
-            ->post($url, [
-                'contents' => [
-                    ['parts' => [['text' => $prompt]]],
-                ],
-                'generationConfig' => [
-                    'temperature'      => 0.7,
-                    'thinkingConfig'   => ['thinkingBudget' => 0],
-                    'responseMimeType' => 'application/json',
-                ],
-            ]);
+        $lastError = 'AI generation failed.';
+        $raw = '';
 
-        if (! $res->successful()) {
-            Log::error('ViralStudioAiService fail', ['body' => $res->body()]);
-            throw new \RuntimeException('Gemini AI API Error: ' . ($res->json('error.message') ?? 'Request failed'));
+        foreach (['gemini-2.5-flash', 'gemini-2.5-flash-preview'] as $model) {
+            $url = "https://generativelanguage.googleapis.com/v1beta/models/{$model}:generateContent?key=" . $this->apiKey;
+            $res = Http::withHeaders(['Content-Type' => 'application/json'])
+                ->timeout(30)
+                ->post($url, $payload);
+
+            if ($res->successful()) {
+                $raw = (string) $res->json('candidates.0.content.parts.0.text');
+                if ($raw !== '') {
+                    break;
+                }
+            }
+            $lastError = $res->json('error.message') ?? $lastError;
+            Log::warning('ViralStudio Gemini model failed', ['model' => $model, 'status' => $res->status()]);
         }
 
-        $raw = (string) $res->json('candidates.0.content.parts.0.text');
+        if ($raw === '') {
+            throw new \RuntimeException('Gemini AI API Error: ' . $lastError);
+        }
         $clean = trim($raw);
         $clean = preg_replace('/^```(?:json)?\s*/i', '', $clean);
         $clean = preg_replace('/\s*```$/', '', $clean);

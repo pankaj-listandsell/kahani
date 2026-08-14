@@ -229,8 +229,8 @@ class ShayariStudioAiService
 
         $lastError = 'Gemini generation fail.';
 
-        // Fastest models first: 2.0-flash (1-2s), 2.5-flash (with budget 0), 1.5-flash
-        foreach (['gemini-2.0-flash', 'gemini-2.5-flash', 'gemini-1.5-flash'] as $model) {
+        // Fastest models first: gemini-2.5-flash (with budget 0), gemini-2.5-flash-preview
+        foreach (['gemini-2.5-flash', 'gemini-2.5-flash-preview', 'gemini-2.0-flash'] as $model) {
             $url = "https://generativelanguage.googleapis.com/v1beta/models/{$model}:generateContent";
             $res = Http::timeout(60)
                 ->withHeaders(['x-goog-api-key' => config('services.gemini.key')])
