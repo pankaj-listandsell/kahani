@@ -139,27 +139,38 @@ Route::middleware('auth')->prefix('admin')->name('admin.')->group(function () {
     Route::get('puzzle', [PuzzleController::class, 'index'])->name('puzzle.index');
     Route::post('puzzle/generate', [PuzzleController::class, 'generate'])->name('puzzle.generate');
     Route::post('puzzle/save', [PuzzleController::class, 'save'])->name('puzzle.save');
+    Route::get('puzzle/{story}', [PuzzleController::class, 'show'])->name('puzzle.show');
+    Route::delete('puzzle/{story}', [PuzzleController::class, 'destroy'])->name('puzzle.destroy');
 
     // 2. 🔮 Mind Reader Studio (Magic Math & Psychology)
     Route::get('mind-reader', [MindReaderController::class, 'index'])->name('mind_reader.index');
     Route::post('mind-reader/generate', [MindReaderController::class, 'generate'])->name('mind_reader.generate');
     Route::post('mind-reader/save', [MindReaderController::class, 'save'])->name('mind_reader.save');
+    Route::get('mind-reader/{story}', [MindReaderController::class, 'show'])->name('mind_reader.show');
+    Route::delete('mind-reader/{story}', [MindReaderController::class, 'destroy'])->name('mind_reader.destroy');
 
     // 3. ⚖️ This or That Studio (Choose 1 Debate Challenge)
     Route::get('this-or-that', [ThisOrThatController::class, 'index'])->name('this_or_that.index');
     Route::post('this-or-that/generate', [ThisOrThatController::class, 'generate'])->name('this_or_that.generate');
     Route::post('this-or-that/save', [ThisOrThatController::class, 'save'])->name('this_or_that.save');
+    Route::get('this-or-that/{story}', [ThisOrThatController::class, 'show'])->name('this_or_that.show');
+    Route::delete('this-or-that/{story}', [ThisOrThatController::class, 'destroy'])->name('this_or_that.destroy');
 
     // 4. 🔤 Name & Personality Secrets Studio
     Route::get('name-secret', [NameSecretController::class, 'index'])->name('name_secret.index');
     Route::post('name-secret/generate', [NameSecretController::class, 'generate'])->name('name_secret.generate');
     Route::post('name-secret/save', [NameSecretController::class, 'save'])->name('name_secret.save');
+    Route::get('name-secret/{story}', [NameSecretController::class, 'show'])->name('name_secret.show');
+    Route::delete('name-secret/{story}', [NameSecretController::class, 'destroy'])->name('name_secret.destroy');
 
     // Topic se AI kahani generate (create form bharne ke liye) — resource se pehle
     Route::post('stories/generate', [StoryController::class, 'generateFromTopic'])->name('stories.generate');
 
     // Dusri website se kahani(yan) import (URL se) — resource se pehle
     Route::post('stories/import', [StoryController::class, 'import'])->name('stories.import');
+
+    // Bulk delete for stories/collections
+    Route::post('stories/bulk-delete', [StoryController::class, 'bulkDestroy'])->name('stories.bulk_destroy');
 
     // Story CRUD
     Route::resource('stories', StoryController::class);
@@ -186,6 +197,7 @@ Route::middleware('auth')->prefix('admin')->name('admin.')->group(function () {
     Route::get('parts/{part}/cards', [CardController::class, 'editor'])->name('parts.cards');
     Route::post('parts/{part}/cards', [CardController::class, 'store'])->name('parts.cards.store');
     Route::delete('parts/{part}/cards', [CardController::class, 'clear'])->name('parts.cards.clear');
+    Route::post('cards/bulk-delete', [CardController::class, 'bulkDestroy'])->name('cards.bulk_destroy');
     Route::post('cards/{card}/reel', [CardController::class, 'reel'])->name('cards.reel');
     Route::delete('cards/{card}', [CardController::class, 'destroy'])->name('cards.destroy');
 

@@ -73,6 +73,57 @@
     </div>
 
     <div id="previewGrid" class="grid sm:grid-cols-2 lg:grid-cols-3 gap-6 hidden"></div>
+
+    {{-- Saved This or That Collections --}}
+    <div class="mt-10 bg-white rounded-xl border border-slate-200 p-5 shadow-sm">
+        <form id="bulkForm" method="POST" action="{{ route('admin.stories.bulk_destroy') }}">
+            @csrf
+            <div class="flex items-center justify-between gap-4 mb-4 flex-wrap pb-3 border-b border-slate-100">
+                <h3 class="font-bold text-slate-800 flex items-center gap-2">
+                    <span>💾</span> Saved This or That Polls ({{ $collections->count() }})
+                </h3>
+                @if ($collections->isNotEmpty())
+                    <div class="flex items-center gap-3">
+                        <label class="flex items-center gap-1.5 text-xs font-semibold text-slate-600 cursor-pointer select-none">
+                            <input type="checkbox" id="selectAll" class="rounded border-slate-300 accent-teal-600 w-4 h-4 cursor-pointer">
+                            <span>Select All</span>
+                        </label>
+                        <button type="button" id="bulkDeleteBtn" disabled
+                                class="text-xs font-bold text-white bg-red-600 hover:bg-red-700 disabled:opacity-40 disabled:cursor-not-allowed px-3.5 py-1.5 rounded-lg shadow-sm transition flex items-center gap-1.5">
+                            <span>🗑</span> Delete Selected (<span id="selectedCount">0</span>)
+                        </button>
+                    </div>
+                @endif
+            </div>
+
+            @forelse ($collections as $c)
+                <div class="flex items-center justify-between bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 mb-2.5 hover:border-teal-400 hover:bg-teal-50/20 transition gap-3">
+                    <input type="checkbox" name="ids[]" value="{{ $c->id }}" class="bulk-item rounded border-slate-300 accent-teal-600 w-4 h-4 cursor-pointer">
+                    <a href="{{ route('admin.this_or_that.show', $c) }}" class="flex-1 flex items-center justify-between gap-3 group">
+                        <div>
+                            <span class="font-bold text-slate-800 group-hover:text-teal-700 transition">⚖️ {{ $c->title }}</span>
+                            <span class="text-xs text-slate-500 ml-2">({{ ucfirst($c->language ?? 'gujarati') }})</span>
+                        </div>
+                        <span class="text-xs font-semibold px-2.5 py-1 bg-teal-100 text-teal-800 rounded-full">
+                            {{ $c->parts_count }} cards · {{ ucfirst($c->status) }}
+                        </span>
+                    </a>
+                    <button type="button" onclick="if(confirm('Kya aap sach me ye poll collection delete karna chahte hain?')) document.getElementById('single-del-{{ $c->id }}').submit();" class="text-xs font-semibold text-red-600 hover:text-red-700 bg-red-50 hover:bg-red-100 border border-red-200 px-3 py-1.5 rounded-lg transition flex items-center gap-1">
+                        <span>🗑</span> Delete
+                    </button>
+                </div>
+            @empty
+                <p class="text-sm text-slate-500 text-center py-4">Abhi koi poll save nahi hai — upar se naya banayein! ⚖️</p>
+            @endforelse
+        </form>
+
+        {{-- Hidden Single Delete Forms --}}
+        @foreach ($collections as $c)
+            <form id="single-del-{{ $c->id }}" method="POST" action="{{ route('admin.this_or_that.destroy', $c) }}" class="hidden">
+                @csrf @method('DELETE')
+            </form>
+        @endforeach
+    </div>
 </div>
 
 @push('scripts')
@@ -329,6 +380,45 @@
             el('progressBox').classList.add('hidden');
         }
     });
+
+    // ---------- Bulk Delete ----------
+    const selectAll = document.getElementById('selectAll');
+    const bulkBtn = document.getElementById('bulkDeleteBtn');
+    const countSpan = document.getElementById('selectedCount');
+    const form = document.getElementById('bulkForm');
+
+    if (selectAll && form) {
+        const updateBulkState = () => {
+            const items = form.querySelectorAll('.bulk-item');
+            const checked = form.querySelectorAll('.bulk-item:checked');
+            if (countSpan) countSpan.textContent = checked.length;
+            if (bulkBtn) bulkBtn.disabled = checked.length === 0;
+            if (selectAll) {
+                selectAll.checked = items.length > 0 && checked.length === items.length;
+                selectAll.indeterminate = checked.length > 0 && checked.length < items.length;
+            }
+        };
+
+        selectAll.addEventListener('change', () => {
+            form.querySelectorAll('.bulk-item').forEach(cb => cb.checked = selectAll.checked);
+            updateBulkState();
+        });
+
+        form.querySelectorAll('.bulk-item').forEach(cb => {
+            cb.addEventListener('change', updateBulkState);
+        });
+
+        if (bulkBtn) {
+            bulkBtn.addEventListener('click', () => {
+                const count = form.querySelectorAll('.bulk-item:checked').length;
+                if (count > 0 && confirm(`Kya aap sach me chune hue ${count} polls ko delete karna chahte hain?`)) {
+                    bulkBtn.disabled = true;
+                    bulkBtn.textContent = '⏳ Deleting…';
+                    form.submit();
+                }
+            });
+        }
+    }
 })();
 </script>
 @endpush

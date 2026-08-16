@@ -119,6 +119,31 @@ class CardController extends Controller
     }
 
     /**
+     * Multiple cards ko ek saath delete karo.
+     */
+    public function bulkDestroy(Request $request)
+    {
+        $data = $request->validate([
+            'ids'   => ['required', 'array', 'min:1'],
+            'ids.*' => ['integer', 'exists:part_cards,id'],
+        ]);
+
+        $cards = PartCard::with('part.story')->whereIn('id', $data['ids'])->get();
+        $count = 0;
+
+        foreach ($cards as $card) {
+            if (! auth()->user()->isAdmin() && $card->part->story->user_id !== auth()->id()) {
+                continue;
+            }
+            $this->instagram->deleteMediaFiles($card);
+            $card->delete();
+            $count++;
+        }
+
+        return back()->with('success', "{$count} cards successfully delete ho gaye.");
+    }
+
+    /**
      * Ek card ka reel (720x1280 mp4, voice-mode ON ho to voice-over ke saath)
      * bana ke uska URL do — page par preview/check karne ke liye.
      */

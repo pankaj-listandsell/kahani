@@ -83,17 +83,49 @@
     </div>
 
     {{-- ============ EXISTING COLLECTIONS ============ --}}
-    <div class="mt-8">
-        <h3 class="font-semibold mb-3">Saved collections</h3>
-        @forelse ($collections as $c)
-            <a href="{{ route('admin.yoga.show', $c) }}"
-               class="flex items-center justify-between bg-white border border-slate-200 rounded-lg px-4 py-3 mb-2 hover:border-emerald-300">
-                <span class="font-medium">🧘 {{ $c->title }}</span>
-                <span class="text-xs text-slate-400">{{ $c->parts_count }} cards · {{ ucfirst($c->status) }}</span>
-            </a>
-        @empty
-            <p class="text-sm text-slate-500">Abhi koi collection nahi — upar se pehli banao. 🧘</p>
-        @endforelse
+    <div class="mt-8 bg-white rounded-xl border border-slate-200 p-5 shadow-sm">
+        <form id="bulkForm" method="POST" action="{{ route('admin.stories.bulk_destroy') }}">
+            @csrf
+            <div class="flex items-center justify-between gap-4 mb-4 flex-wrap pb-3 border-b border-slate-100">
+                <h3 class="font-bold text-slate-800 flex items-center gap-2">
+                    <span>💾</span> Saved Collections ({{ $collections->count() }})
+                </h3>
+                @if ($collections->isNotEmpty())
+                    <div class="flex items-center gap-3">
+                        <label class="flex items-center gap-1.5 text-xs font-semibold text-slate-600 cursor-pointer select-none">
+                            <input type="checkbox" id="selectAll" class="rounded border-slate-300 accent-emerald-600 w-4 h-4 cursor-pointer">
+                            <span>Select All</span>
+                        </label>
+                        <button type="button" id="bulkDeleteBtn" disabled
+                                class="text-xs font-bold text-white bg-red-600 hover:bg-red-700 disabled:opacity-40 disabled:cursor-not-allowed px-3.5 py-1.5 rounded-lg shadow-sm transition flex items-center gap-1.5">
+                            <span>🗑</span> Delete Selected (<span id="selectedCount">0</span>)
+                        </button>
+                    </div>
+                @endif
+            </div>
+
+            @forelse ($collections as $c)
+                <div class="flex items-center justify-between bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 mb-2.5 hover:border-emerald-300 hover:bg-emerald-50/20 transition gap-3">
+                    <input type="checkbox" name="ids[]" value="{{ $c->id }}" class="bulk-item rounded border-slate-300 accent-emerald-600 w-4 h-4 cursor-pointer">
+                    <a href="{{ route('admin.yoga.show', $c) }}" class="flex-1 flex items-center justify-between gap-3 group">
+                        <span class="font-bold text-slate-800 group-hover:text-emerald-700 transition">🧘 {{ $c->title }}</span>
+                        <span class="text-xs text-slate-500 font-medium">{{ $c->parts_count }} cards · {{ ucfirst($c->status) }}</span>
+                    </a>
+                    <button type="button" onclick="if(confirm('Kya aap sach me ye yoga collection delete karna chahte hain?')) document.getElementById('single-del-{{ $c->id }}').submit();" class="text-xs font-semibold text-red-600 hover:text-red-700 bg-red-50 hover:bg-red-100 border border-red-200 px-3 py-1.5 rounded-lg transition flex items-center gap-1">
+                        <span>🗑</span> Delete
+                    </button>
+                </div>
+            @empty
+                <p class="text-sm text-slate-500 text-center py-4">Abhi koi collection nahi — upar se pehli banao. 🧘</p>
+            @endforelse
+        </form>
+
+        {{-- Hidden Single Delete Forms --}}
+        @foreach ($collections as $c)
+            <form id="single-del-{{ $c->id }}" method="POST" action="{{ route('admin.yoga.destroy', $c) }}" class="hidden">
+                @csrf @method('DELETE')
+            </form>
+        @endforeach
     </div>
 </div>
 
@@ -658,6 +690,47 @@ el('saveBtn').addEventListener('click', async () => {
         btn.disabled = false; btn.classList.remove('opacity-60');
     }
 });
+
+// ---------- Bulk Delete ----------
+(function() {
+    const selectAll = document.getElementById('selectAll');
+    const bulkBtn = document.getElementById('bulkDeleteBtn');
+    const countSpan = document.getElementById('selectedCount');
+    const form = document.getElementById('bulkForm');
+
+    if (selectAll && form) {
+        const updateBulkState = () => {
+            const items = form.querySelectorAll('.bulk-item');
+            const checked = form.querySelectorAll('.bulk-item:checked');
+            if (countSpan) countSpan.textContent = checked.length;
+            if (bulkBtn) bulkBtn.disabled = checked.length === 0;
+            if (selectAll) {
+                selectAll.checked = items.length > 0 && checked.length === items.length;
+                selectAll.indeterminate = checked.length > 0 && checked.length < items.length;
+            }
+        };
+
+        selectAll.addEventListener('change', () => {
+            form.querySelectorAll('.bulk-item').forEach(cb => cb.checked = selectAll.checked);
+            updateBulkState();
+        });
+
+        form.querySelectorAll('.bulk-item').forEach(cb => {
+            cb.addEventListener('change', updateBulkState);
+        });
+
+        if (bulkBtn) {
+            bulkBtn.addEventListener('click', () => {
+                const count = form.querySelectorAll('.bulk-item:checked').length;
+                if (count > 0 && confirm(`Kya aap sach me chune hue ${count} yoga collections ko delete karna chahte hain?`)) {
+                    bulkBtn.disabled = true;
+                    bulkBtn.textContent = '⏳ Deleting…';
+                    form.submit();
+                }
+            });
+        }
+    }
+})();
 </script>
 @endpush
 @endsection

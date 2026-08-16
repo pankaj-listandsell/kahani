@@ -329,6 +329,48 @@ class StoryController extends Controller
             ->with('success', 'Story deleted.');
     }
 
+    /**
+     * Multiple stories / collections ko ek saath delete karo.
+     */
+    public function bulkDestroy(Request $request)
+    {
+        $data = $request->validate([
+            'ids'   => ['required', 'array', 'min:1'],
+            'ids.*' => ['integer', 'exists:stories,id'],
+        ]);
+
+        $stories = Story::with('parts.cards')->whereIn('id', $data['ids'])->get();
+        $count = 0;
+
+        foreach ($stories as $story) {
+            if (! auth()->user()->isAdmin() && $story->user_id !== auth()->id()) {
+                continue;
+            }
+
+            foreach ($story->parts as $part) {
+                if ($part->image_path) {
+                    Storage::disk('public')->delete($part->image_path);
+                }
+                foreach ($part->cards as $card) {
+                    $this->instagram->deleteMediaFiles($card);
+                }
+            }
+
+            if ($story->cover_image) {
+                Storage::disk('public')->delete($story->cover_image);
+                $coverJpeg = preg_replace('/\.[a-z0-9]+$/i', '.jpg', $story->cover_image);
+                if ($coverJpeg && $coverJpeg !== $story->cover_image) {
+                    Storage::disk('public')->delete($coverJpeg);
+                }
+            }
+
+            $story->delete();
+            $count++;
+        }
+
+        return back()->with('success', "{$count} items successfully delete ho gaye.");
+    }
+
     private function validated(Request $request): array
     {
         $data = $request->validate([

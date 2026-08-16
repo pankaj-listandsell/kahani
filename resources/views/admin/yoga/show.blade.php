@@ -25,33 +25,58 @@
     @if ($cards->isEmpty())
         <div class="bg-white rounded-xl border border-slate-200 p-8 text-center text-slate-500">Koi card nahi.</div>
     @else
-        <div class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4">
-            @foreach ($cards as $i => $card)
-                <div class="bg-white rounded-xl border border-slate-200 p-2">
-                    <div class="text-[11px] font-medium mb-1 text-emerald-600">🧘 आसन {{ $i + 1 }}</div>
-                    <div class="media-slot">
-                        <a href="{{ asset('storage/' . $card->image_path) }}" target="_blank">
-                            <img src="{{ asset('storage/' . $card->image_path) }}" class="w-full rounded-lg border border-slate-100" alt="Card">
-                        </a>
+        <form id="bulkCardsForm" method="POST" action="{{ route('admin.cards.bulk_destroy') }}">
+            @csrf
+            <div class="flex items-center justify-between gap-3 mb-4 bg-white border border-slate-200 rounded-xl p-3 shadow-sm flex-wrap">
+                <label class="flex items-center gap-2 text-xs font-bold text-slate-700 cursor-pointer select-none">
+                    <input type="checkbox" id="selectAllCards" class="rounded border-slate-300 accent-emerald-600 w-4 h-4 cursor-pointer">
+                    <span>Select All Cards ({{ $cards->count() }})</span>
+                </label>
+                <button type="button" id="bulkDeleteCardsBtn" disabled
+                        class="text-xs font-bold text-white bg-red-600 hover:bg-red-700 disabled:opacity-40 disabled:cursor-not-allowed px-3.5 py-1.5 rounded-lg shadow-sm transition flex items-center gap-1.5">
+                    <span>🗑</span> Delete Selected Cards (<span id="selectedCardsCount">0</span>)
+                </button>
+            </div>
+
+            <div class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4">
+                @foreach ($cards as $i => $card)
+                    <div class="bg-white rounded-xl border border-slate-200 p-2 relative">
+                        <div class="flex items-center justify-between mb-1">
+                            <label class="flex items-center gap-1 cursor-pointer">
+                                <input type="checkbox" name="ids[]" value="{{ $card->id }}" class="bulk-card rounded border-slate-300 accent-emerald-600 w-4 h-4 cursor-pointer">
+                                <span class="text-[11px] font-medium text-emerald-600">🧘 आसन {{ $i + 1 }}</span>
+                            </label>
+                        </div>
+                        <div class="media-slot">
+                            <a href="{{ asset('storage/' . $card->image_path) }}" target="_blank">
+                                <img src="{{ asset('storage/' . $card->image_path) }}" class="w-full rounded-lg border border-slate-100" alt="Card">
+                            </a>
+                        </div>
+                        <div class="flex items-center justify-center gap-2 mt-2 text-xs">
+                            <span class="{{ $card->isPosted() ? '' : 'opacity-25 grayscale' }}" title="Instagram">📸</span>
+                            <span class="{{ $card->isYtPosted() ? '' : 'opacity-25 grayscale' }}" title="YouTube">▶️</span>
+                            <span class="{{ $card->isFbPosted() ? '' : 'opacity-25 grayscale' }}" title="Facebook">📘</span>
+                        </div>
+                        <button type="button"
+                                class="gen-reel mt-2 w-full text-[11px] bg-emerald-600 hover:bg-emerald-700 text-white rounded px-2 py-1.5"
+                                data-url="{{ route('admin.cards.reel', $card) }}">▶ Generate Reel</button>
+                        <a href="{{ asset('storage/' . $card->image_path) }}" download
+                           class="block text-center text-[11px] text-emerald-600 hover:underline mt-1">⬇ Image</a>
+                        <button type="button" onclick="if(confirm('Ye card delete karein?')) document.getElementById('card-del-{{ $card->id }}').submit();"
+                                class="w-full text-[11px] text-red-600 hover:bg-red-50 rounded px-2 py-1 mt-1 font-semibold">
+                            🗑 Remove
+                        </button>
                     </div>
-                    <div class="flex items-center justify-center gap-2 mt-2 text-xs">
-                        <span class="{{ $card->isPosted() ? '' : 'opacity-25 grayscale' }}" title="Instagram">📸</span>
-                        <span class="{{ $card->isYtPosted() ? '' : 'opacity-25 grayscale' }}" title="YouTube">▶️</span>
-                        <span class="{{ $card->isFbPosted() ? '' : 'opacity-25 grayscale' }}" title="Facebook">📘</span>
-                    </div>
-                    <button type="button"
-                            class="gen-reel mt-2 w-full text-[11px] bg-emerald-600 hover:bg-emerald-700 text-white rounded px-2 py-1.5"
-                            data-url="{{ route('admin.cards.reel', $card) }}">▶ Generate Reel</button>
-                    <a href="{{ asset('storage/' . $card->image_path) }}" download
-                       class="block text-center text-[11px] text-emerald-600 hover:underline mt-1">⬇ Image</a>
-                    <form method="POST" action="{{ route('admin.cards.destroy', $card) }}"
-                          onsubmit="return confirm('Ye card delete karein?')" class="mt-1">
-                        @csrf @method('DELETE')
-                        <button class="w-full text-[11px] text-red-600 hover:bg-red-50 rounded px-2 py-1">🗑 Remove</button>
-                    </form>
-                </div>
-            @endforeach
-        </div>
+                @endforeach
+            </div>
+        </form>
+
+        {{-- Hidden Individual Card Delete Forms --}}
+        @foreach ($cards as $card)
+            <form id="card-del-{{ $card->id }}" method="POST" action="{{ route('admin.cards.destroy', $card) }}" class="hidden">
+                @csrf @method('DELETE')
+            </form>
+        @endforeach
 
         <p class="text-xs text-slate-400 mt-4">Har card ek aasan hai. Caption me steps, fayda aur safety line jaati hai. Icon highlight = post ho chuka.</p>
     @endif
@@ -78,6 +103,45 @@
             btn.disabled = false;
         });
     });
+
+    // ---------- Bulk Delete Cards ----------
+    const selectAllCards = document.getElementById('selectAllCards');
+    const bulkDeleteCardsBtn = document.getElementById('bulkDeleteCardsBtn');
+    const selectedCardsCount = document.getElementById('selectedCardsCount');
+    const bulkCardsForm = document.getElementById('bulkCardsForm');
+
+    if (selectAllCards && bulkCardsForm) {
+        const updateCardsState = () => {
+            const items = bulkCardsForm.querySelectorAll('.bulk-card');
+            const checked = bulkCardsForm.querySelectorAll('.bulk-card:checked');
+            if (selectedCardsCount) selectedCardsCount.textContent = checked.length;
+            if (bulkDeleteCardsBtn) bulkDeleteCardsBtn.disabled = checked.length === 0;
+            if (selectAllCards) {
+                selectAllCards.checked = items.length > 0 && checked.length === items.length;
+                selectAllCards.indeterminate = checked.length > 0 && checked.length < items.length;
+            }
+        };
+
+        selectAllCards.addEventListener('change', () => {
+            bulkCardsForm.querySelectorAll('.bulk-card').forEach(cb => cb.checked = selectAllCards.checked);
+            updateCardsState();
+        });
+
+        bulkCardsForm.querySelectorAll('.bulk-card').forEach(cb => {
+            cb.addEventListener('change', updateCardsState);
+        });
+
+        if (bulkDeleteCardsBtn) {
+            bulkDeleteCardsBtn.addEventListener('click', () => {
+                const count = bulkCardsForm.querySelectorAll('.bulk-card:checked').length;
+                if (count > 0 && confirm(`Kya aap sach me chune hue ${count} cards ko delete karna chahte hain?`)) {
+                    bulkDeleteCardsBtn.disabled = true;
+                    bulkDeleteCardsBtn.textContent = '⏳ Deleting…';
+                    bulkCardsForm.submit();
+                }
+            });
+        }
+    }
 })();
 </script>
 @endpush

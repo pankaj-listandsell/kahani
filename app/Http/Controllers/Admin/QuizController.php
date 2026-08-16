@@ -28,7 +28,10 @@ class QuizController extends Controller
 
     public function index()
     {
-        $query = Story::withCount('parts')->where('type', 'quiz')->latest();
+        $query = Story::withCount('parts')
+            ->where('type', 'quiz')
+            ->whereNotIn('category', ['Puzzle', 'Mind Reading', 'This or That', 'Name Secrets'])
+            ->latest();
 
         if (! auth()->user()->isAdmin()) {
             $query->where('user_id', auth()->id());
