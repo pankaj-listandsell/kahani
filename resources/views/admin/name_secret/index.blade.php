@@ -25,8 +25,8 @@
             <div>
                 <label class="block text-xs font-bold text-slate-700 uppercase tracking-wide mb-1.5">🌐 Language</label>
                 <select id="language" class="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:ring-2 focus:ring-rose-500 focus:outline-none font-medium">
-                    <option value="gujarati" selected>ગુજરાતી (Gujarati)</option>
-                    <option value="hindi">हिंदी (Hindi)</option>
+                    <option value="gujarati">ગુજરાતી (Gujarati)</option>
+                    <option value="hindi" selected>हिंदी (Hindi)</option>
                     <option value="hinglish">Hinglish</option>
                 </select>
             </div>
@@ -114,14 +114,33 @@
 </div>
 
 @push('scripts')
+@include('admin.partials._canvas_kit')
 <script>
 (function() {
     const CSRF = document.querySelector('meta[name=csrf-token]').content;
     const GEN_URL = @json(route('admin.name_secret.generate'));
     const SAVE_URL = @json(route('admin.name_secret.save'));
 
+    const K = window.CanvasKit;
     let items = [];
+    let itemsLang = 'hindi'; // jis language me items generate hue — canvas text bhi usi me
     const el = id => document.getElementById(id);
+
+    const I18N = {
+        gujarati: {
+            title: l => `'${l}' અક્ષર વાળા લોકોનું રહસ્ય 👑`, sub: 'સ્વભાવ, ગુણ અને રહસ્ય વિશે જાણો',
+            best: 'બેસ્ટ જોડી / મિત્ર', cta: 'આ અક્ષર વાળા ખાસ દોસ્તને ટેગ કરો! 🤝',
+        },
+        hindi: {
+            title: l => `'${l}' अक्षर वाले लोगों का रहस्य 👑`, sub: 'स्वभाव, गुण और रहस्य जानें',
+            best: 'बेस्ट जोड़ी / दोस्त', cta: 'इस अक्षर वाले ख़ास दोस्त को टैग करें! 🤝',
+        },
+        hinglish: {
+            title: l => `'${l}' letter wale logon ka raaz 👑`, sub: 'Swabhav, gun aur raaz jaano',
+            best: 'Best jodi / dost', cta: 'Is letter wale khaas dost ko tag karo! 🤝',
+        },
+    };
+    const tr = () => I18N[itemsLang] || I18N.hindi;
 
     el('genBtn').addEventListener('click', async () => {
         const btn = el('genBtn');
@@ -140,7 +159,9 @@
             if (!d.ok) throw new Error(d.error || 'Failed to generate');
 
             items = d.items;
+            itemsLang = el('language').value;
             el('progressBar').style.width = '80%';
+            await K.ensureFonts();
             renderAllPreviews();
 
             el('progressBar').style.width = '100%';
@@ -173,12 +194,12 @@
 
             cardBox.innerHTML = `
                 <div class="p-3 bg-rose-50 border-b border-rose-100 flex items-center justify-between text-xs font-bold text-rose-900">
-                    <span>Letter '${item.letter}' Personality</span>
-                    <span class="px-2 py-0.5 rounded bg-rose-200 text-rose-900 font-extrabold">Best: ${item.best_match || 'All'}</span>
+                    <span>Letter '${K.esc(item.letter)}' Personality</span>
+                    <span class="px-2 py-0.5 rounded bg-rose-200 text-rose-900 font-extrabold">Best: ${K.esc(item.best_match || 'All')}</span>
                 </div>
                 <div class="p-3 flex-1 flex flex-col items-center"></div>
                 <div class="p-3 bg-slate-50 border-t border-slate-100 text-xs text-slate-500">
-                    <p class="font-medium text-slate-700 truncate">${item.tag_cta}</p>
+                    <p class="font-medium text-slate-700 truncate">${K.esc(item.tag_cta)}</p>
                 </div>
             `;
             cardBox.querySelector('.flex-1').appendChild(canvas);
@@ -189,6 +210,8 @@
     function drawNameSecret(c, item) {
         const ctx = c.getContext('2d');
         const W = 1080, H = 1920;
+        const L = tr();
+        K.reset(ctx);
 
         // Dark Luxury Red/Violet Gradient Background
         const grad = ctx.createLinearGradient(0, 0, 0, H);
@@ -198,14 +221,16 @@
         ctx.fillRect(0, 0, W, H);
 
         // Header Title
+        const title = item.title || L.title(item.letter);
         ctx.fillStyle = '#fbbf24';
-        ctx.font = 'bold 54px "Noto Sans Devanagari", "Noto Sans Gujarati", sans-serif';
         ctx.textAlign = 'center';
-        ctx.fillText(item.title || `'${item.letter}' અક્ષર વાળા લોકોનું રહસ્ય 👑`, W / 2, 160);
+        ctx.textBaseline = 'alphabetic';
+        K.fitOneLine(ctx, title, W - 100, 54, 32);
+        ctx.fillText(title, W / 2, 160);
 
         ctx.fillStyle = 'rgba(255,255,255,0.7)';
-        ctx.font = 'bold 36px sans-serif';
-        ctx.fillText('સ્વભાવ, ગુણ અને રહસ્ય વિશે જાણો', W / 2, 230);
+        K.fitOneLine(ctx, L.sub, W - 120, 36, 26);
+        ctx.fillText(L.sub, W / 2, 230);
 
         // MASSIVE GLOWING LETTER BADGE
         ctx.save();
@@ -221,8 +246,8 @@
         ctx.restore();
 
         ctx.fillStyle = '#000000';
-        ctx.font = 'extrabold 180px sans-serif';
         ctx.textBaseline = 'middle';
+        K.fitOneLine(ctx, item.letter, 240, 180, 80, '900');
         ctx.fillText(item.letter, W / 2, 460);
 
         // 3 LUXURY TRAIT CARDS
@@ -239,6 +264,7 @@
         traits.forEach((t, idx) => {
             const y = startY + idx * (boxH + 35);
 
+            ctx.beginPath();
             ctx.fillStyle = 'rgba(255,255,255,0.06)';
             ctx.roundRect(90, y, boxW, boxH, 24);
             ctx.fill();
@@ -259,12 +285,12 @@
 
             // Trait text
             ctx.fillStyle = '#ffffff';
-            ctx.font = 'bold 42px "Noto Sans Devanagari", "Noto Sans Gujarati", sans-serif';
             ctx.textAlign = 'left';
-            wrapText(ctx, t.text, 270, y + 85, boxW - 210, 58);
+            K.fitDraw(ctx, t.text, 270, y + boxH / 2, { maxW: boxW - 210, maxH: boxH - 50, size: 42, minSize: 28, lineHeight: 1.4 });
         });
 
         // BEST MATCH BADGE
+        ctx.beginPath();
         ctx.fillStyle = 'rgba(251,191,36,0.15)';
         ctx.roundRect(140, 1580, W - 280, 100, 20);
         ctx.fill();
@@ -272,32 +298,15 @@
         ctx.lineWidth = 2;
         ctx.stroke();
 
+        const best = `✨ ${L.best}: ${item.best_match || 'A, S, P, K'} ✨`;
         ctx.fillStyle = '#fbbf24';
-        ctx.font = 'bold 42px "Noto Sans Devanagari", "Noto Sans Gujarati", sans-serif';
         ctx.textAlign = 'center';
-        ctx.fillText(`✨ બેસ્ટ જોડી / મિત્ર: ${item.best_match || 'A, S, P, K'} ✨`, W / 2, 1630);
+        K.fitOneLine(ctx, best, W - 320, 42, 26);
+        ctx.fillText(best, W / 2, 1630);
 
-        // TAG CTA
+        // TAG CTA (max 2 lines)
         ctx.fillStyle = '#ffffff';
-        ctx.font = 'bold 44px "Noto Sans Devanagari", "Noto Sans Gujarati", sans-serif';
-        ctx.fillText(item.tag_cta || 'આ અક્ષર વાળા ખાસ દોસ્તને ટેગ કરો! 🤝', W / 2, 1750);
-    }
-
-    function wrapText(ctx, text, x, y, maxWidth, lineHeight) {
-        const words = text.split(' ');
-        let line = '';
-        for (let n = 0; n < words.length; n++) {
-            const testLine = line + words[n] + ' ';
-            const metrics = ctx.measureText(testLine);
-            if (metrics.width > maxWidth && n > 0) {
-                ctx.fillText(line, x, y);
-                line = words[n] + ' ';
-                y += lineHeight;
-            } else {
-                line = testLine;
-            }
-        }
-        ctx.fillText(line, x, y);
+        K.fitDraw(ctx, item.tag_cta || L.cta, W / 2, 1770, { maxW: W - 120, maxH: 130, size: 44, minSize: 30, lineHeight: 1.3 });
     }
 
     // Save All Secrets
@@ -307,13 +316,14 @@
         btn.disabled = true;
         el('progressBox').classList.remove('hidden');
         el('progressBar').style.width = '30%';
+        await K.ensureFonts();
 
         const off = document.createElement('canvas'); off.width = 1080; off.height = 1920;
         const cardsToSave = [];
 
         items.forEach((item, idx) => {
             drawNameSecret(off, item);
-            const fullVoiceText = item.title + '. ' + item.trait_1 + ' ' + item.trait_2 + ' ' + item.trait_3 + ' ' + item.tag_cta;
+            const fullVoiceText = (item.title || tr().title(item.letter)) + '. ' + item.trait_1 + ' ' + item.trait_2 + ' ' + item.trait_3 + ' ' + item.tag_cta;
             cardsToSave.push({
                 order: idx + 1,
                 text: fullVoiceText,
@@ -329,7 +339,7 @@
             const r = await fetch(SAVE_URL, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json', 'X-CSRF-TOKEN': CSRF, 'Accept': 'application/json' },
-                body: JSON.stringify({ language: el('language').value, cards: cardsToSave })
+                body: JSON.stringify({ language: itemsLang, cards: cardsToSave })
             });
             const d = await r.json();
             if (!d.ok) throw new Error(d.error || 'Failed to save');

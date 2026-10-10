@@ -2,6 +2,8 @@
 
 namespace App\Console\Commands;
 
+use App\Console\Commands\Concerns\HandlesAutoPostFailures;
+use App\Exceptions\CardBusyException;
 use App\Models\PartCard;
 use App\Models\Setting;
 use App\Models\Story;
@@ -12,6 +14,8 @@ use Illuminate\Support\Carbon;
 
 class YoutubeAutoPost extends Command
 {
+    use HandlesAutoPostFailures;
+
     protected $signature = 'youtube:auto-post {--force : Window/interval check ignore karke abhi ek upload karo} {--user= : Sirf is user id ke liye}';
 
     protected $description = 'Har user ke YouTube channel par next pending card/part ko Short bana ke auto-upload karo (unke time windows me)';
@@ -59,6 +63,12 @@ class YoutubeAutoPost extends Command
             return;
         }
 
+        if (! $force && $until = $this->cooldownUntil($uid, 'yt', $now)) {
+            $this->warn("User #{$uid}: YouTube cooldown (until {$until}) — skip.");
+
+            return;
+        }
+
         if (! $force) {
             $window = $this->activeWindow($uid, $now);
             if (! $window) {
@@ -78,17 +88,20 @@ class YoutubeAutoPost extends Command
             }
         }
 
+        $card = $this->nextPendingCard($uid);
+        if (! $card) {
+            return;
+        }
+
         try {
-            $card = $this->nextPendingCard($uid);
-            if (! $card) {
-                return;
-            }
             $id = $youtube->postCard($card);
             $this->info("User #{$uid}: uploaded Short (card #{$card->id}) → {$id}");
-
-            Setting::putFor($uid, 'yt_auto_last_post_at', $now->toIso8601String());
+            $this->recordSuccess($uid, 'yt', $now);
+        } catch (CardBusyException $e) {
+            $this->warn("User #{$uid}: " . $e->getMessage()); // button se upload ho raha hai — slot rehne do
         } catch (\Throwable $e) {
-            $this->error("User #{$uid} YouTube upload failed: " . $e->getMessage());
+            $this->error("User #{$uid} card #{$card->id} YouTube upload failed: " . $e->getMessage());
+            $this->recordFailure($uid, 'yt', $card, $e, $now);
         }
     }
 
@@ -157,7 +170,7 @@ class YoutubeAutoPost extends Command
             if (! $story->targetsPlatform('youtube')) {
                 continue; // ye story YouTube ke liye target nahi
             }
-            $isCollection = in_array($story->type, ['shayari', 'joke', 'quote', 'quiz', 'status', 'fact', 'yoga', 'ukhana'], true);
+            $isCollection = $story->isCollection();
             foreach ($story->parts as $part) {
                 foreach ($part->cards as $card) {
                     if ($card->yt_status !== null) {

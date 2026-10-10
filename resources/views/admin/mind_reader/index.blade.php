@@ -25,8 +25,8 @@
             <div>
                 <label class="block text-xs font-bold text-slate-700 uppercase tracking-wide mb-1.5">🌐 Language</label>
                 <select id="language" class="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:ring-2 focus:ring-purple-500 focus:outline-none font-medium">
-                    <option value="gujarati" selected>ગુજરાતી (Gujarati)</option>
-                    <option value="hindi">हिंदी (Hindi)</option>
+                    <option value="gujarati">ગુજરાતી (Gujarati)</option>
+                    <option value="hindi" selected>हिंदी (Hindi)</option>
                     <option value="hinglish">Hinglish</option>
                 </select>
             </div>
@@ -125,13 +125,32 @@
 </div>
 
 @push('scripts')
+@include('admin.partials._canvas_kit')
 <script>
 (function() {
     const CSRF = document.querySelector('meta[name=csrf-token]').content;
     const GEN_URL = @json(route('admin.mind_reader.generate'));
     const SAVE_URL = @json(route('admin.mind_reader.save'));
 
+    const K = window.CanvasKit;
     let items = [];
+    let itemsLang = 'hindi'; // jis language me items generate hue — canvas text bhi usi me
+
+    const I18N = {
+        gujarati: {
+            subQ: '🧠 ધ્યાનથી ગણો અને જવાબ કમેન્ટ કરો!', subA: '🎯 સાચો જવાબ નીચે જુઓ!',
+            nums: ['૧', '૨', '૩'], wait: '👇 તમારો જવાબ કમેન્ટમાં લખો! 👇', final: 'તમારો છેલ્લો જવાબ છે:',
+        },
+        hindi: {
+            subQ: '🧠 ध्यान से गिनें और जवाब कमेंट करें!', subA: '🎯 सही जवाब नीचे देखें!',
+            nums: ['१', '२', '३'], wait: '👇 अपना जवाब कमेंट में लिखें! 👇', final: 'आपका आख़िरी जवाब है:',
+        },
+        hinglish: {
+            subQ: '🧠 Dhyan se gino aur jawab comment karo!', subA: '🎯 Sahi jawab neeche dekho!',
+            nums: ['1', '2', '3'], wait: '👇 Apna jawab comment me likho! 👇', final: 'Aapka final jawab hai:',
+        },
+    };
+    const tr = () => I18N[itemsLang] || I18N.hindi;
 
     const THEMES = {
         neon_purple: { bg: ['#0f051d', '#230a3f'], accent: '#c084fc', gold: '#fbbf24', border: '#a855f7', box: 'rgba(168,85,247,0.12)' },
@@ -158,7 +177,9 @@
             if (!d.ok) throw new Error(d.error || 'Failed to generate');
 
             items = d.items;
+            itemsLang = el('language').value;
             el('progressBar').style.width = '80%';
+            await K.ensureFonts();
             renderAllPreviews();
 
             el('progressBar').style.width = '100%';
@@ -173,7 +194,11 @@
         }
     });
 
-    el('theme').addEventListener('change', () => { if (items.length) renderAllPreviews(); });
+    el('theme').addEventListener('change', async () => {
+        if (!items.length) return;
+        await K.ensureFonts();
+        renderAllPreviews();
+    });
 
     function renderAllPreviews() {
         el('emptyState').classList.add('hidden');
@@ -198,12 +223,12 @@
 
             cardBox.innerHTML = `
                 <div class="p-3 bg-purple-50 border-b border-purple-100 flex items-center justify-between text-xs font-bold text-purple-900">
-                    <span>Trick #${idx + 1}: ${item.title}</span>
-                    <span class="px-2 py-0.5 rounded bg-purple-200 text-purple-900 font-extrabold">${item.final_answer}</span>
+                    <span>Trick #${idx + 1}: ${K.esc(item.title)}</span>
+                    <span class="px-2 py-0.5 rounded bg-purple-200 text-purple-900 font-extrabold">${K.esc(item.final_answer)}</span>
                 </div>
                 <div class="p-3 flex-1 flex flex-col items-center"></div>
                 <div class="p-3 bg-slate-50 border-t border-slate-100 text-xs text-slate-500">
-                    <p class="font-medium text-slate-700 truncate">${item.call_to_action}</p>
+                    <p class="font-medium text-slate-700 truncate">${K.esc(item.call_to_action)}</p>
                 </div>
             `;
             cardBox.querySelector('.flex-1').appendChild(canvasQ);
@@ -214,6 +239,8 @@
     function drawMindReader(c, item, t, isAnswer) {
         const ctx = c.getContext('2d');
         const W = 1080, H = 1920;
+        const L = tr();
+        K.reset(ctx);
 
         const grad = ctx.createLinearGradient(0, 0, 0, H);
         grad.addColorStop(0, t.bg[0]);
@@ -221,22 +248,21 @@
         ctx.fillStyle = grad;
         ctx.fillRect(0, 0, W, H);
 
-        // Header Title
+        // Header Title (max 2 lines)
         ctx.fillStyle = t.gold;
-        ctx.font = 'bold 56px "Noto Sans Devanagari", "Noto Sans Gujarati", sans-serif';
-        ctx.textAlign = 'center';
-        ctx.fillText(item.title, W / 2, 220);
+        K.fitDraw(ctx, item.title, W / 2, 200, { maxW: W - 120, maxH: 140, size: 56, minSize: 34, lineHeight: 1.2 });
 
+        const sub = isAnswer ? L.subA : L.subQ;
         ctx.fillStyle = 'rgba(255,255,255,0.7)';
-        ctx.font = 'bold 36px sans-serif';
-        ctx.fillText(isAnswer ? '🎯 સાચો જવાબ નીચે જુઓ!' : '🧠 ધ્યાનથી ગણો અને અંતે જવાબ જુઓ!', W / 2, 290);
+        K.fitOneLine(ctx, sub, W - 120, 36, 26);
+        ctx.fillText(sub, W / 2, 310);
 
         if (!isAnswer) {
             // 3 Steps
             const steps = [
-                { num: '૧', text: item.step1 },
-                { num: '૨', text: item.step2 },
-                { num: '૩', text: item.step3 }
+                { num: L.nums[0], text: item.step1 },
+                { num: L.nums[1], text: item.step2 },
+                { num: L.nums[2], text: item.step3 }
             ];
 
             const startY = 420;
@@ -245,6 +271,7 @@
             steps.forEach((s, idx) => {
                 const y = startY + idx * (stepH + 40);
 
+                ctx.beginPath();
                 ctx.fillStyle = t.box;
                 ctx.roundRect(100, y, W - 200, stepH, 28);
                 ctx.fill();
@@ -259,29 +286,28 @@
                 ctx.fill();
 
                 ctx.fillStyle = '#000000';
-                ctx.font = 'bold 54px sans-serif';
+                ctx.font = K.font(54);
                 ctx.textAlign = 'center';
-                ctx.textBaseline = 'middle';
                 ctx.fillText(s.num, 200, y + stepH / 2);
 
-                // Step text (word wrap)
+                // Step text — box ke andar fit
                 ctx.fillStyle = '#ffffff';
-                ctx.font = 'bold 44px "Noto Sans Devanagari", "Noto Sans Gujarati", sans-serif';
                 ctx.textAlign = 'left';
-                wrapText(ctx, s.text, 300, y + 100, W - 440, 64);
+                K.fitDraw(ctx, s.text, 300, y + stepH / 2, { maxW: W - 440, maxH: stepH - 60, size: 44, minSize: 28, lineHeight: 1.4 });
             });
 
-            // Countdown box
+            // Countdown
             ctx.fillStyle = t.gold;
-            ctx.font = 'bold 46px sans-serif';
             ctx.textAlign = 'center';
-            ctx.fillText('⏱️ જવાબ જોવા માટે ૫ સેકન્ડ રાહ જુઓ...', W / 2, 1720);
+            K.fitOneLine(ctx, L.wait, W - 120, 46, 30);
+            ctx.fillText(L.wait, W / 2, 1720);
         } else {
             // Final Answer Reveal Card
             ctx.save();
             ctx.shadowColor = t.gold;
             ctx.shadowBlur = 40;
             ctx.fillStyle = 'rgba(251,191,36,0.15)';
+            ctx.beginPath();
             ctx.roundRect(120, 520, W - 240, 750, 36);
             ctx.fill();
             ctx.strokeStyle = t.gold;
@@ -290,41 +316,22 @@
             ctx.restore();
 
             ctx.fillStyle = '#ffffff';
-            ctx.font = 'bold 50px sans-serif';
             ctx.textAlign = 'center';
-            ctx.fillText('તમારો છેલ્લો જવાબ છે:', W / 2, 680);
+            K.fitOneLine(ctx, L.final, W - 300, 50, 32);
+            ctx.fillText(L.final, W / 2, 660);
 
             // Huge Result Number / Text
             ctx.fillStyle = t.gold;
-            ctx.font = 'extrabold 90px "Noto Sans Devanagari", "Noto Sans Gujarati", sans-serif';
-            ctx.fillText(item.final_answer, W / 2, 880);
+            K.fitDraw(ctx, item.final_answer, W / 2, 850, { maxW: W - 320, maxH: 230, size: 90, minSize: 44, lineHeight: 1.15 });
 
             // CTA
             ctx.fillStyle = t.accent;
-            ctx.font = 'bold 46px "Noto Sans Devanagari", "Noto Sans Gujarati", sans-serif';
-            wrapText(ctx, item.call_to_action, 180, 1050, W - 360, 65);
+            K.fitDraw(ctx, item.call_to_action, W / 2, 1120, { maxW: W - 360, maxH: 260, size: 46, minSize: 30, lineHeight: 1.4 });
 
             ctx.fillStyle = '#ffffff';
             ctx.font = 'bold 40px sans-serif';
             ctx.fillText('LIKE • SHARE • SUBSCRIBE FOR MORE', W / 2, 1680);
         }
-    }
-
-    function wrapText(ctx, text, x, y, maxWidth, lineHeight) {
-        const words = text.split(' ');
-        let line = '';
-        for (let n = 0; n < words.length; n++) {
-            const testLine = line + words[n] + ' ';
-            const metrics = ctx.measureText(testLine);
-            if (metrics.width > maxWidth && n > 0) {
-                ctx.fillText(line, x, y);
-                line = words[n] + ' ';
-                y += lineHeight;
-            } else {
-                line = testLine;
-            }
-        }
-        ctx.fillText(line, x, y);
     }
 
     // Save All Tricks
@@ -334,6 +341,7 @@
         btn.disabled = true;
         el('progressBox').classList.remove('hidden');
         el('progressBar').style.width = '30%';
+        await K.ensureFonts();
 
         const curTheme = THEMES[el('theme').value] || THEMES.neon_purple;
         const offQ = document.createElement('canvas'); offQ.width = 1080; offQ.height = 1920;
@@ -361,7 +369,7 @@
             const r = await fetch(SAVE_URL, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json', 'X-CSRF-TOKEN': CSRF, 'Accept': 'application/json' },
-                body: JSON.stringify({ language: el('language').value, cards: cardsToSave })
+                body: JSON.stringify({ language: itemsLang, cards: cardsToSave })
             });
             const d = await r.json();
             if (!d.ok) throw new Error(d.error || 'Failed to save');

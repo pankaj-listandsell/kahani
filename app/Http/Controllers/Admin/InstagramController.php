@@ -80,7 +80,8 @@ class InstagramController extends Controller
             'ig_auto_windows'        => json_decode((string) Setting::get('ig_auto_windows', '[]'), true) ?: [],
             'ig_reel_music'          => Setting::get('ig_reel_music'),
             'ig_auto_reply_enabled'  => Setting::get('ig_auto_reply_enabled', '0'),
-            'ig_auto_reply_template' => Setting::get('ig_auto_reply_template', '✅ Aapka jawab note ho gaya hai! Sahi jawab janne ke liye reel ko end tak dekhein 🎯'),
+            'ig_auto_reply_option_template' => Setting::get('ig_auto_reply_option_template', InstagramWebhookController::DEFAULT_OPTION_REPLIES),
+            'ig_auto_reply_template'        => Setting::get('ig_auto_reply_template', InstagramWebhookController::DEFAULT_REPLIES),
             'tts_audio_mode'         => Setting::get('tts_audio_mode', 'music'),
             'tts_voice'              => Setting::get('tts_voice', 'Kore'),
             'tts_configured'         => filled(config('services.gemini.key')),
@@ -110,7 +111,8 @@ class InstagramController extends Controller
             'ig_caption_suffix'      => ['nullable', 'string', 'max:1000'],
             'ig_collaborators'       => ['nullable', 'string', 'max:255'],
             'ig_auto_reply_enabled'  => ['nullable', 'boolean'],
-            'ig_auto_reply_template' => ['nullable', 'string', 'max:500'],
+            'ig_auto_reply_option_template' => ['nullable', 'string', 'max:2000'],
+            'ig_auto_reply_template'        => ['nullable', 'string', 'max:2000'],
         ]);
 
         // Copy-paste me aksar aage/peeche space ya newline aa jaate hain — hata do
@@ -121,9 +123,9 @@ class InstagramController extends Controller
         Setting::put('ig_caption_suffix', $data['ig_caption_suffix'] ?? null);
         Setting::put('ig_collaborators', $clean($data['ig_collaborators'] ?? null));
         Setting::put('ig_auto_reply_enabled', $request->boolean('ig_auto_reply_enabled') ? '1' : '0');
-        if (isset($data['ig_auto_reply_template'])) {
-            Setting::put('ig_auto_reply_template', trim($data['ig_auto_reply_template']));
-        }
+        // Khaali chhoda to default messages hi jaate hain (webhook khud fallback karta hai)
+        Setting::put('ig_auto_reply_option_template', $clean($data['ig_auto_reply_option_template'] ?? null));
+        Setting::put('ig_auto_reply_template', $clean($data['ig_auto_reply_template'] ?? null));
 
         return back()->with('success', 'Instagram settings saved.');
     }

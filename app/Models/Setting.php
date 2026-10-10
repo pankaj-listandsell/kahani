@@ -26,11 +26,20 @@ class Setting extends Model
             return $default;
         }
 
-        return Cache::rememberForever("setting.{$userId}.{$key}", function () use ($userId, $key, $default) {
+        // Sirf DB ki asli value cache karo ([] = row nahi hai). Default cache me
+        // nahi jaata, warna pehle caller ka default baaki sab callers ko milta.
+        $cached = Cache::rememberForever(static::cacheKey($userId, $key), function () use ($userId, $key) {
             $row = static::where('user_id', $userId)->where('key', $key)->first();
 
-            return $row ? $row->value : $default;
+            return $row ? [$row->value] : [];
         });
+
+        return $cached ? $cached[0] : $default;
+    }
+
+    protected static function cacheKey(int $userId, string $key): string
+    {
+        return "setting.v2.{$userId}.{$key}";
     }
 
     public static function putFor(int $userId, string $key, ?string $value): void
@@ -39,13 +48,13 @@ class Setting extends Model
             ['user_id' => $userId, 'key' => $key],
             ['value' => $value],
         );
-        Cache::forget("setting.{$userId}.{$key}");
+        Cache::forget(static::cacheKey($userId, $key));
     }
 
     public static function removeFor(int $userId, string $key): void
     {
         static::where('user_id', $userId)->where('key', $key)->delete();
-        Cache::forget("setting.{$userId}.{$key}");
+        Cache::forget(static::cacheKey($userId, $key));
     }
 
     /* ===================================================================

@@ -30,7 +30,9 @@ class QuizController extends Controller
     {
         $query = Story::withCount('parts')
             ->where('type', 'quiz')
-            ->whereNotIn('category', ['Puzzle', 'Mind Reading', 'This or That', 'Name Secrets'])
+            // NULL category wale quiz bhi dikhen (SQL me NULL NOT IN (...) kabhi true nahi hota)
+            ->where(fn ($q) => $q->whereNull('category')
+                ->orWhereNotIn('category', ['Puzzle', 'Mind Reading', 'This or That', 'Name Secrets']))
             ->latest();
 
         if (! auth()->user()->isAdmin()) {

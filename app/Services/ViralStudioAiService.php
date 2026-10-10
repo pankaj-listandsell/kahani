@@ -19,7 +19,7 @@ class ViralStudioAiService
      */
     public function generatePuzzles(int $count = 5, string $language = 'gujarati'): array
     {
-        $langPrompt = $language === 'gujarati' ? 'Gujarati (ગુજરાતી)' : 'Hindi (हिंदी)';
+        $langPrompt = $this->langPrompt($language);
 
         $prompt = <<<PROMPT
 You are a viral Instagram Reels puzzle generator.
@@ -32,6 +32,7 @@ Rules:
 - Choose a random hidden location (row from 2 to 6, col from 2 to 7) for the odd character.
 - `hook`: Catchy viral hook line in {$langPrompt} (e.g. "૫ સેકન્ડમાં છુપાયેલો 'ફ' શોધો! ૯૯% લોકો ફેલ ❌").
 - `answer_text`: Reveal explanation (e.g. "સાચો જવાબ: ત્રીજી લાઈનમાં ૫મો અક્ષર 'ફ' છે! ✅").
+- `caption`: Must NOT reveal the answer (row/col or position) — only invite viewers to comment their answer.
 
 Return ONLY a raw JSON array of objects:
 [
@@ -58,7 +59,7 @@ PROMPT;
      */
     public function generateMindReader(int $count = 3, string $language = 'gujarati'): array
     {
-        $langPrompt = $language === 'gujarati' ? 'Gujarati (ગુજરાતી)' : 'Hindi (हिंदी)';
+        $langPrompt = $this->langPrompt($language);
 
         $prompt = <<<PROMPT
 You are a viral mind-reading magic creator for Reels & Shorts.
@@ -72,7 +73,7 @@ Structure for each trick:
 - `step3`: Third instruction (e.g. "હવે આવેલા જવાબને ૨ વડે ભાગો અને ધારેલો નંબર બાદ કરો...")
 - `final_answer`: The calculated result (e.g. "તમારો છેલ્લો જવાબ ૪ છે! 🎯")
 - `call_to_action`: "જો સાચું પડ્યું હોય તો હમણાં જ સબસ્ક્રાઇબ કરો! ✨"
-- `caption`: Full viral caption with emojis
+- `caption`: Full viral caption with emojis. Must NOT reveal the final answer — ask viewers to comment their answer.
 
 Return ONLY a raw JSON array of objects with keys: `title`, `step1`, `step2`, `step3`, `final_answer`, `call_to_action`, `caption`, `hashtags`.
 PROMPT;
@@ -85,7 +86,7 @@ PROMPT;
      */
     public function generateThisOrThat(int $count = 5, string $language = 'gujarati', string $category = 'general'): array
     {
-        $langPrompt = $language === 'gujarati' ? 'Gujarati (ગુજરાતી)' : 'Hindi (हिंदी)';
+        $langPrompt = $this->langPrompt($language);
 
         $prompt = <<<PROMPT
 You are a viral poll and debate reel creator for Instagram & YouTube Shorts.
@@ -111,7 +112,7 @@ PROMPT;
      */
     public function generateNameSecrets(array $letters = ['A', 'S', 'P', 'R', 'K'], string $language = 'gujarati'): array
     {
-        $langPrompt = $language === 'gujarati' ? 'Gujarati (ગુજરાતી)' : 'Hindi (हिंदी)';
+        $langPrompt = $this->langPrompt($language);
         $lettersStr = implode(', ', $letters);
 
         $prompt = <<<PROMPT
@@ -133,6 +134,16 @@ Return ONLY a raw JSON array of objects with keys: `letter`, `title`, `trait_1`,
 PROMPT;
 
         return $this->callGeminiJson($prompt);
+    }
+
+    /** Prompt ke liye language ka naam — hinglish = Hindi words, Roman (English) letters me. */
+    protected function langPrompt(string $language): string
+    {
+        return match ($language) {
+            'gujarati' => 'Gujarati (ગુજરાતી)',
+            'hinglish' => 'Hinglish (Hindi words written in Roman/English letters, e.g. "Aap kya chunoge?")',
+            default    => 'Hindi (हिंदी)',
+        };
     }
 
     /**

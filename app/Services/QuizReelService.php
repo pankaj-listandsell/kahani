@@ -38,6 +38,17 @@ class QuizReelService
     /** Answer reveal kitni der screen par rahe (voice ho to uske hisab se badhta hai). */
     private const ANSWER_MIN_SECONDS = 3.0;
 
+    /**
+     * In studios ki reel me answer reveal NAHI — sirf sawaal + countdown, jawab
+     * log comment me dete hain. (type = naya, category = purane type 'quiz' wale rows)
+     */
+    public const NO_ANSWER_TYPES = ['puzzle', 'mind_reader', 'this_or_that', 'name_secret'];
+
+    public const NO_ANSWER_CATEGORIES = ['Puzzle', 'Mind Reading', 'This or That', 'Name Secrets'];
+
+    /** Countdown khatam hone ke baad (answer na ho to) itni der aur dikhe — reel achanak na kate. */
+    private const NO_ANSWER_TAIL_SECONDS = 1.0;
+
     public function __construct(private GeminiTtsService $tts)
     {
     }
@@ -52,6 +63,15 @@ class QuizReelService
         $disk = Storage::disk('public');
 
         return $disk->exists($card->image_path) && $disk->exists($card->answer_image_path);
+    }
+
+    /** Is card ki reel ke end me answer dikhana hai ya nahi. */
+    public function showsAnswer(PartCard $card): bool
+    {
+        $story = $card->part?->story;
+
+        return ! in_array($story?->type, self::NO_ANSWER_TYPES, true)
+            && ! in_array($story?->category, self::NO_ANSWER_CATEGORIES, true);
     }
 
     /**
@@ -72,13 +92,17 @@ class QuizReelService
         $userId = $card->part?->story?->user_id;
         $timer  = $this->timerSeconds($userId);
 
+        $withAnswer = $this->showsAnswer($card);
+
         // Voice (agar mode on ho) — question ke liye aur answer ke liye alag
         $qVoice = $this->voice($card, $card->text, $userId);
-        $aVoice = $this->voice($card, $card->answer_text, $userId);
+        $aVoice = $withAnswer ? $this->voice($card, $card->answer_text, $userId) : null;
 
-        // Question segment kam se kam timer jitna lamba — warna countdown kat jaata
-        $qDur = round(max($timer, $qVoice ? $qVoice['seconds'] + 0.8 : 0), 2);
-        $aDur = round(max(self::ANSWER_MIN_SECONDS, $aVoice ? $aVoice['seconds'] + 0.8 : 0), 2);
+        // Question segment kam se kam timer jitna lamba — warna countdown kat jaata.
+        // Answer na ho to countdown ke baad thoda tail, taaki reel 0 par achanak na kate.
+        $minQ = $withAnswer ? $timer : $timer + self::NO_ANSWER_TAIL_SECONDS;
+        $qDur = round(max($minQ, $qVoice ? $qVoice['seconds'] + 0.8 : 0), 2);
+        $aDur = $withAnswer ? round(max(self::ANSWER_MIN_SECONDS, $aVoice ? $aVoice['seconds'] + 0.8 : 0), 2) : 0.0;
 
         // Resolution tiers: pehle 720p, OOM/fail par halki res par retry.
         $tiers      = [[720, 1280], [540, 960], [480, 854]];
@@ -89,7 +113,7 @@ class QuizReelService
         foreach ($tiers as [$w, $h]) {
             $cmd = $this->buildCommand(
                 $disk->path($card->image_path),
-                $disk->path($card->answer_image_path),
+                $withAnswer ? $disk->path($card->answer_image_path) : null,
                 $qVoice ? $disk->path($qVoice['path']) : null,
                 $aVoice ? $disk->path($aVoice['path']) : null,
                 $qDur,
@@ -162,7 +186,9 @@ class QuizReelService
     }
 
     /**
-     * ffmpeg command — 2 video segments concat, voiceover + countdown tick/ding SFX + BGM mixing.
+     * ffmpeg command — question (+ countdown) aur answer segment concat, voiceover +
+     * countdown tick/ding SFX + BGM mixing. $aImg null = answer segment nahi
+     * (sirf question + countdown, bina ding).
      *
      * Instagram Reels spec ke hisab se: 720x1280, H.264 high, yuv420p, TV range,
      * AAC 44.1k stereo.
@@ -171,7 +197,7 @@ class QuizReelService
      */
     protected function buildCommand(
         string $qImg,
-        string $aImg,
+        ?string $aImg,
         ?string $qVoice,
         ?string $aVoice,
         float $qDur,
@@ -185,36 +211,42 @@ class QuizReelService
         string $bgmTrack = 'suspense',
     ): array {
         $ffmpeg = config('services.ffmpeg.path', 'ffmpeg');
+        $withAnswer = $aImg !== null;
 
-        $cmd = [
-            $ffmpeg, '-y',
-            '-loop', '1', '-t', $this->num($qDur), '-i', $qImg,   // 0 = question
-            '-loop', '1', '-t', $this->num($aDur), '-i', $aImg,   // 1 = answer
-        ];
+        $cmd = [$ffmpeg, '-y', '-loop', '1', '-t', $this->num($qDur), '-i', $qImg];   // 0 = question
+        if ($withAnswer) {
+            $cmd = array_merge($cmd, ['-loop', '1', '-t', $this->num($aDur), '-i', $aImg]);   // 1 = answer
+        }
 
         // Audio inputs — voice ho to wahi, warna us segment ke liye silence
-        $audioIdx = 2;
-        $qAudio   = $this->addAudioInput($cmd, $audioIdx, $qVoice, $qDur);
-        $aAudio   = $this->addAudioInput($cmd, $audioIdx, $aVoice, $aDur);
+        $audioIdx = $withAnswer ? 2 : 1;
+        $qAudio   = $this->addAudioInput($cmd, $audioIdx, $qVoice, $qDur, 'aq');
+        $qFit     = ReelMotion::chain($w, $h, $qDur, 0, $motion);
+        $qVideo   = '[0:v]' . $qFit . $this->countdownFilter($timer, $qDur);
 
-        $qFit = ReelMotion::chain($w, $h, $qDur, 0, $motion);
-        $aFit = ReelMotion::chain($w, $h, $aDur, 1, $motion);
+        if ($withAnswer) {
+            $aAudio = $this->addAudioInput($cmd, $audioIdx, $aVoice, $aDur, 'aa');
+            $aFit   = ReelMotion::chain($w, $h, $aDur, 1, $motion);
 
-        $totalDur = $qDur + $aDur;
+            $totalDur = $qDur + $aDur;
 
-        // Video filter
-        $filterParts = [
-            '[0:v]' . $qFit . $this->countdownFilter($timer, $qDur) . '[v0]',
-            '[1:v]' . $aFit . '[v1]',
-            '[v0][v1]concat=n=2:v=1:a=0[v]',
-        ];
+            $filterParts = [
+                $qVideo . '[v0]',
+                '[1:v]' . $aFit . '[v1]',
+                '[v0][v1]concat=n=2:v=1:a=0[v]',
+            ];
 
-        // Audio filter
-        $audioFilters = [
-            rtrim($qAudio, ';'),
-            rtrim($aAudio, ';'),
-            '[aq][aa]concat=n=2:v=0:a=1[avoice]',
-        ];
+            $audioFilters = [
+                rtrim($qAudio, ';'),
+                rtrim($aAudio, ';'),
+                '[aq][aa]concat=n=2:v=0:a=1[avoice]',
+            ];
+        } else {
+            $totalDur = $qDur;
+
+            $filterParts  = [$qVideo . '[v]'];
+            $audioFilters = [rtrim($qAudio, ';'), '[aq]anull[avoice]'];
+        }
 
         $currentAudioLabel = '[avoice]';
 
@@ -227,16 +259,19 @@ class QuizReelService
                 $delayMs = (int) round($tTime * 1000);
                 $sfxNodes[] = "sine=frequency=1600:duration=0.04,afade=t=out:st=0.01:d=0.03,volume=1.5,adelay={$delayMs}|{$delayMs}[sfx_t{$k}]";
             }
-            // Ding at exact answer reveal ($qDur)
-            $dingDelayMs = (int) round($qDur * 1000);
-            $sfxNodes[] = "sine=frequency=1760:duration=1.1,afade=t=out:st=0.05:d=1.05,volume=1.9,adelay={$dingDelayMs}|{$dingDelayMs}[sfx_ding]";
-
             $sfxInputsStr = '';
             for ($k = 0; $k < $timer; $k++) {
                 $sfxInputsStr .= "[sfx_t{$k}]";
             }
-            $sfxInputsStr .= '[sfx_ding]';
-            $sfxTotalCount = $timer + 1;
+            $sfxTotalCount = $timer;
+
+            // Ding at exact answer reveal ($qDur) — answer hi nahi to ding bhi nahi
+            if ($withAnswer) {
+                $dingDelayMs = (int) round($qDur * 1000);
+                $sfxNodes[] = "sine=frequency=1760:duration=1.1,afade=t=out:st=0.05:d=1.05,volume=1.9,adelay={$dingDelayMs}|{$dingDelayMs}[sfx_ding]";
+                $sfxInputsStr .= '[sfx_ding]';
+                $sfxTotalCount++;
+            }
 
             $audioFilters[] = implode(';', $sfxNodes);
             $audioFilters[] = $sfxInputsStr . "amix=inputs={$sfxTotalCount}:duration=longest,aformat=sample_rates=44100:channel_layouts=stereo[sfx_all]";
@@ -277,10 +312,8 @@ class QuizReelService
      * Ek segment ka audio input jodo aur uska filter-chunk return karo.
      * Voice ho to use pad/trim karke exact segment length me fit karte hain.
      */
-    protected function addAudioInput(array &$cmd, int &$idx, ?string $voice, float $dur): string
+    protected function addAudioInput(array &$cmd, int &$idx, ?string $voice, float $dur, string $label): string
     {
-        $label = $idx === 2 ? 'aq' : 'aa';
-
         if ($voice) {
             $cmd = array_merge($cmd, ['-i', $voice]);
             $chunk = "[{$idx}:a]aresample=44100,apad,atrim=duration=" . $this->num($dur)

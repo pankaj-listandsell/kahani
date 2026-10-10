@@ -25,8 +25,8 @@
             <div>
                 <label class="block text-xs font-bold text-slate-700 uppercase tracking-wide mb-1.5">🌐 Language</label>
                 <select id="language" class="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:ring-2 focus:ring-emerald-500 focus:outline-none font-medium">
-                    <option value="gujarati" selected>ગુજરાતી (Gujarati)</option>
-                    <option value="hindi">हिंदी (Hindi)</option>
+                    <option value="gujarati">ગુજરાતી (Gujarati)</option>
+                    <option value="hindi" selected>हिंदी (Hindi)</option>
                     <option value="hinglish">Hinglish</option>
                 </select>
             </div>
@@ -127,14 +127,33 @@
 </div>
 
 @push('scripts')
+@include('admin.partials._canvas_kit')
 <script>
 (function() {
     const CSRF = document.querySelector('meta[name=csrf-token]').content;
     const GEN_URL = @json(route('admin.this_or_that.generate'));
     const SAVE_URL = @json(route('admin.this_or_that.save'));
 
+    const K = window.CanvasKit;
     let items = [];
+    let itemsLang = 'hindi'; // jis language me items generate hue — canvas text bhi usi me
     const el = id => document.getElementById(id);
+
+    const I18N = {
+        gujarati: {
+            title: 'તમે શું પસંદ કરશો? 🤔', sub: 'આ કે તે? તમારો સાચો જવાબ કમેન્ટ કરો!',
+            cta: '👇 તમારી પસંદગી કમેન્ટ બોક્સમાં લખો! 👇', voiceCta: 'તમારી પસંદ કમેન્ટ કરો!',
+        },
+        hindi: {
+            title: 'आप क्या चुनेंगे? 🤔', sub: 'ये या वो? अपना जवाब कमेंट करें!',
+            cta: '👇 अपनी पसंद कमेंट बॉक्स में लिखें! 👇', voiceCta: 'अपनी पसंद कमेंट करें!',
+        },
+        hinglish: {
+            title: 'Aap kya chunoge? 🤔', sub: 'Ye ya woh? Apna jawab comment karo!',
+            cta: '👇 Apni pasand comment box me likho! 👇', voiceCta: 'Apni pasand comment karo!',
+        },
+    };
+    const tr = () => I18N[itemsLang] || I18N.hindi;
 
     el('genBtn').addEventListener('click', async () => {
         const btn = el('genBtn');
@@ -153,7 +172,9 @@
             if (!d.ok) throw new Error(d.error || 'Failed to generate');
 
             items = d.items;
+            itemsLang = el('language').value;
             el('progressBar').style.width = '80%';
+            await K.ensureFonts();
             renderAllPreviews();
 
             el('progressBar').style.width = '100%';
@@ -186,11 +207,11 @@
 
             cardBox.innerHTML = `
                 <div class="p-3 bg-emerald-50 border-b border-emerald-100 flex items-center justify-between text-xs font-bold text-emerald-900">
-                    <span>Poll #${idx + 1}: ${item.title}</span>
+                    <span>Poll #${idx + 1}: ${K.esc(item.title)}</span>
                 </div>
                 <div class="p-3 flex-1 flex flex-col items-center"></div>
                 <div class="p-3 bg-slate-50 border-t border-slate-100 text-xs text-slate-500">
-                    <p class="font-medium text-slate-700 truncate">${item.option_a} VS ${item.option_b}</p>
+                    <p class="font-medium text-slate-700 truncate">${K.esc(item.option_a)} VS ${K.esc(item.option_b)}</p>
                 </div>
             `;
             cardBox.querySelector('.flex-1').appendChild(canvas);
@@ -201,6 +222,8 @@
     function drawThisOrThat(c, item) {
         const ctx = c.getContext('2d');
         const W = 1080, H = 1920;
+        const L = tr();
+        K.reset(ctx);
 
         const optA = String(item.option_a || item.optionA || item.option_1 || item.a || '');
         const optB = String(item.option_b || item.optionB || item.option_2 || item.b || '');
@@ -210,15 +233,16 @@
         ctx.fillRect(0, 0, W, H);
 
         // Header Title
+        const title = item.title || L.title;
         ctx.fillStyle = '#fbbf24';
-        ctx.font = 'bold 58px "Noto Sans Devanagari", "Noto Sans Gujarati", sans-serif';
         ctx.textAlign = 'center';
         ctx.textBaseline = 'alphabetic';
-        ctx.fillText(item.title || 'તમે શું પસંદ કરશો? 🤔', W / 2, 180);
+        K.fitOneLine(ctx, title, W - 100, 58, 34);
+        ctx.fillText(title, W / 2, 180);
 
         ctx.fillStyle = 'rgba(255,255,255,0.7)';
-        ctx.font = 'bold 36px sans-serif';
-        ctx.fillText('આ કે તે? તમારો સાચો જવાબ કમેન્ટ કરો!', W / 2, 250);
+        K.fitOneLine(ctx, L.sub, W - 120, 36, 26);
+        ctx.fillText(L.sub, W / 2, 250);
 
         // OPTION A BOX (Top Half)
         const boxW = W - 160, boxH = 580;
@@ -247,11 +271,9 @@
         ctx.textBaseline = 'middle';
         ctx.fillText('OPTION A', boxX + 150, boxY_A + 75);
 
-        // Option A Text
+        // Option A Text — badge ke neeche wale hisse me fit
         ctx.fillStyle = '#ffffff';
-        ctx.font = 'bold 54px "Noto Sans Devanagari", "Noto Sans Gujarati", sans-serif';
-        ctx.textBaseline = 'alphabetic';
-        wrapText(ctx, optA, W / 2, boxY_A + 320, boxW - 80, 75);
+        K.fitDraw(ctx, optA, W / 2, boxY_A + 340, { maxW: boxW - 80, maxH: 400, size: 54, minSize: 32, lineHeight: 1.4 });
 
         // OPTION B BOX (Bottom Half)
         const boxY_B = 1040;
@@ -279,11 +301,9 @@
         ctx.textBaseline = 'middle';
         ctx.fillText('OPTION B', boxX + 150, boxY_B + 75);
 
-        // Option B Text
+        // Option B Text — badge ke neeche wale hisse me fit
         ctx.fillStyle = '#ffffff';
-        ctx.font = 'bold 54px "Noto Sans Devanagari", "Noto Sans Gujarati", sans-serif';
-        ctx.textBaseline = 'alphabetic';
-        wrapText(ctx, optB, W / 2, boxY_B + 320, boxW - 80, 75);
+        K.fitDraw(ctx, optB, W / 2, boxY_B + 340, { maxW: boxW - 80, maxH: 400, size: 54, minSize: 32, lineHeight: 1.4 });
 
         // GLOWING "VS" CIRCLE IN CENTER
         ctx.save();
@@ -299,43 +319,20 @@
         ctx.restore();
 
         ctx.fillStyle = '#000000';
-        ctx.font = 'extrabold 82px sans-serif';
+        ctx.font = '900 82px sans-serif';
         ctx.textAlign = 'center';
         ctx.textBaseline = 'middle';
         ctx.fillText('VS', W / 2, 982);
 
         // BOTTOM CTA
         ctx.fillStyle = '#fbbf24';
-        ctx.font = 'bold 44px "Noto Sans Devanagari", "Noto Sans Gujarati", sans-serif';
         ctx.textBaseline = 'alphabetic';
-        ctx.fillText('👇 તમારી પસંદગી કમેન્ટ બોક્સમાં લખો! 👇', W / 2, 1720);
+        K.fitOneLine(ctx, L.cta, W - 100, 44, 30);
+        ctx.fillText(L.cta, W / 2, 1720);
 
         ctx.fillStyle = 'rgba(255,255,255,0.7)';
         ctx.font = 'bold 36px sans-serif';
         ctx.fillText('LIKE • SHARE • FOLLOW FOR MORE', W / 2, 1790);
-    }
-
-    function wrapText(ctx, text, x, y, maxWidth, lineHeight) {
-        if (!text) return;
-        const words = String(text).split(' ');
-        let line = '';
-        const lines = [];
-        for (let n = 0; n < words.length; n++) {
-            const testLine = line + words[n] + ' ';
-            const metrics = ctx.measureText(testLine);
-            if (metrics.width > maxWidth && n > 0) {
-                lines.push(line);
-                line = words[n] + ' ';
-            } else {
-                line = testLine;
-            }
-        }
-        lines.push(line);
-
-        const startY = y - ((lines.length - 1) * lineHeight) / 2;
-        lines.forEach((l, i) => {
-            ctx.fillText(l.trim(), x, startY + i * lineHeight);
-        });
     }
 
     // Save All Polls
@@ -345,13 +342,14 @@
         btn.disabled = true;
         el('progressBox').classList.remove('hidden');
         el('progressBar').style.width = '30%';
+        await K.ensureFonts();
 
         const off = document.createElement('canvas'); off.width = 1080; off.height = 1920;
         const cardsToSave = [];
 
         items.forEach((item, idx) => {
             drawThisOrThat(off, item);
-            const fullVoiceText = item.title + '. Option A: ' + item.option_a + '. Option B: ' + item.option_b + '. Tamari pasand comment karo!';
+            const fullVoiceText = (item.title || tr().title) + '. Option A: ' + item.option_a + '. Option B: ' + item.option_b + '. ' + tr().voiceCta;
             cardsToSave.push({
                 order: idx + 1,
                 text: fullVoiceText,
@@ -367,7 +365,7 @@
             const r = await fetch(SAVE_URL, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json', 'X-CSRF-TOKEN': CSRF, 'Accept': 'application/json' },
-                body: JSON.stringify({ language: el('language').value, cards: cardsToSave })
+                body: JSON.stringify({ language: itemsLang, cards: cardsToSave })
             });
             const d = await r.json();
             if (!d.ok) throw new Error(d.error || 'Failed to save');

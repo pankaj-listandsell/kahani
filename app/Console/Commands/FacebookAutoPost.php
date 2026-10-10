@@ -2,6 +2,8 @@
 
 namespace App\Console\Commands;
 
+use App\Console\Commands\Concerns\HandlesAutoPostFailures;
+use App\Exceptions\CardBusyException;
 use App\Models\PartCard;
 use App\Models\Setting;
 use App\Models\Story;
@@ -12,6 +14,8 @@ use Illuminate\Support\Carbon;
 
 class FacebookAutoPost extends Command
 {
+    use HandlesAutoPostFailures;
+
     protected $signature = 'facebook:auto-post {--force : Window/interval check ignore karke abhi ek post karo} {--user= : Sirf is user id ke liye}';
 
     protected $description = 'Har user ke Facebook Page par next pending card auto-post karo (unke time windows me)';
@@ -58,10 +62,9 @@ class FacebookAutoPost extends Command
             return;
         }
 
-        // Rate-limit cooldown active hai? (FB ne "We limit how often…" diya tha)
-        $cooldown = Setting::getFor($uid, 'fb_auto_cooldown_until');
-        if ($cooldown && Carbon::parse($cooldown)->isFuture()) {
-            $this->warn("User #{$uid}: Facebook rate-limit cooldown (until {$cooldown}) — skip.");
+        // Cooldown active hai? (FB rate-limit, ya lagaatar failures)
+        if ($cooldown = $this->cooldownUntil($uid, 'fb', $now)) {
+            $this->warn("User #{$uid}: Facebook cooldown (until {$cooldown}) — skip.");
 
             return;
         }
@@ -93,16 +96,17 @@ class FacebookAutoPost extends Command
 
         try {
             $id = $type === 'reel' ? $facebook->postReel($card) : $facebook->postPhoto($card);
-            Setting::putFor($uid, 'fb_auto_last_post_at', $now->toIso8601String());
+            $this->recordSuccess($uid, 'fb', $now);
             $this->info("User #{$uid}: posted {$type} card #{$card->id} → {$id}");
         } catch (\App\Exceptions\FacebookRateLimitException $e) {
             // FB ne "We limit how often you can post…" diya — 2 ghante ruk jao.
             // Card 'failed' nahi hua (pending hai), cooldown ke baad dobara try hoga.
-            $until = $now->copy()->addHours(2);
-            Setting::putFor($uid, 'fb_auto_cooldown_until', $until->toIso8601String());
-            $this->warn("User #{$uid}: Facebook rate-limit — {$e->getMessage()}. Cooldown {$until->format('d M H:i')} tak.");
+            $this->startCooldown($uid, 'fb', $now->copy()->addHours(2), 'rate-limit: ' . $e->getMessage());
+        } catch (CardBusyException $e) {
+            $this->warn("User #{$uid}: " . $e->getMessage()); // button se post ho raha hai — slot rehne do
         } catch (\Throwable $e) {
             $this->error("User #{$uid} card #{$card->id} failed: " . $e->getMessage());
+            $this->recordFailure($uid, 'fb', $card, $e, $now);
         }
     }
 
@@ -173,7 +177,7 @@ class FacebookAutoPost extends Command
             if (! $story->targetsPlatform('facebook')) {
                 continue; // ye story Facebook ke liye target nahi
             }
-            $isCollection = in_array($story->type, ['shayari', 'joke', 'quote', 'quiz', 'status', 'fact', 'yoga', 'ukhana'], true);
+            $isCollection = $story->isCollection();
             foreach ($story->parts as $part) {
                 foreach ($part->cards as $card) {
                     if ($card->fb_status !== null) {

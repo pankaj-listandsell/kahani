@@ -7,14 +7,14 @@
     <div class="bg-gradient-to-r from-violet-600 to-indigo-700 rounded-2xl p-6 text-white shadow-md">
         <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
             <div>
-                <span class="inline-block px-2.5 py-1 bg-white/20 rounded-full text-xs font-semibold uppercase tracking-wider mb-2">📊 Real-Time Performance</span>
+                <span class="inline-block px-2.5 py-1 bg-white/20 rounded-full text-xs font-semibold uppercase tracking-wider mb-2">📊 Performance</span>
                 <h1 class="text-2xl font-bold">Social Reach &amp; Audience Insights</h1>
-                <p class="text-violet-100 text-sm mt-1">Track Instagram, YouTube, and Facebook engagement across all auto-posts.</p>
+                <p class="text-violet-100 text-sm mt-1">Post counts aapke data se; likes/comments Instagram Graph API se (last {{ $stats['ig_sampled'] }} IG posts, 15 min cache).</p>
             </div>
             <div class="bg-white/10 backdrop-blur-md rounded-xl p-3 border border-white/20 text-center">
-                <p class="text-xs text-violet-200">Avg. Engagement Rate</p>
-                <p class="text-2xl font-extrabold text-white mt-0.5">{{ $stats['avg_engagement'] }}</p>
-                <span class="text-[11px] text-emerald-300">▲ +1.2% this week</span>
+                <p class="text-xs text-violet-200">Avg. Likes + Comments / IG Post</p>
+                <p class="text-2xl font-extrabold text-white mt-0.5">{{ $stats['avg_interactions'] ?? '—' }}</p>
+                <span class="text-[11px] text-violet-200">{{ $stats['ig_sampled'] ? 'last ' . $stats['ig_sampled'] . ' posts' : 'abhi data nahi' }}</span>
             </div>
         </div>
     </div>
@@ -32,29 +32,29 @@
 
         <div class="bg-white p-5 rounded-xl border border-slate-200 shadow-sm">
             <div class="flex items-center justify-between text-slate-500 mb-2">
-                <span class="text-xs font-bold uppercase tracking-wider">Estimated Reach</span>
-                <span class="text-lg">👁️</span>
+                <span class="text-xs font-bold uppercase tracking-wider">IG Posts Tracked</span>
+                <span class="text-lg">📸</span>
             </div>
-            <p class="text-3xl font-extrabold text-indigo-600">{{ number_format($stats['total_reach']) }}+</p>
-            <p class="text-xs text-emerald-600 mt-1 font-medium">🔥 High viral potential</p>
+            <p class="text-3xl font-extrabold text-indigo-600">{{ $stats['ig_sampled'] }}</p>
+            <p class="text-xs text-slate-400 mt-1">Recent posts jinka live data mila</p>
         </div>
 
         <div class="bg-white p-5 rounded-xl border border-slate-200 shadow-sm">
             <div class="flex items-center justify-between text-slate-500 mb-2">
-                <span class="text-xs font-bold uppercase tracking-wider">Likes &amp; Reactions</span>
+                <span class="text-xs font-bold uppercase tracking-wider">IG Likes</span>
                 <span class="text-lg">❤️</span>
             </div>
-            <p class="text-3xl font-extrabold text-rose-600">{{ number_format($stats['total_likes']) }}</p>
-            <p class="text-xs text-slate-400 mt-1">Across reels &amp; posts</p>
+            <p class="text-3xl font-extrabold text-rose-600">{{ $stats['ig_sampled'] ? number_format($stats['total_likes']) : '—' }}</p>
+            <p class="text-xs text-slate-400 mt-1">Upar wale IG posts par</p>
         </div>
 
         <div class="bg-white p-5 rounded-xl border border-slate-200 shadow-sm">
             <div class="flex items-center justify-between text-slate-500 mb-2">
-                <span class="text-xs font-bold uppercase tracking-wider">Comments &amp; Answers</span>
+                <span class="text-xs font-bold uppercase tracking-wider">IG Comments</span>
                 <span class="text-lg">💬</span>
             </div>
-            <p class="text-3xl font-extrabold text-amber-600">{{ number_format($stats['total_comments']) }}</p>
-            <p class="text-xs text-slate-400 mt-1">Quiz options &amp; replies</p>
+            <p class="text-3xl font-extrabold text-amber-600">{{ $stats['ig_sampled'] ? number_format($stats['total_comments']) : '—' }}</p>
+            <p class="text-xs text-slate-400 mt-1">Upar wale IG posts par</p>
         </div>
     </div>
 
@@ -66,7 +66,11 @@
                 <h2 class="font-bold text-slate-800 text-sm flex items-center gap-2">
                     <span>📸</span> Recent Instagram Posts &amp; Live Engagement
                 </h2>
-                <span class="text-xs bg-pink-50 text-pink-700 px-2.5 py-1 rounded-full font-semibold border border-pink-200">Graph API Connected</span>
+                @if ($igConnected)
+                    <span class="text-xs bg-pink-50 text-pink-700 px-2.5 py-1 rounded-full font-semibold border border-pink-200">Graph API Connected</span>
+                @else
+                    <a href="{{ route('admin.instagram.index') }}" class="text-xs bg-slate-100 text-slate-600 px-2.5 py-1 rounded-full font-semibold border border-slate-200 hover:bg-slate-200">Instagram connect nahi →</a>
+                @endif
             </div>
 
             @if (empty($recentIgInsights))
@@ -118,20 +122,25 @@
         <div class="space-y-6">
             {{-- Best Posting Times Recommendation --}}
             <div class="bg-white rounded-xl border border-slate-200 p-5 shadow-sm">
-                <h3 class="font-bold text-slate-800 text-sm mb-3 flex items-center gap-2">
-                    <span>⏰</span> Best Time to Post (AI Suggested)
+                <h3 class="font-bold text-slate-800 text-sm mb-1 flex items-center gap-2">
+                    <span>⏰</span> Best Time to Post
                 </h3>
-                <div class="space-y-3">
-                    @foreach ($bestHours as $h)
-                        <div class="p-2.5 rounded-lg bg-slate-50 border border-slate-100 text-xs">
-                            <div class="flex items-center justify-between mb-1">
-                                <span class="font-bold text-slate-800">{{ $h['time'] }}</span>
-                                <span class="font-semibold text-emerald-600">{{ $h['engagement'] }}</span>
+                <p class="text-[11px] text-slate-400 mb-3">Aapke recent IG posts — kis ghante post kiye gaye posts par sabse zyada likes + comments aaye.</p>
+                @if (empty($bestHours))
+                    <p class="text-xs text-slate-400">Abhi kaafi data nahi — har ghante ke kam se kam 2 posts chahiye.</p>
+                @else
+                    <div class="space-y-3">
+                        @foreach ($bestHours as $h)
+                            <div class="p-2.5 rounded-lg bg-slate-50 border border-slate-100 text-xs">
+                                <div class="flex items-center justify-between mb-1">
+                                    <span class="font-bold text-slate-800">{{ $h['time'] }}</span>
+                                    <span class="font-semibold text-emerald-600">avg {{ $h['avg'] }}</span>
+                                </div>
+                                <p class="text-slate-500 text-[11px]">{{ $h['posts'] }} posts</p>
                             </div>
-                            <p class="text-slate-500 text-[11px]">{{ $h['type'] }}</p>
-                        </div>
-                    @endforeach
-                </div>
+                        @endforeach
+                    </div>
+                @endif
             </div>
 
             {{-- Top Categories Breakdown --}}

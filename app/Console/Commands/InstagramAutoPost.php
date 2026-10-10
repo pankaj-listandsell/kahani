@@ -2,6 +2,8 @@
 
 namespace App\Console\Commands;
 
+use App\Console\Commands\Concerns\HandlesAutoPostFailures;
+use App\Exceptions\CardBusyException;
 use App\Models\Setting;
 use App\Models\Story;
 use App\Models\User;
@@ -11,6 +13,8 @@ use Illuminate\Support\Carbon;
 
 class InstagramAutoPost extends Command
 {
+    use HandlesAutoPostFailures;
+
     protected $signature = 'instagram:auto-post {--force : Ignore enabled + window + interval checks and post one now} {--user= : Sirf is user id ke liye chalao}';
 
     protected $description = 'Har user ke apne Instagram account par next pending card auto-post karo (unke time windows ke andar)';
@@ -61,6 +65,12 @@ class InstagramAutoPost extends Command
             return;
         }
 
+        if (! $force && $until = $this->cooldownUntil($uid, 'ig', $now)) {
+            $this->warn("User #{$uid}: Instagram cooldown (until {$until}) — skip.");
+
+            return;
+        }
+
         if (! $force) {
             $window = $this->activeWindow($uid, $now);
             if (! $window) {
@@ -94,10 +104,13 @@ class InstagramAutoPost extends Command
 
         try {
             $id = $type === 'reel' ? $instagram->postReel($card) : $instagram->postCard($card);
-            Setting::putFor($uid, 'ig_auto_last_post_at', $now->toIso8601String());
+            $this->recordSuccess($uid, 'ig', $now);
             $this->info("User #{$uid}: posted {$type} card #{$card->id} → media {$id}");
+        } catch (CardBusyException $e) {
+            $this->warn("User #{$uid}: " . $e->getMessage()); // button se post ho raha hai — slot rehne do
         } catch (\Throwable $e) {
             $this->error("User #{$uid} card #{$card->id} failed: " . $e->getMessage());
+            $this->recordFailure($uid, 'ig', $card, $e, $now);
         }
     }
 
@@ -183,7 +196,7 @@ class InstagramAutoPost extends Command
             if (! $story->targetsPlatform('instagram')) {
                 continue; // ye story Instagram ke liye target nahi
             }
-            $isCollection = in_array($story->type, ['shayari', 'joke', 'quote', 'quiz', 'status', 'fact', 'yoga', 'ukhana'], true);
+            $isCollection = $story->isCollection();
             foreach ($story->parts as $part) {
                 foreach ($part->cards as $card) {
                     // Sirf fresh cards (jo abhi tak kabhi post/queue/fail nahi hue).

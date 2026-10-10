@@ -33,6 +33,9 @@ class FacebookService
     public function forUser(?int $userId): static
     {
         $this->settingsUserId = $userId;
+        // Reel mp4 InstagramService banata hai — usko bhi same user ki
+        // voice/music settings chahiye (cron me koi logged-in user nahi hota).
+        $this->instagram->forUser($userId);
 
         return $this;
     }
@@ -99,18 +102,20 @@ class FacebookService
             throw new \RuntimeException('Facebook configured nahi. Pehle Page ID + token daalo.');
         }
 
-        $caption ??= $this->buildCaption($card);
-
-        $jpeg = $this->instagram->jpegPathFor($card);
-        $imageUrl = $this->publicUrl($jpeg)
-            ?? $this->instagram->uploadToTempHost(Storage::disk('public')->path($jpeg));
-
-        if (! $imageUrl) {
-            $this->markFailed($card, 'Could not upload image to a public host.');
-            throw new \RuntimeException('Could not upload image to a public host.');
-        }
+        // Koi aur (button/cron) isi card ko abhi post kar raha ho to yahin ruk jao
+        $previous = $card->claimFor('fb');
 
         try {
+            $caption ??= $this->buildCaption($card);
+
+            $jpeg = $this->instagram->jpegPathFor($card);
+            $imageUrl = $this->publicUrl($jpeg)
+                ?? $this->instagram->uploadToTempHost(Storage::disk('public')->path($jpeg));
+
+            if (! $imageUrl) {
+                throw new \RuntimeException('Could not upload image to a public host.');
+            }
+
             $res = Http::asForm()->post($this->apiBase() . '/' . $this->pageId() . '/photos', [
                 'url'          => $imageUrl,
                 'caption'      => $caption,
@@ -129,7 +134,9 @@ class FacebookService
         } catch (\Throwable $e) {
             Log::error('FB photo post error', ['card' => $card->id, 'error' => $e->getMessage()]);
             // Rate-limit (FB block) par card ko pending rehne do — baad me retry ho.
-            if (! $e instanceof FacebookRateLimitException) {
+            if ($e instanceof FacebookRateLimitException) {
+                $card->releaseClaim('fb', $previous);
+            } else {
                 $this->markFailed($card, $e->getMessage());
             }
             throw $e;
@@ -149,9 +156,13 @@ class FacebookService
         }
 
         @set_time_limit(300);
-        $caption ??= $this->buildCaption($card);
+
+        // Koi aur (button/cron) isi card ko abhi post kar raha ho to yahin ruk jao
+        $previous = $card->claimFor('fb');
 
         try {
+            $caption ??= $this->buildCaption($card);
+
             // 1) Instagram wala hi reel mp4 (720x1280, voice/music ke saath)
             $mp4 = $this->instagram->mp4PathFor($card);
             $absolute = Storage::disk('public')->path($mp4);
@@ -226,7 +237,9 @@ class FacebookService
         } catch (\Throwable $e) {
             Log::error('FB reel post error', ['card' => $card->id, 'error' => $e->getMessage()]);
             // Rate-limit (FB block) par card ko pending rehne do — baad me retry ho.
-            if (! $e instanceof FacebookRateLimitException) {
+            if ($e instanceof FacebookRateLimitException) {
+                $card->releaseClaim('fb', $previous);
+            } else {
                 $this->markFailed($card, $e->getMessage());
             }
             throw $e;

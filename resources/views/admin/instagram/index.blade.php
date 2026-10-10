@@ -125,14 +125,31 @@
                             <span class="text-xs font-semibold text-slate-600">Enable Auto-Reply</span>
                         </label>
                     </div>
-                    <p class="text-xs text-slate-500 mb-2">Jab koi user Quiz reel par option (A, B, C, D) ya comment karega, system unhe automatic reply karega.</p>
-                    <textarea name="ig_auto_reply_template" rows="2"
+                    <p class="text-xs text-slate-500 mb-3">Jab koi user reel par comment karega, system automatic reply karega. <b>Har line = ek message</b> — har baar inme se koi ek random jaata hai (sab par same reply jaye to Instagram spam maan sakta hai, isliye 3-4 alag message rakhein).</p>
+
+                    <label class="block text-xs font-semibold text-slate-700 mb-1">🎯 A / B / C / D wale comment ka reply</label>
+                    <p class="text-[11px] text-slate-500 mb-1"><code>{option}</code> ki jagah user ka option (A/B/C/D) apne aap aayega.</p>
+                    <textarea name="ig_auto_reply_option_template" rows="3"
+                              class="w-full rounded-lg border border-slate-300 px-3 py-2 text-xs focus:ring-2 focus:ring-rose-400 focus:outline-none mb-3"
+                              placeholder="🎯 Option {option} note ho gaya! Sahi jawab reel ke end me 💡">{{ old('ig_auto_reply_option_template', $settings['ig_auto_reply_option_template']) }}</textarea>
+
+                    <label class="block text-xs font-semibold text-slate-700 mb-1">💬 Baaki sab comments ka reply</label>
+                    <textarea name="ig_auto_reply_template" rows="3"
                               class="w-full rounded-lg border border-slate-300 px-3 py-2 text-xs focus:ring-2 focus:ring-rose-400 focus:outline-none"
                               placeholder="✅ Aapka jawab note ho gaya hai! Sahi jawab janne ke liye reel ko end tak dekhein 🎯">{{ old('ig_auto_reply_template', $settings['ig_auto_reply_template']) }}</textarea>
+                    <p class="text-[11px] text-slate-400 mt-1">Koi textbox khaali chhoda to default message jayega.</p>
                     <div class="mt-2 p-2.5 bg-slate-50 border border-slate-200 rounded-lg text-[11px] text-slate-500">
                         <p class="font-semibold text-slate-700">Meta Webhook Callback URL:</p>
                         <code class="text-rose-600 select-all">{{ url('webhook/instagram') }}</code>
-                        <p class="mt-1">Verify Token: <code class="text-slate-700 font-bold">kahani_auto_engagement_token</code></p>
+                        @if (config('services.instagram_webhook.verify_token'))
+                            <p class="mt-1">Verify Token: <code class="text-slate-700 font-bold">.env ka IG_WEBHOOK_VERIFY_TOKEN</code></p>
+                        @else
+                            <p class="mt-1 text-amber-700">⚠ <code>.env</code> me <code>IG_WEBHOOK_VERIFY_TOKEN</code> set karo (wahi Meta dashboard me daalo).</p>
+                        @endif
+                        @unless (config('services.instagram_webhook.app_secret'))
+                            <p class="mt-1 text-amber-700">⚠ <code>.env</code> me <code>IG_APP_SECRET</code> set karo — iske bina webhook events reject honge.</p>
+                        @endunless
+                        <p class="mt-1">Auto-reply sahi account par jaye, isliye upar <b>Instagram User ID</b> zaroor bharein.</p>
                     </div>
                 </div>
 

@@ -163,7 +163,7 @@ class CardController extends Controller
         if ($mode !== 'music' && filled($card->text) && $tts->isConfigured()) {
             // Style + language wahi hon jo reel builder use karta hai — warna TTS
             // cache miss ho jaata hai aur ek hi card par do Gemini call lag jaati hain.
-            $style = in_array($story->type, ['shayari', 'quote', 'joke', 'yoga', 'quiz', 'ukhana'], true) ? $story->type : 'story';
+            $style = $story->voiceStyle();
             try {
                 $tts->speak(
                     $card->text,

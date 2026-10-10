@@ -25,8 +25,8 @@
             <div>
                 <label class="block text-xs font-bold text-slate-700 uppercase tracking-wide mb-1.5">🌐 Language</label>
                 <select id="language" class="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:ring-2 focus:ring-amber-500 focus:outline-none font-medium">
-                    <option value="gujarati" selected>ગુજરાતી (Gujarati)</option>
-                    <option value="hindi">हिंदी (Hindi)</option>
+                    <option value="gujarati">ગુજરાતી (Gujarati)</option>
+                    <option value="hindi" selected>हिंदी (Hindi)</option>
                     <option value="hinglish">Hinglish</option>
                 </select>
             </div>
@@ -128,13 +128,23 @@
 </div>
 
 @push('scripts')
+@include('admin.partials._canvas_kit')
 <script>
 (function() {
     const CSRF = document.querySelector('meta[name=csrf-token]').content;
     const GEN_URL = @json(route('admin.puzzle.generate'));
     const SAVE_URL = @json(route('admin.puzzle.save'));
 
+    const K = window.CanvasKit;
     let items = [];
+    let itemsLang = 'hindi'; // jis language me items generate hue — canvas text bhi usi me
+
+    const I18N = {
+        gujarati: { find: '⏱️ ૫ સેકન્ડમાં શોધીને કમેન્ટ કરો!', answer: '✅ આ રહ્યો સાચો જવાબ!' },
+        hindi:    { find: '⏱️ 5 सेकंड में ढूंढकर कमेंट करें!', answer: '✅ ये रहा सही जवाब!' },
+        hinglish: { find: '⏱️ 5 second me dhoondh kar comment karo!', answer: '✅ Ye raha sahi jawab!' },
+    };
+    const tr = () => I18N[itemsLang] || I18N.hindi;
 
     const THEMES = {
         dark_gold: { bg: ['#0f0d08', '#1f1807'], text: '#ffffff', oddBg: '#ffb703', oddGlow: 'rgba(255,183,3,0.8)', border: '#f59e0b', hookBg: '#d97706' },
@@ -163,9 +173,11 @@
             if (!d.ok) throw new Error(d.error || 'Failed to generate');
 
             items = d.items;
+            itemsLang = el('language').value;
             el('progressBar').style.width = '80%';
             el('progressText').textContent = 'Rendering canvases…';
 
+            await K.ensureFonts();
             renderAllPreviews();
 
             el('progressBar').style.width = '100%';
@@ -181,7 +193,11 @@
         }
     });
 
-    el('theme').addEventListener('change', () => { if (items.length) renderAllPreviews(); });
+    el('theme').addEventListener('change', async () => {
+        if (!items.length) return;
+        await K.ensureFonts();
+        renderAllPreviews();
+    });
 
     function renderAllPreviews() {
         el('emptyState').classList.add('hidden');
@@ -206,12 +222,12 @@
 
             cardBox.innerHTML = `
                 <div class="p-3 bg-slate-50 border-b border-slate-100 flex items-center justify-between text-xs font-bold text-slate-700">
-                    <span>Puzzle #${idx + 1}: Find "${item.odd_char}"</span>
-                    <span class="px-2 py-0.5 rounded bg-amber-100 text-amber-800">Row ${item.odd_row}, Col ${item.odd_col}</span>
+                    <span>Puzzle #${idx + 1}: Find "${K.esc(item.odd_char)}"</span>
+                    <span class="px-2 py-0.5 rounded bg-amber-100 text-amber-800">Row ${K.esc(item.odd_row)}, Col ${K.esc(item.odd_col)}</span>
                 </div>
                 <div class="p-3 flex-1 flex flex-col items-center"></div>
                 <div class="p-3 bg-slate-50 border-t border-slate-100 text-xs text-slate-500">
-                    <p class="font-medium text-slate-700 truncate">${item.hook}</p>
+                    <p class="font-medium text-slate-700 truncate">${K.esc(item.hook)}</p>
                 </div>
             `;
             cardBox.querySelector('.flex-1').appendChild(canvasQ);
@@ -222,6 +238,7 @@
     function drawPuzzle(c, item, t, isAnswer) {
         const ctx = c.getContext('2d');
         const W = 1080, H = 1920;
+        K.reset(ctx);
 
         // Gradient Background
         ctx.fillStyle = '#0a0d14';
@@ -232,21 +249,13 @@
         ctx.fillStyle = grad;
         ctx.fillRect(0, 0, W, H);
 
-        // Header Box (Dynamic Height & Padding)
+        // Header Box — hook max 3 lines; box ki height lines ke hisaab se
         const headerY = 120;
         const headerW = W - 140;
         const headerX = 70;
 
-        // Auto-scale hook text font size
-        let hookFont = 48;
-        ctx.font = `bold ${hookFont}px "Noto Sans Devanagari", "Noto Sans Gujarati", sans-serif`;
-        while (ctx.measureText(item.hook).width > (headerW - 60) && hookFont > 32) {
-            hookFont -= 2;
-            ctx.font = `bold ${hookFont}px "Noto Sans Devanagari", "Noto Sans Gujarati", sans-serif`;
-        }
-
-        const isMultiLine = ctx.measureText(item.hook).width > (headerW - 60);
-        const headerH = isMultiLine ? 170 : 130;
+        const hook = K.fit(ctx, item.hook, { maxW: headerW - 60, maxH: 3 * 48 * 1.25, size: 48, minSize: 30, lineHeight: 1.25 });
+        const headerH = Math.max(130, hook.lines.length * hook.lh + 60);
 
         ctx.beginPath();
         ctx.fillStyle = t.hookBg;
@@ -259,19 +268,15 @@
         ctx.fillStyle = '#ffffff';
         ctx.textAlign = 'center';
         ctx.textBaseline = 'middle';
-
-        if (isMultiLine) {
-            wrapText(ctx, item.hook, W / 2, headerY + headerH / 2, headerW - 60, hookFont * 1.25);
-        } else {
-            ctx.font = `bold ${hookFont}px "Noto Sans Devanagari", "Noto Sans Gujarati", sans-serif`;
-            ctx.fillText(item.hook, W / 2, headerY + headerH / 2);
-        }
+        ctx.font = K.font(hook.size);
+        K.drawLines(ctx, hook.lines, W / 2, headerY + headerH / 2, hook.lh);
 
         // Subtitle instructions
         const subY = headerY + headerH + 60;
+        const subText = isAnswer ? tr().answer : tr().find;
         ctx.fillStyle = t.oddBg;
-        ctx.font = 'bold 42px "Noto Sans Devanagari", "Noto Sans Gujarati", sans-serif';
-        ctx.fillText(isAnswer ? '✅ આ રહ્યો સાચો જવાબ!' : '⏱️ ૫ સેકન્ડમાં શોધીને કમેન્ટ કરો!', W / 2, subY);
+        K.fitOneLine(ctx, subText, W - 120, 42, 30);
+        ctx.fillText(subText, W / 2, subY);
 
         // Puzzle Grid Container
         const startX = 90, startY = subY + 70;
@@ -323,29 +328,6 @@
         ctx.fillText('LIKE • SHARE • FOLLOW FOR MORE', W / 2, 1780);
     }
 
-    function wrapText(ctx, text, x, y, maxWidth, lineHeight) {
-        if (!text) return;
-        const words = String(text).split(' ');
-        let line = '';
-        const lines = [];
-        for (let n = 0; n < words.length; n++) {
-            const testLine = line + words[n] + ' ';
-            const metrics = ctx.measureText(testLine);
-            if (metrics.width > maxWidth && n > 0) {
-                lines.push(line);
-                line = words[n] + ' ';
-            } else {
-                line = testLine;
-            }
-        }
-        lines.push(line);
-
-        const startY = y - ((lines.length - 1) * lineHeight) / 2;
-        lines.forEach((l, i) => {
-            ctx.fillText(l.trim(), x, startY + i * lineHeight);
-        });
-    }
-
     // Save All Puzzles
     el('saveBtn').addEventListener('click', async () => {
         if (!items.length) return;
@@ -354,6 +336,7 @@
         el('progressBox').classList.remove('hidden');
         el('progressBar').style.width = '30%';
         el('progressText').textContent = 'Rendering WebP cards…';
+        await K.ensureFonts();
 
         const curTheme = THEMES[el('theme').value] || THEMES.dark_gold;
         const offQ = document.createElement('canvas'); offQ.width = 1080; offQ.height = 1920;
@@ -381,7 +364,7 @@
             const r = await fetch(SAVE_URL, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json', 'X-CSRF-TOKEN': CSRF, 'Accept': 'application/json' },
-                body: JSON.stringify({ category: 'Puzzle', language: el('language').value, cards: cardsToSave })
+                body: JSON.stringify({ category: 'Puzzle', language: itemsLang, cards: cardsToSave })
             });
             const d = await r.json();
             if (!d.ok) throw new Error(d.error || 'Failed to save');

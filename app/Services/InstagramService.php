@@ -236,20 +236,22 @@ class InstagramService
             throw new \RuntimeException('Instagram is not configured. Fill the settings first.');
         }
 
-        $caption ??= $this->buildCaption($card);
-
-        // Instagram sirf JPEG leta hai → JPEG banao → public URL do
-        // (pehle apna hosting URL, warna temp host).
-        $jpeg = $this->jpegPathFor($card);
-        $imageUrl = $this->publicMediaUrl($jpeg)
-            ?? $this->uploadToTempHost(Storage::disk('public')->path($jpeg));
-
-        if (! $imageUrl) {
-            $this->markFailed($card, 'Could not upload image to a public host.');
-            throw new \RuntimeException('Could not upload image to a public host.');
-        }
+        // Koi aur (button/cron) isi card ko abhi post kar raha ho to yahin ruk jao
+        $card->claimFor('ig');
 
         try {
+            $caption ??= $this->buildCaption($card);
+
+            // Instagram sirf JPEG leta hai → JPEG banao → public URL do
+            // (pehle apna hosting URL, warna temp host).
+            $jpeg = $this->jpegPathFor($card);
+            $imageUrl = $this->publicMediaUrl($jpeg)
+                ?? $this->uploadToTempHost(Storage::disk('public')->path($jpeg));
+
+            if (! $imageUrl) {
+                throw new \RuntimeException('Could not upload image to a public host.');
+            }
+
             $params = [
                 'image_url'    => $imageUrl,
                 'caption'      => $caption,
@@ -301,9 +303,13 @@ class InstagramService
         }
 
         @set_time_limit(300);
-        $caption ??= $this->buildCaption($card);
+
+        // Koi aur (button/cron) isi card ko abhi post kar raha ho to yahin ruk jao
+        $card->claimFor('ig');
 
         try {
+            $caption ??= $this->buildCaption($card);
+
             // 1) Card image → MP4 video
             $mp4 = $this->mp4PathFor($card);
 
@@ -781,9 +787,7 @@ class InstagramService
     /** Narration ka andaaz — shayari/quote/joke expressive, yoga shaant, warna kahani. */
     protected function voiceStyle(PartCard $card): string
     {
-        $type = $card->part?->story?->type;
-
-        return in_array($type, ['shayari', 'quote', 'joke', 'yoga', 'ukhana'], true) ? $type : 'story';
+        return $card->part?->story?->voiceStyle() ?? 'story';
     }
 
     /**

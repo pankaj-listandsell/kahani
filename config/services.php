@@ -65,6 +65,14 @@ return [
         'key' => env('PIXABAY_KEY'),
     ],
 
+    // Instagram comment auto-reply webhook (Meta App dashboard → Webhooks).
+    // verify_token: wahi jo Meta dashboard me "Verify Token" me daala.
+    // app_secret:   App secret — har webhook POST ka signature isi se verify hota hai.
+    'instagram_webhook' => [
+        'verify_token' => env('IG_WEBHOOK_VERIFY_TOKEN'),
+        'app_secret'   => env('IG_APP_SECRET'),
+    ],
+
     // Google / YouTube Data API v3 (OAuth) — Shorts auto-upload
     // client id/secret Google Cloud Console se aate hain (app-level, sabhi users share karte hain).
     // Har user apna channel OAuth se connect karta hai (refresh token per-user settings me).

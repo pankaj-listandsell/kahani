@@ -31,6 +31,31 @@ class Story extends Model
     ];
 
     /**
+     * Collection types — inke cards auto-post me RANDOM order me jaate hain.
+     * Baaki (kahani) cards sequence me. Naya studio type yahin add karo.
+     */
+    public const COLLECTION_TYPES = [
+        'shayari', 'joke', 'quote', 'quiz', 'status', 'fact', 'yoga', 'ukhana',
+        'puzzle', 'mind_reader', 'this_or_that', 'name_secret',
+    ];
+
+    public function isCollection(): bool
+    {
+        return in_array($this->type, self::COLLECTION_TYPES, true);
+    }
+
+    /** TTS narration ka andaaz (GeminiTtsService::instructionFor ka style). */
+    public function voiceStyle(): string
+    {
+        return match ($this->type) {
+            'shayari', 'quote', 'joke', 'yoga', 'quiz', 'ukhana' => $this->type,
+            // Interactive studios — quiz-master wala andaaz
+            'puzzle', 'mind_reader', 'this_or_that', 'name_secret' => 'quiz',
+            default => 'story',
+        };
+    }
+
+    /**
      * Kya is story ko diye gaye platform par auto-post karna hai?
      * null/empty platforms = sab platforms (default).
      */

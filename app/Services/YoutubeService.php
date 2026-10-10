@@ -432,9 +432,7 @@ class YoutubeService
     /** Narration ka andaaz — shayari/quote/joke expressive, yoga shaant, warna kahani. */
     protected function voiceStyle(PartCard $card): string
     {
-        $type = $card->part?->story?->type;
-
-        return in_array($type, ['shayari', 'quote', 'joke', 'yoga', 'ukhana'], true) ? $type : 'story';
+        return $card->part?->story?->voiceStyle() ?? 'story';
     }
 
     /**
@@ -685,6 +683,9 @@ class YoutubeService
         }
 
         @set_time_limit(900);
+
+        // Koi aur (button/cron) isi card ko abhi upload kar raha ho to yahin ruk jao
+        $card->claimFor('yt');
 
         try {
             $mp4 = $this->mp4ForCard($card);
