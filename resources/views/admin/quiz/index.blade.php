@@ -14,23 +14,26 @@
                 <input type="text" id="category" list="catList" placeholder="e.g. Constable GK"
                        class="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm">
                 <datalist id="catList">
-                    {{-- Exam-focused --}}
-                    <option value="Constable GK"><option value="SSC GK"><option value="Railway (RRB) GK">
-                    <option value="Police Exam GK"><option value="Army / Defence GK"><option value="Banking Awareness">
-                    {{-- General Knowledge --}}
-                    <option value="General Knowledge (GK)"><option value="Current Affairs"><option value="Static GK">
-                    <option value="Important Days"><option value="Awards & Honours"><option value="Books & Authors">
-                    <option value="Sports GK"><option value="Famous Personalities">
-                    {{-- Subjects --}}
-                    <option value="Indian History"><option value="World History"><option value="Indian Geography">
-                    <option value="World Geography"><option value="Indian Polity / Constitution"><option value="Economics">
-                    <option value="General Science"><option value="Physics"><option value="Chemistry"><option value="Biology">
-                    <option value="Computer Knowledge"><option value="Environment & Ecology"><option value="Space & Technology">
-                    {{-- Aptitude --}}
-                    <option value="Reasoning"><option value="Maths / Quantitative Aptitude"><option value="English Grammar">
-                    {{-- Culture / misc --}}
-                    <option value="Indian Culture"><option value="Indian Festivals"><option value="Rajasthan GK">
-                    <option value="Madhya Pradesh GK"><option value="UP GK"><option value="Bihar GK">
+                    <option value="Constable GK">
+                    <option value="SSC GK">
+                    <option value="Police Exam GK">
+                    <option value="General Knowledge (GK)">
+                    <option value="Current Affairs">
+                    <option value="Static GK">
+                    <option value="Important Days">
+                    <option value="Sports GK">    
+                    <option value="Indian History">
+                    <option value="World History">
+                    <option value="Indian Geography">
+                    <option value="World Geography">
+                    <option value="Indian Polity / Constitution">   
+                    <option value="General Science">
+                    <option value="Physics">
+                    <option value="Chemistry">
+                    <option value="Biology">
+                    <option value="Computer Knowledge">
+                    <option value="Reasoning">
+                    <option value="Maths / Quantitative Aptitude">
                 </datalist>
             </div>
             <div>
@@ -43,7 +46,7 @@
             </div>
             <div>
                 <label class="block text-sm font-medium mb-1">Kitne cards?</label>
-                <input type="number" id="count" value="5" min="1" max="30"
+                <input type="number" id="count" value="10" min="1" max="30" autocomplete="off"
                        class="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm">
                 <p id="countHint" class="text-[11px] text-slate-400 mt-1"></p>
             </div>
@@ -55,10 +58,11 @@
         <div class="grid sm:grid-cols-2 lg:grid-cols-4 gap-4">
             <div>
                 <label class="block text-sm font-medium mb-1">🖼 Card Design</label>
-                <select id="style" class="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm">
+                {{-- autocomplete=off: reload par browser purani chuni value wapas na laaye, hamesha default --}}
+                <select id="style" autocomplete="off" class="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm">
                     <option value="simple">✨ Simple (header + footer)</option>
                     <option value="list">📋 Q&amp;A List (kai sawaal ek card me)</option>
-                    <option value="poster">🏆 Daily GK Quiz</option>
+                    <option value="poster" selected>🏆 Daily GK Quiz</option>
                     <option value="sahitya">🪶 Sahitya Parchment (2×2 grid)</option>
                     <option value="clean">📝 Classic (theme)</option>
                 </select>
@@ -67,11 +71,8 @@
                     Options bhi dikhao <span class="text-slate-400">(kam sawaal fit honge)</span>
                 </label>
             </div>
-            <div id="headerWrap">
-                <label class="block text-sm font-medium mb-1">📌 Header text</label>
-                <input type="text" id="headerText" value="Daily GK Quiz" placeholder="Daily GK Quiz"
-                       class="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm">
-            </div>
+            {{-- Header text ab fixed — Simple / List / Sahitya designs card ke upar yahi likhte hain --}}
+            <input type="hidden" id="headerText" value="Daily GK Quiz">
             <div>
                 <label class="block text-sm font-medium mb-1">Watermark / Handle <span class="text-slate-400">(optional)</span></label>
                 <input type="text" id="handle" placeholder="@yourpage"
@@ -1539,7 +1540,6 @@ el('genBtn').addEventListener('click', async () => {
 // badge banta hai); "Options bhi dikhao" sirf List me
 function syncStyleFields() {
     const s = el('style').value;
-    el('headerWrap').style.display = (s === 'simple' || s === 'list' || s === 'sahitya') ? '' : 'none';
     el('listOptsWrap').classList.toggle('hidden', s !== 'list');
     el('listOptsWrap').classList.toggle('flex', s === 'list');
     el('countHint').textContent = s === 'list'
