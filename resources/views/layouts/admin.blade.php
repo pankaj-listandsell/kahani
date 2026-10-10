@@ -74,6 +74,15 @@
                     <p class="text-xs text-rose-200 truncate">{{ auth()->user()->email }}</p>
                 </div>
             </div>
+            @if (auth()->user()->isAdmin() && Route::has('admin.cache.clear'))
+                <form method="POST" action="{{ route('admin.cache.clear') }}">
+                    @csrf
+                    <button class="w-full mt-1 text-left px-3 py-2 rounded-lg text-sm hover:bg-white/10 flex items-center gap-3"
+                            title="Server par nayi files daalne ke baad dabao">
+                        <span class="text-lg">🧹</span> Clear Cache
+                    </button>
+                </form>
+            @endif
             <form method="POST" action="{{ route('logout') }}">
                 @csrf
                 <button class="w-full mt-1 text-left px-3 py-2 rounded-lg text-sm hover:bg-white/10 flex items-center gap-3">

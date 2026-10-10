@@ -138,6 +138,41 @@
                               class="w-full rounded-lg border border-slate-300 px-3 py-2 text-xs focus:ring-2 focus:ring-rose-400 focus:outline-none"
                               placeholder="✅ Aapka jawab note ho gaya hai! Sahi jawab janne ke liye reel ko end tak dekhein 🎯">{{ old('ig_auto_reply_template', $settings['ig_auto_reply_template']) }}</textarea>
                     <p class="text-[11px] text-slate-400 mt-1">Koi textbox khaali chhoda to default message jayega.</p>
+
+                    {{-- DM to commenter (Instagram private reply) --}}
+                    <div class="mt-4 p-3 rounded-lg border border-violet-200 bg-violet-50/40">
+                        <p class="text-sm font-semibold text-slate-800 mb-1">📩 Comment karne wale ko DM</p>
+                        <p class="text-[11px] text-slate-500 mb-3">Ek comment par sirf ek DM jaata hai (Instagram ka niyam), aur ek user ko ek reel par ek hi DM — kai comment kare to bhi. Pehle keyword dekha jaata hai, keyword na mile to sahi jawab.</p>
+
+                        <label class="flex items-center gap-2 cursor-pointer mb-1">
+                            <input type="checkbox" name="ig_all_dm_enabled" value="1" class="accent-violet-600 w-4 h-4" @checked($settings['ig_all_dm_enabled'] === '1')>
+                            <span class="text-xs font-semibold text-slate-700">🔗 Har comment karne wale ko DM — sabse upar ye link / message (sab reels par)</span>
+                        </label>
+                        <p class="text-[11px] text-slate-500 mb-1">Ye text har DM me <b>sabse upar</b> jaata hai. Neeche sahi jawab (answer wali reel par) ya keyword wala message apne aap judta hai; kuch na ho to sirf yahi jaata hai. Har line = ek message (random).</p>
+                        <textarea name="ig_all_dm_template" rows="2"
+                                  class="w-full rounded-lg border border-slate-300 px-3 py-2 text-xs focus:ring-2 focus:ring-violet-400 focus:outline-none mb-3"
+                                  placeholder="🔗 Aisi aur quiz ke liye hamari website dekho 👉 https://example.com">{{ old('ig_all_dm_template', $settings['ig_all_dm_template']) }}</textarea>
+
+                        <label class="flex items-center gap-2 cursor-pointer mb-1">
+                            <input type="checkbox" name="ig_auto_dm_enabled" value="1" class="accent-violet-600 w-4 h-4" @checked($settings['ig_auto_dm_enabled'] === '1')>
+                            <span class="text-xs font-semibold text-slate-700">🎯 Quiz / Puzzle / Mind Reader reel par sahi jawab DM me bhejo</span>
+                        </label>
+                        <p class="text-[11px] text-slate-500 mb-1">Har line = ek message (random). <code>{answer}</code> ki jagah us reel ka sahi jawab aayega. Sirf un reels par jinka answer save hai.</p>
+                        <textarea name="ig_auto_dm_template" rows="3"
+                                  class="w-full rounded-lg border border-slate-300 px-3 py-2 text-xs focus:ring-2 focus:ring-violet-400 focus:outline-none mb-3"
+                                  placeholder="📩 Comment karne ke liye shukriya! Ye raha sahi jawab 👇 {answer}">{{ old('ig_auto_dm_template', $settings['ig_auto_dm_template']) }}</textarea>
+
+                        <label class="flex items-center gap-2 cursor-pointer mb-1">
+                            <input type="checkbox" name="ig_keyword_dm_enabled" value="1" class="accent-violet-600 w-4 h-4" @checked($settings['ig_keyword_dm_enabled'] === '1')>
+                            <span class="text-xs font-semibold text-slate-700">🔑 Keyword wale comment par DM bhejo</span>
+                        </label>
+                        <p class="text-[11px] text-slate-500 mb-1">Har line: <code>KEYWORD = message</code>. Ek line me kai keyword comma se. Comment me wo shabd ho to DM jaata hai (chhota/bada akshar farak nahi padta). Message me <code>{answer}</code> bhi likh sakte ho.</p>
+                        <textarea name="ig_keyword_dm_rules" rows="4"
+                                  class="w-full rounded-lg border border-slate-300 px-3 py-2 text-xs font-mono focus:ring-2 focus:ring-violet-400 focus:outline-none"
+                                  placeholder="ANSWER, JAWAB = 🎯 Ye raha sahi jawab 👇 {answer}&#10;LINK = 🔗 Ye raha link: https://...&#10;STORY, KAHANI = 📖 Poori kahani yahan padho: https://...">{{ old('ig_keyword_dm_rules', $settings['ig_keyword_dm_rules']) }}</textarea>
+
+                        <p class="text-[11px] text-amber-700 mt-2">⚠ DM ke liye: Instagram app → Settings → Messages → <b>Connected tools → Allow access to messages</b> ON karein, aur Meta App me <code>instagram_business_manage_messages</code> permission chahiye.</p>
+                    </div>
                     <div class="mt-2 p-2.5 bg-slate-50 border border-slate-200 rounded-lg text-[11px] text-slate-500">
                         <p class="font-semibold text-slate-700">Meta Webhook Callback URL:</p>
                         <code class="text-rose-600 select-all">{{ url('webhook/instagram') }}</code>

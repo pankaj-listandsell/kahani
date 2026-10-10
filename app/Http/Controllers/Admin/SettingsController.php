@@ -5,8 +5,10 @@ namespace App\Http\Controllers\Admin;
 use App\Http\Controllers\Controller;
 use App\Models\Setting;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Validation\Rules\Password;
 
 class SettingsController extends Controller
@@ -14,6 +16,34 @@ class SettingsController extends Controller
     public function index()
     {
         return view('admin.settings.index', ['user' => Auth::user()]);
+    }
+
+    /**
+     * Server par nayi files upload karne ke baad — config/route/view cache saaf karo
+     * (terminal me `php artisan view:clear` wagairah chalane ki zaroorat nahi).
+     *
+     * App ka data cache (cache:clear) jaan-boojhkar NAHI — usme webhook ke
+     * "is comment ko reply/DM ho chuka" wale keys aur scheduler locks hote hain;
+     * unhe mitane se duplicate reply/DM ja sakte hain.
+     */
+    public function clearCache()
+    {
+        $done = [];
+        foreach (['config:clear', 'route:clear', 'view:clear', 'event:clear', 'clear-compiled'] as $cmd) {
+            try {
+                Artisan::call($cmd);
+                $done[] = $cmd;
+            } catch (\Throwable $e) {
+                Log::warning('Clear cache step failed', ['cmd' => $cmd, 'error' => $e->getMessage()]);
+            }
+        }
+
+        // Kuch hosting par PHP purani files yaad rakhta hai (OPcache) — use bhi reset
+        if (function_exists('opcache_reset')) {
+            @opcache_reset();
+        }
+
+        return back()->with('success', '🧹 Cache clear ho gaya (' . implode(', ', $done) . ').');
     }
 
     /**

@@ -3,12 +3,14 @@
 namespace App\Http\Controllers\Admin;
 
 use App\Http\Controllers\Controller;
+use App\Models\PartCard;
 use App\Models\Setting;
 use App\Services\InstagramService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Str;
 
 /**
  * Meta webhook (public route — koi logged-in user nahi hota). Isliye har setting
@@ -21,12 +23,20 @@ use Illuminate\Support\Facades\Log;
 class InstagramWebhookController extends Controller
 {
     /** A/B/C/D comment ke default replies — {option} ki jagah user ka option aata hai. Har line = ek message. */
-    public const DEFAULT_OPTION_REPLIES = "🎯 Option {option} note ho gaya! Sahi jawab reel ke end me 💡\n"
-        . "✅ {option} lock kar diya! Dekhte hain sahi hai ya nahi 🤔\n"
-        . '🔥 Aapne {option} chuna! Answer janne ke liye reel dobara dekho 👀';
+    public const DEFAULT_OPTION_REPLIES = "🎯 Option {option} lock ho gaya! Dekhte hain kitne log sahi hain 🤔\n"
+        . "✅ {option} note kar liya! Dekhte hain sahi hai ya nahi 🤔\n"
+        . '🔥 Aapne {option} chuna! Confident ho ya guess kiya? 😄';
 
     /** Baaki comments ke default replies. Har line = ek message. */
     public const DEFAULT_REPLIES = '✅ Aapka jawab note ho gaya hai! Sahi jawab janne ke liye reel ko end tak dekhein 🎯';
+
+    /**
+     * Comment karne wale ko DM me sahi jawab — {answer} ki jagah card ka answer
+     * (alag paragraph me) aata hai. Har line = ek message.
+     */
+    public const DEFAULT_DMS = "📩 Comment karne ke liye shukriya! Ye raha sahi jawab 👇 {answer} Kitna sahi tha aapka? 😄\n"
+        . "🎯 Aapke liye special 🤫 {answer} Agle quiz ke liye ready raho! 🔥\n"
+        . '🧠 Ye raha is reel ka jawab 👇 {answer} Dosto ko bhi challenge karo 😎';
 
     /**
      * Webhook verification for Meta App (GET request).
@@ -61,7 +71,15 @@ class InstagramWebhookController extends Controller
             $accountId = (string) ($entry['id'] ?? '');
             $userId = $this->userForAccount($accountId);
 
-            if (! $userId || Setting::getFor($userId, 'ig_auto_reply_enabled', '0') !== '1') {
+            if (! $userId) {
+                continue;
+            }
+
+            $replyOn = Setting::getFor($userId, 'ig_auto_reply_enabled', '0') === '1';
+            $dmOn    = Setting::getFor($userId, 'ig_auto_dm_enabled', '0') === '1'
+                || Setting::getFor($userId, 'ig_keyword_dm_enabled', '0') === '1'
+                || Setting::getFor($userId, 'ig_all_dm_enabled', '0') === '1';
+            if (! $replyOn && ! $dmOn) {
                 continue;
             }
 
@@ -85,12 +103,20 @@ class InstagramWebhookController extends Controller
                     continue;
                 }
 
-                // Meta same event dobara bhej sakta hai — ek comment ko ek hi reply
+                // Meta same event dobara bhej sakta hai — ek comment ko ek hi reply/DM
                 if (! Cache::add("ig_webhook_reply.{$commentId}", true, now()->addDay())) {
                     continue;
                 }
 
-                $this->replyToComment($instagram->forUser($userId), $userId, $commentId, $text);
+                $instagram->forUser($userId);
+
+                if ($replyOn) {
+                    $this->replyToComment($instagram, $userId, $commentId, $text);
+                }
+
+                if ($dmOn) {
+                    $this->sendDm($instagram, $userId, $commentId, $fromId, (string) ($value['media']['id'] ?? ''), $text);
+                }
             }
         }
 
@@ -149,6 +175,139 @@ class InstagramWebhookController extends Controller
         $lines = $this->lines(Setting::getFor($userId, 'ig_auto_reply_template'), self::DEFAULT_REPLIES);
 
         return $lines[array_rand($lines)];
+    }
+
+    /**
+     * Commenter ko DM (Instagram "private reply" — ek comment par sirf ek, 7 din ke andar).
+     *  1) Keyword DM ON aur comment me koi keyword (jaise LINK) → us keyword ka message
+     *  2) warna Answer DM ON aur reel ka card answer wala hai → sahi jawab
+     *  3) "Har DM ke upar link" ON → ye text sabse upar (aur 1/2 kuch na ho to sirf yahi)
+     * Ek user ko ek reel par ek hi DM (kai comment kare to bhi) — spam na lage.
+     */
+    protected function sendDm(InstagramService $instagram, int $userId, string $commentId, string $fromId, string $mediaId, string $text): void
+    {
+        $answer = $this->answerForMedia($userId, $mediaId);
+
+        $message = null;
+        if (Setting::getFor($userId, 'ig_keyword_dm_enabled', '0') === '1') {
+            $message = $this->keywordMessage((string) Setting::getFor($userId, 'ig_keyword_dm_rules'), $text, $answer);
+        }
+        if ($message === null && $answer !== null && Setting::getFor($userId, 'ig_auto_dm_enabled', '0') === '1') {
+            $lines = $this->lines(Setting::getFor($userId, 'ig_auto_dm_template'), self::DEFAULT_DMS);
+            $line = $lines[array_rand($lines)];
+            // {answer} likhna bhool gaye to bhi jawab jaye — message ke neeche jod do
+            if (! str_contains($line, '{answer}')) {
+                $line .= ' {answer}';
+            }
+            $message = $this->fillAnswer($line, $answer);
+        }
+        // 3) "Har DM ke upar link" — ON ho to har comment karne wale ko DM jaata hai (sab reels):
+        //    upar ye link/text, neeche keyword ya answer wala message (ho to).
+        if (Setting::getFor($userId, 'ig_all_dm_enabled', '0') === '1') {
+            $lines = $this->lines(Setting::getFor($userId, 'ig_all_dm_template'), '');
+            if ($lines) {
+                $top = $lines[array_rand($lines)];
+                $message = $message === null ? $top : $top . "\n\n" . $message;
+            }
+        }
+        if ($message === null) {
+            Log::info('Instagram DM skipped', [
+                'comment_id' => $commentId,
+                'media_id'   => $mediaId,
+                'reason'     => $answer === null
+                    ? 'is reel ka answer save nahi (ya admin panel se post nahi hui) aur koi keyword match nahi'
+                    : 'answer DM switch OFF aur koi keyword match nahi',
+            ]);
+
+            return;
+        }
+
+        $key = 'ig_dm.' . ($mediaId !== '' ? $mediaId : 'x') . '.' . ($fromId !== '' ? $fromId : $commentId);
+        if (! Cache::add($key, true, now()->addDays(7))) {
+            Log::info('Instagram DM skipped', [
+                'comment_id' => $commentId,
+                'media_id'   => $mediaId,
+                'reason'     => 'is user ko is reel par pehle hi DM ja chuka (7 din me ek)',
+            ]);
+
+            return;
+        }
+
+        try {
+            $res = Http::withToken((string) $instagram->token())->timeout(20)
+                ->post($instagram->apiBase() . '/' . $instagram->nodeId() . '/messages', [
+                    'recipient' => ['comment_id' => $commentId],
+                    'message'   => ['text' => Str::limit($message, 950)],
+                ]);
+
+            Log::info('Instagram DM sent', [
+                'comment_id'   => $commentId,
+                'to_user'      => $fromId,
+                'ok'           => $res->successful(),
+                'message_id'   => $res->json('message_id'),
+                'recipient_id' => $res->json('recipient_id'),
+                'error'        => $res->json('error.message'),
+            ]);
+
+            if (! $res->successful()) {
+                Cache::forget($key); // fail hua — user agla comment kare to dobara try
+            }
+        } catch (\Throwable $e) {
+            Cache::forget($key);
+            Log::error('Instagram DM failed', ['comment_id' => $commentId, 'error' => $e->getMessage()]);
+        }
+    }
+
+    /** Is reel (IG media id) wale card ka answer — sirf isi user ka card, answer ho tab. */
+    protected function answerForMedia(int $userId, string $mediaId): ?string
+    {
+        if (! ctype_digit($mediaId)) {
+            return null;
+        }
+
+        $card = PartCard::with('part.story')->where('ig_media_id', $mediaId)->first();
+        $answer = trim((string) $card?->answer_text);
+
+        return $answer !== '' && (int) $card->part?->story?->user_id === $userId ? $answer : null;
+    }
+
+    /**
+     * Keyword rules — har line "KEYWORD = message", ek line me kai keyword comma se
+     * ("LINK, LINKS = …"). Same keyword ki kai lines = random me se ek. Comment me
+     * keyword poora shabd hona chahiye (case ignore). {answer} wala rule sirf answer
+     * wali reel par chalta hai.
+     */
+    protected function keywordMessage(string $rules, string $comment, ?string $answer): ?string
+    {
+        $matches = [];
+
+        foreach (preg_split('/\R/', $rules) as $line) {
+            if (! str_contains($line, '=')) {
+                continue;
+            }
+            [$keys, $msg] = array_map('trim', explode('=', $line, 2));
+            if ($msg === '' || (str_contains($msg, '{answer}') && $answer === null)) {
+                continue;
+            }
+
+            foreach (array_filter(array_map('trim', explode(',', $keys)), 'strlen') as $kw) {
+                if (preg_match('/(?<![\p{L}\p{N}])' . preg_quote($kw, '/') . '(?![\p{L}\p{N}])/iu', $comment)) {
+                    $matches[] = $msg;
+                    break;
+                }
+            }
+        }
+
+        return $matches ? $this->fillAnswer($matches[array_rand($matches)], (string) $answer) : null;
+    }
+
+    /** {answer} ko alag paragraph me daalo, taaki DM me saaf dikhe. */
+    protected function fillAnswer(string $message, string $answer): string
+    {
+        $text = str_replace('{answer}', "\n\n{$answer}\n\n", $message);
+        $text = preg_replace('/[ \t]*\n[ \t]*/', "\n", $text); // line ke aage/peeche ke space
+
+        return trim(preg_replace("/\n{3,}/", "\n\n", $text));
     }
 
     /** Textbox ki non-empty lines; khaali ho to default ki lines. */

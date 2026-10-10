@@ -102,6 +102,17 @@ window.CanvasKit = window.CanvasKit || (function () {
         return String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
     }
 
-    return { STACK, font, ensureFonts, reset, wrapLines, fit, drawLines, fitDraw, fitOneLine, esc };
+    /** AI kabhi list (["#a","#b"]) bhejta hai, kabhi text — server ko hamesha text. */
+    function str(v) {
+        return Array.isArray(v) ? v.join(' ') : (v == null ? '' : String(v));
+    }
+
+    /** Save ka error — Laravel validation (422) `message` deta hai, hamara code `error`. */
+    function saveError(d) {
+        const first = d && d.errors ? Object.values(d.errors)[0] : null;
+        return (d && d.error) || (first && first[0]) || (d && d.message) || 'Failed to save';
+    }
+
+    return { STACK, font, ensureFonts, reset, wrapLines, fit, drawLines, fitDraw, fitOneLine, esc, str, saveError };
 })();
 </script>

@@ -82,6 +82,12 @@ class InstagramController extends Controller
             'ig_auto_reply_enabled'  => Setting::get('ig_auto_reply_enabled', '0'),
             'ig_auto_reply_option_template' => Setting::get('ig_auto_reply_option_template', InstagramWebhookController::DEFAULT_OPTION_REPLIES),
             'ig_auto_reply_template'        => Setting::get('ig_auto_reply_template', InstagramWebhookController::DEFAULT_REPLIES),
+            'ig_auto_dm_enabled'            => Setting::get('ig_auto_dm_enabled', '0'),
+            'ig_auto_dm_template'           => Setting::get('ig_auto_dm_template', InstagramWebhookController::DEFAULT_DMS),
+            'ig_keyword_dm_enabled'         => Setting::get('ig_keyword_dm_enabled', '0'),
+            'ig_keyword_dm_rules'           => Setting::get('ig_keyword_dm_rules'),
+            'ig_all_dm_enabled'             => Setting::get('ig_all_dm_enabled', '0'),
+            'ig_all_dm_template'            => Setting::get('ig_all_dm_template'),
             'tts_audio_mode'         => Setting::get('tts_audio_mode', 'music'),
             'tts_voice'              => Setting::get('tts_voice', 'Kore'),
             'tts_configured'         => filled(config('services.gemini.key')),
@@ -113,6 +119,12 @@ class InstagramController extends Controller
             'ig_auto_reply_enabled'  => ['nullable', 'boolean'],
             'ig_auto_reply_option_template' => ['nullable', 'string', 'max:2000'],
             'ig_auto_reply_template'        => ['nullable', 'string', 'max:2000'],
+            'ig_auto_dm_enabled'            => ['nullable', 'boolean'],
+            'ig_auto_dm_template'           => ['nullable', 'string', 'max:3000'],
+            'ig_keyword_dm_enabled'         => ['nullable', 'boolean'],
+            'ig_keyword_dm_rules'           => ['nullable', 'string', 'max:5000'],
+            'ig_all_dm_enabled'             => ['nullable', 'boolean'],
+            'ig_all_dm_template'            => ['nullable', 'string', 'max:3000'],
         ]);
 
         // Copy-paste me aksar aage/peeche space ya newline aa jaate hain — hata do
@@ -126,6 +138,14 @@ class InstagramController extends Controller
         // Khaali chhoda to default messages hi jaate hain (webhook khud fallback karta hai)
         Setting::put('ig_auto_reply_option_template', $clean($data['ig_auto_reply_option_template'] ?? null));
         Setting::put('ig_auto_reply_template', $clean($data['ig_auto_reply_template'] ?? null));
+
+        // Comment karne wale ko DM — sahi jawab, aur/ya keyword (LINK, STORY…) par message
+        Setting::put('ig_auto_dm_enabled', $request->boolean('ig_auto_dm_enabled') ? '1' : '0');
+        Setting::put('ig_auto_dm_template', $clean($data['ig_auto_dm_template'] ?? null));
+        Setting::put('ig_keyword_dm_enabled', $request->boolean('ig_keyword_dm_enabled') ? '1' : '0');
+        Setting::put('ig_keyword_dm_rules', $clean($data['ig_keyword_dm_rules'] ?? null));
+        Setting::put('ig_all_dm_enabled', $request->boolean('ig_all_dm_enabled') ? '1' : '0');
+        Setting::put('ig_all_dm_template', $clean($data['ig_all_dm_template'] ?? null));
 
         return back()->with('success', 'Instagram settings saved.');
     }

@@ -210,6 +210,9 @@ Route::middleware('auth')->prefix('admin')->name('admin.')->group(function () {
         Route::put('users/{user}', [UserManagementController::class, 'update'])->name('users.update');
         Route::delete('users/{user}', [UserManagementController::class, 'destroy'])->name('users.destroy');
         Route::post('users/{user}/login-as', [UserManagementController::class, 'loginAs'])->name('users.loginAs');
+
+        // Nayi files upload ke baad config/route/view cache saaf karo
+        Route::post('cache/clear', [SettingsController::class, 'clearCache'])->name('cache.clear');
     });
 
     // Impersonation ke dauraan hi chalega — isliye role:admin ke bahar

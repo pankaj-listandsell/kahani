@@ -327,8 +327,8 @@
             cardsToSave.push({
                 order: idx + 1,
                 text: fullVoiceText,
-                caption: item.caption,
-                hashtags: item.hashtags,
+                caption: K.str(item.caption),
+                hashtags: K.str(item.hashtags),
                 image: off.toDataURL('image/webp', 0.92),
             });
         });
@@ -342,7 +342,7 @@
                 body: JSON.stringify({ language: itemsLang, cards: cardsToSave })
             });
             const d = await r.json();
-            if (!d.ok) throw new Error(d.error || 'Failed to save');
+            if (!d.ok) throw new Error(K.saveError(d));
 
             el('progressBar').style.width = '100%';
             setTimeout(() => window.location = d.redirect, 400);

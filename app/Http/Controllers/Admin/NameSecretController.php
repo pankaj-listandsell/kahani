@@ -93,8 +93,8 @@ class NameSecretController extends Controller
             'cards'                => ['required', 'array', 'min:1', 'max:60'],
             'cards.*.order'        => ['required', 'integer', 'min:1'],
             'cards.*.text'         => ['required', 'string'],
-            'cards.*.caption'      => ['nullable', 'string', 'max:500'],
-            'cards.*.hashtags'     => ['nullable', 'string', 'max:1000'],
+            'cards.*.caption'      => ['nullable', 'string', 'max:2200'], // Instagram caption limit
+            'cards.*.hashtags'     => ['nullable', 'string', 'max:2000'],
             'cards.*.image'        => ['required', 'string'],
         ]);
 

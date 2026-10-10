@@ -90,8 +90,8 @@ class PuzzleController extends Controller
             'cards.*.order'        => ['required', 'integer', 'min:1'],
             'cards.*.text'         => ['required', 'string'],
             'cards.*.answer'       => ['nullable', 'string', 'max:600'],
-            'cards.*.caption'      => ['nullable', 'string', 'max:500'],
-            'cards.*.hashtags'     => ['nullable', 'string', 'max:1000'],
+            'cards.*.caption'      => ['nullable', 'string', 'max:2200'], // Instagram caption limit
+            'cards.*.hashtags'     => ['nullable', 'string', 'max:2000'],
             'cards.*.image'        => ['required', 'string'],
             'cards.*.answer_image' => ['nullable', 'string'],
         ]);
