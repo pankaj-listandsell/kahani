@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Admin;
 
 use App\Http\Controllers\Controller;
+use App\Jobs\PostCardJob;
 use App\Models\Part;
 use App\Models\PartCard;
 use App\Models\Setting;
@@ -82,6 +83,9 @@ class InstagramController extends Controller
             'ig_auto_reply_enabled'  => Setting::get('ig_auto_reply_enabled', '0'),
             'ig_auto_reply_option_template' => Setting::get('ig_auto_reply_option_template', InstagramWebhookController::DEFAULT_OPTION_REPLIES),
             'ig_auto_reply_template'        => Setting::get('ig_auto_reply_template', InstagramWebhookController::DEFAULT_REPLIES),
+            'ig_judge_enabled'              => Setting::get('ig_judge_enabled', '0'),
+            'ig_correct_reply_template'     => Setting::get('ig_correct_reply_template', InstagramWebhookController::DEFAULT_CORRECT_REPLIES),
+            'ig_wrong_reply_template'       => Setting::get('ig_wrong_reply_template', InstagramWebhookController::DEFAULT_WRONG_REPLIES),
             'ig_auto_dm_enabled'            => Setting::get('ig_auto_dm_enabled', '0'),
             'ig_auto_dm_template'           => Setting::get('ig_auto_dm_template', InstagramWebhookController::DEFAULT_DMS),
             'ig_keyword_dm_enabled'         => Setting::get('ig_keyword_dm_enabled', '0'),
@@ -119,6 +123,9 @@ class InstagramController extends Controller
             'ig_auto_reply_enabled'  => ['nullable', 'boolean'],
             'ig_auto_reply_option_template' => ['nullable', 'string', 'max:2000'],
             'ig_auto_reply_template'        => ['nullable', 'string', 'max:2000'],
+            'ig_judge_enabled'              => ['nullable', 'boolean'],
+            'ig_correct_reply_template'     => ['nullable', 'string', 'max:2000'],
+            'ig_wrong_reply_template'       => ['nullable', 'string', 'max:2000'],
             'ig_auto_dm_enabled'            => ['nullable', 'boolean'],
             'ig_auto_dm_template'           => ['nullable', 'string', 'max:3000'],
             'ig_keyword_dm_enabled'         => ['nullable', 'boolean'],
@@ -138,6 +145,11 @@ class InstagramController extends Controller
         // Khaali chhoda to default messages hi jaate hain (webhook khud fallback karta hai)
         Setting::put('ig_auto_reply_option_template', $clean($data['ig_auto_reply_option_template'] ?? null));
         Setting::put('ig_auto_reply_template', $clean($data['ig_auto_reply_template'] ?? null));
+
+        // Quiz reel par A/B/C/D comment → sahi ya galat wala reply
+        Setting::put('ig_judge_enabled', $request->boolean('ig_judge_enabled') ? '1' : '0');
+        Setting::put('ig_correct_reply_template', $clean($data['ig_correct_reply_template'] ?? null));
+        Setting::put('ig_wrong_reply_template', $clean($data['ig_wrong_reply_template'] ?? null));
 
         // Comment karne wale ko DM — sahi jawab, aur/ya keyword (LINK, STORY…) par message
         Setting::put('ig_auto_dm_enabled', $request->boolean('ig_auto_dm_enabled') ? '1' : '0');
@@ -318,31 +330,23 @@ class InstagramController extends Controller
         return back()->with('success', $targets->count() . ' card(s) me AI caption add ho gaya. ✨ (chahein to har card me alag edit kar sakte hain.)');
     }
 
+    /**
+     * Saare (abhi tak post na hue) cards background queue me — request turant khatam,
+     * worker ek-ek karke reel banata + post karta hai.
+     */
     private function bulk(Part $part, string $type, string $noun)
     {
         $part->load('cards');
-        $count = 0;
-        $failed = 0;
 
-        foreach ($part->cards as $card) {
-            // Jo post ho chuke, unhe chhod do
-            if ($card->isPosted()) {
-                continue;
-            }
-
-            try {
-                $type === 'reel' ? $this->instagram->postReel($card) : $this->instagram->postCard($card);
-                $count++;
-            } catch (\Throwable $e) {
-                $failed++;
-            }
+        $pending = $part->cards->reject(fn (PartCard $c) => $c->isPosted())->values();
+        foreach ($pending as $card) {
+            PostCardJob::dispatch($card->id, 'ig', $type);
         }
 
-        $msg = "{$count} {$noun}(s) Instagram par post ho gaye. ✅";
-        if ($failed) {
-            $msg .= " ({$failed} fail hue — dobara try karein.)";
+        if ($pending->isEmpty()) {
+            return back()->with('success', "Is part ke saare {$noun}s pehle hi Instagram par post ho chuke hain. ✅");
         }
 
-        return back()->with('success', $msg);
+        return back()->with('success', "⏳ {$pending->count()} {$noun}(s) queue me daal diye — background me ek-ek karke Instagram par post honge. Thodi der baad page refresh karke status dekho.");
     }
 }

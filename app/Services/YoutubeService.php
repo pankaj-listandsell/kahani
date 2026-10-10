@@ -223,6 +223,35 @@ class YoutubeService
         return ['id' => $item['id'], 'title' => $item['snippet']['title'] ?? 'YouTube'];
     }
 
+    /**
+     * Videos ke views/likes/comments (YouTube Data API, 50 id ek call me).
+     *
+     * @param  list<string>  $videoIds
+     * @return array<string, array{views:int,likes:?int,comments:?int}>
+     */
+    public function videoStats(array $videoIds): array
+    {
+        $out = [];
+        foreach (array_chunk(array_values(array_unique($videoIds)), 50) as $chunk) {
+            $res = Http::withToken($this->accessToken())->timeout(20)
+                ->get('https://www.googleapis.com/youtube/v3/videos', [
+                    'part' => 'statistics',
+                    'id'   => implode(',', $chunk),
+                ]);
+
+            foreach ($res->json('items', []) as $item) {
+                $s = $item['statistics'] ?? [];
+                $out[$item['id']] = [
+                    'views'    => (int) ($s['viewCount'] ?? 0),
+                    'likes'    => isset($s['likeCount']) ? (int) $s['likeCount'] : null,
+                    'comments' => isset($s['commentCount']) ? (int) $s['commentCount'] : null,
+                ];
+            }
+        }
+
+        return $out;
+    }
+
     /** Connection test — channel naam laao. @return array{ok:bool,message:string} */
     public function testConnection(): array
     {

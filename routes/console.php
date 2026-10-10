@@ -19,3 +19,15 @@ Schedule::command('youtube:auto-post')->everyMinute()->withoutOverlapping();
 
 // Facebook Page auto-post (photo/reel) — IG jaisa hi.
 Schedule::command('facebook:auto-post')->everyMinute()->withoutOverlapping();
+
+// Background queue (bulk "All as Reels / Posts") — har minute worker chalao, jobs khatam
+// hote hi ruk jaata hai. Lambe reel jobs ke liye overlap lock 60 min.
+Schedule::command('queue:work --stop-when-empty --tries=1 --timeout=900 --max-time=3300')
+    ->everyMinute()->withoutOverlapping(60)->runInBackground();
+
+// Har 6 ghante Instagram / YouTube se posts ke views, likes, comments laao (Analytics page)
+Schedule::command('analytics:fetch')->everySixHours()->withoutOverlapping(60)->runInBackground();
+
+// Roz raat purani reels / voice cache / temp files hatao (disk na bhare).
+// Card images aur music kabhi nahi hatte — dekho PruneMedia command.
+Schedule::command('media:prune')->dailyAt('03:30')->withoutOverlapping(30);

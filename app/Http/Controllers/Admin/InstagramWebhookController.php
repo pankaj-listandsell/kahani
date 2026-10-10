@@ -27,6 +27,18 @@ class InstagramWebhookController extends Controller
         . "✅ {option} note kar liya! Dekhte hain sahi hai ya nahi 🤔\n"
         . '🔥 Aapne {option} chuna! Confident ho ya guess kiya? 😄';
 
+    /**
+     * Sahi / galat option ke default replies ({option} = user ka, {correct} = sahi option).
+     * Galat wale me jaan-boojhkar sahi jawab NAHI — public comment me answer khul jaata.
+     */
+    public const DEFAULT_CORRECT_REPLIES = "🎉 Sahi jawab! {option} bilkul sahi hai 👏\n"
+        . "✅ Wah! {option} sahi hai 🔥 Aap to genius ho 🧠\n"
+        . '💯 Ekdum sahi — {option}! Dosto ko tag karke challenge karo 😎';
+
+    public const DEFAULT_WRONG_REPLIES = "😅 Oops, {option} sahi nahi hai! Ek baar aur socho 🤔\n"
+        . "🙈 Close tha, par {option} nahi! Reel dobara dekho 👀\n"
+        . '🤔 {option}? Hmm… sahi jawab kuch aur hai! Phir try karo 💪';
+
     /** Baaki comments ke default replies. Har line = ek message. */
     public const DEFAULT_REPLIES = '✅ Aapka jawab note ho gaya hai! Sahi jawab janne ke liye reel ko end tak dekhein 🎯';
 
@@ -110,12 +122,16 @@ class InstagramWebhookController extends Controller
 
                 $instagram->forUser($userId);
 
+                // Is reel ka saved answer (quiz/puzzle) — reply (sahi/galat) aur DM dono me kaam aata hai
+                $mediaId = (string) ($value['media']['id'] ?? '');
+                $answer  = $this->answerForMedia($userId, $mediaId);
+
                 if ($replyOn) {
-                    $this->replyToComment($instagram, $userId, $commentId, $text);
+                    $this->replyToComment($instagram, $userId, $commentId, $text, $answer);
                 }
 
                 if ($dmOn) {
-                    $this->sendDm($instagram, $userId, $commentId, $fromId, (string) ($value['media']['id'] ?? ''), $text);
+                    $this->sendDm($instagram, $userId, $commentId, $fromId, $mediaId, $text, $answer);
                 }
             }
         }
@@ -163,10 +179,23 @@ class InstagramWebhookController extends Controller
      * messages, warna general messages. Har textbox me kai lines ho sakti hain — har baar
      * random ek line, taaki har comment par bilkul same reply na jaaye (Instagram spam maanta hai).
      */
-    protected function pickReply(int $userId, string $userText): string
+    protected function pickReply(int $userId, string $userText, ?string $answer = null): string
     {
         if (preg_match('/^\s*(?:option\s*)?([a-d])\s*[.)!:]*\s*$/i', $userText, $m)) {
             $option = strtoupper($m[1]);
+
+            // "Sahi/galat batao" ON aur reel ka sahi option pata hai → sahi ya galat wala reply
+            $correct = $this->correctOption($answer);
+            if ($correct !== null && Setting::getFor($userId, 'ig_judge_enabled', '0') === '1') {
+                $right = $option === $correct;
+                $lines = $this->lines(
+                    Setting::getFor($userId, $right ? 'ig_correct_reply_template' : 'ig_wrong_reply_template'),
+                    $right ? self::DEFAULT_CORRECT_REPLIES : self::DEFAULT_WRONG_REPLIES,
+                );
+
+                return str_replace(['{option}', '{correct}'], [$option, $correct], $lines[array_rand($lines)]);
+            }
+
             $lines = $this->lines(Setting::getFor($userId, 'ig_auto_reply_option_template'), self::DEFAULT_OPTION_REPLIES);
 
             return str_replace('{option}', $option, $lines[array_rand($lines)]);
@@ -184,10 +213,8 @@ class InstagramWebhookController extends Controller
      *  3) "Har DM ke upar link" ON → ye text sabse upar (aur 1/2 kuch na ho to sirf yahi)
      * Ek user ko ek reel par ek hi DM (kai comment kare to bhi) — spam na lage.
      */
-    protected function sendDm(InstagramService $instagram, int $userId, string $commentId, string $fromId, string $mediaId, string $text): void
+    protected function sendDm(InstagramService $instagram, int $userId, string $commentId, string $fromId, string $mediaId, string $text, ?string $answer): void
     {
-        $answer = $this->answerForMedia($userId, $mediaId);
-
         $message = null;
         if (Setting::getFor($userId, 'ig_keyword_dm_enabled', '0') === '1') {
             $message = $this->keywordMessage((string) Setting::getFor($userId, 'ig_keyword_dm_rules'), $text, $answer);
@@ -258,6 +285,21 @@ class InstagramWebhookController extends Controller
         }
     }
 
+    /**
+     * Answer text se sahi option (A-D). Quiz answer "✅ Sahi jawab: C) Delhi" jaisa hota hai.
+     * Ek se zyada alag option mile (kai sawaal wala card) ya koi na mile (puzzle) → null.
+     */
+    protected function correctOption(?string $answer): ?string
+    {
+        if ($answer === null || ! preg_match_all('/(?<![A-Za-z])([A-D])\)/', $answer, $m)) {
+            return null;
+        }
+
+        $letters = array_unique($m[1]);
+
+        return count($letters) === 1 ? reset($letters) : null;
+    }
+
     /** Is reel (IG media id) wale card ka answer — sirf isi user ka card, answer ho tab. */
     protected function answerForMedia(int $userId, string $mediaId): ?string
     {
@@ -321,14 +363,14 @@ class InstagramWebhookController extends Controller
     /**
      * Post reply to user comment.
      */
-    protected function replyToComment(InstagramService $instagram, int $userId, string $commentId, string $userText): void
+    protected function replyToComment(InstagramService $instagram, int $userId, string $commentId, string $userText, ?string $answer): void
     {
         $token = $instagram->token();
         if (! $token) {
             return;
         }
 
-        $replyText = $this->pickReply($userId, $userText);
+        $replyText = $this->pickReply($userId, $userText, $answer);
 
         try {
             $res = Http::asForm()->timeout(20)->post($instagram->apiBase() . "/{$commentId}/replies", [

@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Admin;
 
 use App\Http\Controllers\Controller;
+use App\Jobs\PostCardJob;
 use App\Models\Part;
 use App\Models\PartCard;
 use App\Models\Setting;
@@ -129,45 +130,24 @@ class FacebookController extends Controller
         return $this->bulk($part, 'reel', 'reel');
     }
 
+    /**
+     * Saare (abhi tak post na hue) cards background queue me. FB rapid-fire posting ko
+     * spam maanta hai, isliye har agla card 15 sec baad; rate-limit aaye to job baaki
+     * cards 2 ghante skip karta hai (card pending rehte hain — auto-post baad me utha lega).
+     */
     private function bulk(Part $part, string $type, string $noun)
     {
-        @set_time_limit(0);
         $part->load('cards');
 
         $pending = $part->cards->reject(fn (PartCard $c) => $c->isFbPosted())->values();
-        $count = 0;
-        $failed = 0;
-        $rateLimited = false;
-
         foreach ($pending as $i => $card) {
-            try {
-                $type === 'reel' ? $this->facebook->postReel($card) : $this->facebook->postPhoto($card);
-                $count++;
-            } catch (\App\Exceptions\FacebookRateLimitException $e) {
-                // FB ne rate-limit laga di — aur post mat karo warna block barhega.
-                $rateLimited = true;
-                break;
-            } catch (\Throwable $e) {
-                $failed++;
-            }
-
-            // FB rapid-fire posting ko spam maanta hai — posts ke beech thoda gap.
-            if ($i < $pending->count() - 1) {
-                sleep(5);
-            }
+            PostCardJob::dispatch($card->id, 'fb', $type)->delay(now()->addSeconds($i * 15));
         }
 
-        $msg = "{$count} {$noun}(s) Facebook par post ho gaye. ✅";
-        if ($failed) {
-            $msg .= " ({$failed} fail hue — dobara try karein.)";
+        if ($pending->isEmpty()) {
+            return back()->with('success', "Is part ke saare {$noun}s pehle hi Facebook par post ho chuke hain. ✅");
         }
 
-        if ($rateLimited) {
-            return back()->with('error', $msg
-                . " ⚠️ Facebook ne rate-limit laga di ('We limit how often you can post…') — baaki cards abhi post nahi hue."
-                . ' Kuch ghante baad dobara try karein.');
-        }
-
-        return back()->with('success', $msg);
+        return back()->with('success', "⏳ {$pending->count()} {$noun}(s) queue me daal diye — background me ek-ek karke Facebook par post honge. Thodi der baad page refresh karke status dekho.");
     }
 }
