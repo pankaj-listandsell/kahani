@@ -10,6 +10,7 @@ use App\Http\Controllers\Admin\MindReaderController;
 use App\Http\Controllers\Admin\NameSecretController;
 use App\Http\Controllers\Admin\PartController;
 use App\Http\Controllers\Admin\PuzzleController;
+use App\Http\Controllers\Admin\SalahController;
 use App\Http\Controllers\Admin\SettingsController;
 use App\Http\Controllers\Admin\StoryController;
 use App\Http\Controllers\Admin\QuizController;
@@ -163,6 +164,13 @@ Route::middleware('auth')->prefix('admin')->name('admin.')->group(function () {
     Route::post('name-secret/save', [NameSecretController::class, 'save'])->name('name_secret.save');
     Route::get('name-secret/{story}', [NameSecretController::class, 'show'])->name('name_secret.show');
     Route::delete('name-secret/{story}', [NameSecretController::class, 'destroy'])->name('name_secret.destroy');
+
+    // 5. 💬 Salah Studio (Reader ka sawaal + expert jawab — advice text cards)
+    Route::get('salah', [SalahController::class, 'index'])->name('salah.index');
+    Route::post('salah/generate', [SalahController::class, 'generate'])->name('salah.generate');
+    Route::post('salah/save', [SalahController::class, 'save'])->name('salah.save');
+    Route::get('salah/{story}', [SalahController::class, 'show'])->name('salah.show');
+    Route::delete('salah/{story}', [SalahController::class, 'destroy'])->name('salah.destroy');
 
     // Topic se AI kahani generate (create form bharne ke liye) — resource se pehle
     Route::post('stories/generate', [StoryController::class, 'generateFromTopic'])->name('stories.generate');

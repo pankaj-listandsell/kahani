@@ -136,6 +136,45 @@ PROMPT;
         return $this->callGeminiJson($prompt);
     }
 
+    /**
+     * 5. 💬 SALAH: Reader ka sawaal + expert jawab + 4 samadhan (advice column card).
+     */
+    public function generateSalah(int $count = 3, string $language = 'gujarati', string $category = 'Parenting', string $topic = ''): array
+    {
+        $langPrompt = $this->langPrompt($language);
+        $topicLine = $topic !== '' ? "Specific topic: {$topic}. Every card must be about this topic (different angles)." : 'Pick a different, common real-life problem for each card.';
+
+        $prompt = <<<PROMPT
+You write a popular "reader asks, expert answers" advice column that is posted as Instagram Reels text cards.
+Generate {$count} cards in {$langPrompt}.
+Category: {$category}.
+{$topicLine}
+
+Tone & safety:
+- Warm, respectful, practical — like a trusted elder sister / family counsellor. Relatable to Indian (Gujarati/Hindi) families.
+- Sensitive topics (health, puberty, marriage, mental health) must be handled tastefully and non-explicitly.
+- For health / medical / legal issues, never diagnose or prescribe medicine — recommend consulting a doctor or professional as one of the steps.
+- No shaming, no superstition, no fear-mongering.
+
+Fields (all text in {$langPrompt}):
+- `title`: Headline, 10-22 words, emotional and curiosity-driven, describes the situation (no quotes around it).
+- `question`: The reader's letter, 55-80 words, first person, starts with a greeting (e.g. "નમસ્તે,"), realistic detail, ends asking for advice.
+- `asker`: Short anonymous signature: who + city (e.g. "એક ચિંતિત માતા, વડોદરા").
+- `answer`: Empathetic expert reply, 50-70 words: validate the feeling, explain the reason simply.
+- `solutions`: Array of exactly 4 objects {"heading": 3-7 word bold step title, "text": 12-25 word explanation}.
+- `takeaway`: One closing line of wisdom, 15-25 words.
+- `cta_question`: One question asking viewers to share their opinion in comments, 12-25 words.
+- `caption`: Instagram caption, 2-4 short lines with a few emojis, asks people to comment / share with someone who needs it.
+- `hashtags`: 8-12 relevant hashtags in one string.
+
+Keep total text per card under ~260 words so it fits on one 9:16 card.
+
+Return ONLY a raw JSON array of objects with keys: `title`, `question`, `asker`, `answer`, `solutions`, `takeaway`, `cta_question`, `caption`, `hashtags`.
+PROMPT;
+
+        return $this->callGeminiJson($prompt, 90);
+    }
+
     /** Prompt ke liye language ka naam — hinglish = Hindi words, Roman (English) letters me. */
     protected function langPrompt(string $language): string
     {
@@ -149,7 +188,7 @@ PROMPT;
     /**
      * Gemini JSON Helper
      */
-    protected function callGeminiJson(string $prompt): array
+    protected function callGeminiJson(string $prompt, int $timeout = 30): array
     {
         if (empty($this->apiKey)) {
             throw new \RuntimeException('Gemini API Key missing (.env me GEMINI_API_KEY).');
@@ -169,10 +208,14 @@ PROMPT;
         $lastError = 'AI generation failed.';
         $raw = '';
 
-        foreach (['gemini-2.5-flash', 'gemini-2.5-flash-preview'] as $model) {
+        // 503 (Google busy) aksar kuch second me theek ho jaata hai — flash ek baar retry, fir flash-lite
+        foreach (['gemini-2.5-flash', 'gemini-2.5-flash', 'gemini-2.5-flash-lite'] as $i => $model) {
+            if ($i > 0) {
+                sleep(2);
+            }
             $url = "https://generativelanguage.googleapis.com/v1beta/models/{$model}:generateContent?key=" . $this->apiKey;
             $res = Http::withHeaders(['Content-Type' => 'application/json'])
-                ->timeout(30)
+                ->timeout($timeout)
                 ->post($url, $payload);
 
             if ($res->successful()) {
@@ -181,7 +224,9 @@ PROMPT;
                     break;
                 }
             }
-            $lastError = $res->json('error.message') ?? $lastError;
+            $lastError = $res->status() === 503
+                ? 'Gemini abhi busy hai (503) — 1-2 minute baad dobara try karo.'
+                : ($res->json('error.message') ?? $lastError);
             Log::warning('ViralStudio Gemini model failed', ['model' => $model, 'status' => $res->status()]);
         }
 
