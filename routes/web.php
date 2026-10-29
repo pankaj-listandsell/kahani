@@ -6,18 +6,14 @@ use App\Http\Controllers\Admin\CardController;
 use App\Http\Controllers\Admin\DashboardController;
 use App\Http\Controllers\Admin\FacebookController;
 use App\Http\Controllers\Admin\InstagramController;
-use App\Http\Controllers\Admin\MindReaderController;
-use App\Http\Controllers\Admin\NameSecretController;
+use App\Http\Controllers\Admin\NuskhaController;
 use App\Http\Controllers\Admin\PartController;
-use App\Http\Controllers\Admin\PuzzleController;
+use App\Http\Controllers\Admin\RashifalController;
 use App\Http\Controllers\Admin\SalahController;
 use App\Http\Controllers\Admin\SettingsController;
 use App\Http\Controllers\Admin\StoryController;
 use App\Http\Controllers\Admin\QuizController;
-use App\Http\Controllers\Admin\StudioController;
-use App\Http\Controllers\Admin\ThisOrThatController;
 use App\Http\Controllers\Admin\UserManagementController;
-use App\Http\Controllers\Admin\YogaController;
 use App\Http\Controllers\Admin\YoutubeController;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Route;
@@ -107,16 +103,6 @@ Route::middleware('auth')->prefix('admin')->name('admin.')->group(function () {
     Route::post('facebook/parts/{part}/photos', [FacebookController::class, 'postPart'])->name('facebook.part.photos');
     Route::post('facebook/parts/{part}/reels', [FacebookController::class, 'postPartReels'])->name('facebook.part.reels');
 
-    // Shayari / Jokes / Quotes Studio — AI batch → sundar cards (stories se alag)
-    Route::get('studio', [StudioController::class, 'index'])->name('studio.index');
-    Route::post('studio/generate', [StudioController::class, 'generate'])->name('studio.generate');
-    Route::post('studio/save', [StudioController::class, 'save'])->name('studio.save');
-    // Card background ke liye Pixabay photo
-    Route::post('studio/bg/search', [StudioController::class, 'bgSearch'])->name('studio.bg.search');
-    Route::post('studio/bg/pick', [StudioController::class, 'bgPick'])->name('studio.bg.pick');
-    Route::get('studio/{story}', [StudioController::class, 'show'])->name('studio.show');
-    Route::delete('studio/{story}', [StudioController::class, 'destroy'])->name('studio.destroy');
-
     // Quiz (MCQ) — alag section
     Route::get('quiz', [QuizController::class, 'index'])->name('quiz.index');
     Route::post('quiz/generate', [QuizController::class, 'generate'])->name('quiz.generate');
@@ -125,52 +111,26 @@ Route::middleware('auth')->prefix('admin')->name('admin.')->group(function () {
     Route::get('quiz/{story}', [QuizController::class, 'show'])->name('quiz.show');
     Route::delete('quiz/{story}', [QuizController::class, 'destroy'])->name('quiz.destroy');
 
-    // Kids Yoga — apna alag menu/section (curated aasan + vector illustration cards)
-    Route::get('yoga', [YogaController::class, 'index'])->name('yoga.index');
-    Route::post('yoga/generate', [YogaController::class, 'generate'])->name('yoga.generate');
-    Route::post('yoga/image', [YogaController::class, 'image'])->name('yoga.image');
-    Route::post('yoga/search', [YogaController::class, 'search'])->name('yoga.search');
-    Route::post('yoga/pick', [YogaController::class, 'pick'])->name('yoga.pick');
-    Route::post('yoga/upload', [YogaController::class, 'upload'])->name('yoga.upload');
-    Route::post('yoga/approve', [YogaController::class, 'approve'])->name('yoga.approve');
-    Route::post('yoga/save', [YogaController::class, 'save'])->name('yoga.save');
-    Route::get('yoga/{story}', [YogaController::class, 'show'])->name('yoga.show');
-    Route::delete('yoga/{story}', [YogaController::class, 'destroy'])->name('yoga.destroy');
-
-    // 1. 🔍 Puzzle Studio (Find Odd One Out)
-    Route::get('puzzle', [PuzzleController::class, 'index'])->name('puzzle.index');
-    Route::post('puzzle/generate', [PuzzleController::class, 'generate'])->name('puzzle.generate');
-    Route::post('puzzle/save', [PuzzleController::class, 'save'])->name('puzzle.save');
-    Route::get('puzzle/{story}', [PuzzleController::class, 'show'])->name('puzzle.show');
-    Route::delete('puzzle/{story}', [PuzzleController::class, 'destroy'])->name('puzzle.destroy');
-
-    // 2. 🔮 Mind Reader Studio (Magic Math & Psychology)
-    Route::get('mind-reader', [MindReaderController::class, 'index'])->name('mind_reader.index');
-    Route::post('mind-reader/generate', [MindReaderController::class, 'generate'])->name('mind_reader.generate');
-    Route::post('mind-reader/save', [MindReaderController::class, 'save'])->name('mind_reader.save');
-    Route::get('mind-reader/{story}', [MindReaderController::class, 'show'])->name('mind_reader.show');
-    Route::delete('mind-reader/{story}', [MindReaderController::class, 'destroy'])->name('mind_reader.destroy');
-
-    // 3. ⚖️ This or That Studio (Choose 1 Debate Challenge)
-    Route::get('this-or-that', [ThisOrThatController::class, 'index'])->name('this_or_that.index');
-    Route::post('this-or-that/generate', [ThisOrThatController::class, 'generate'])->name('this_or_that.generate');
-    Route::post('this-or-that/save', [ThisOrThatController::class, 'save'])->name('this_or_that.save');
-    Route::get('this-or-that/{story}', [ThisOrThatController::class, 'show'])->name('this_or_that.show');
-    Route::delete('this-or-that/{story}', [ThisOrThatController::class, 'destroy'])->name('this_or_that.destroy');
-
-    // 4. 🔤 Name & Personality Secrets Studio
-    Route::get('name-secret', [NameSecretController::class, 'index'])->name('name_secret.index');
-    Route::post('name-secret/generate', [NameSecretController::class, 'generate'])->name('name_secret.generate');
-    Route::post('name-secret/save', [NameSecretController::class, 'save'])->name('name_secret.save');
-    Route::get('name-secret/{story}', [NameSecretController::class, 'show'])->name('name_secret.show');
-    Route::delete('name-secret/{story}', [NameSecretController::class, 'destroy'])->name('name_secret.destroy');
-
-    // 5. 💬 Salah Studio (Reader ka sawaal + expert jawab — advice text cards)
+    // 💬 Salah Studio (Reader ka sawaal + expert jawab — advice text cards)
     Route::get('salah', [SalahController::class, 'index'])->name('salah.index');
     Route::post('salah/generate', [SalahController::class, 'generate'])->name('salah.generate');
     Route::post('salah/save', [SalahController::class, 'save'])->name('salah.save');
     Route::get('salah/{story}', [SalahController::class, 'show'])->name('salah.show');
     Route::delete('salah/{story}', [SalahController::class, 'destroy'])->name('salah.destroy');
+
+    // 🔯 Aaj nu Rashifal — 12 rashi cards, sirf apne din auto-post
+    Route::get('rashifal', [RashifalController::class, 'index'])->name('rashifal.index');
+    Route::post('rashifal/generate', [RashifalController::class, 'generate'])->name('rashifal.generate');
+    Route::post('rashifal/save', [RashifalController::class, 'save'])->name('rashifal.save');
+    Route::get('rashifal/{story}', [RashifalController::class, 'show'])->name('rashifal.show');
+    Route::delete('rashifal/{story}', [RashifalController::class, 'destroy'])->name('rashifal.destroy');
+
+    // 🌿 Gharelu Nuskhe & Recipe cards
+    Route::get('nuskha', [NuskhaController::class, 'index'])->name('nuskha.index');
+    Route::post('nuskha/generate', [NuskhaController::class, 'generate'])->name('nuskha.generate');
+    Route::post('nuskha/save', [NuskhaController::class, 'save'])->name('nuskha.save');
+    Route::get('nuskha/{story}', [NuskhaController::class, 'show'])->name('nuskha.show');
+    Route::delete('nuskha/{story}', [NuskhaController::class, 'destroy'])->name('nuskha.destroy');
 
     // Topic se AI kahani generate (create form bharne ke liye) — resource se pehle
     Route::post('stories/generate', [StoryController::class, 'generateFromTopic'])->name('stories.generate');

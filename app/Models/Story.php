@@ -36,12 +36,45 @@ class Story extends Model
      */
     public const COLLECTION_TYPES = [
         'shayari', 'joke', 'quote', 'quiz', 'status', 'fact', 'yoga', 'ukhana',
-        'puzzle', 'mind_reader', 'this_or_that', 'name_secret', 'salah',
+        'puzzle', 'mind_reader', 'this_or_that', 'name_secret', 'salah', 'nuskha',
     ];
 
     public function isCollection(): bool
     {
         return in_array($this->type, self::COLLECTION_TYPES, true);
+    }
+
+    /**
+     * Rashifal sirf apne din (category = 'Y-m-d') par post ho, Mesh→Meen kram me,
+     * aur us din baaki sab cards se pehle. Auto-post commands pehle ye poochhte hain.
+     *
+     * @param  string  $platform  instagram | youtube | facebook
+     * @param  string  $statusCol  ig_status | yt_status | fb_status
+     */
+    public static function nextRashifalCard(int $userId, string $platform, string $statusCol): ?PartCard
+    {
+        $stories = static::where('status', 'published')
+            ->where('user_id', $userId)
+            ->where('type', 'rashifal')
+            ->where('category', now()->toDateString())
+            ->with(['parts' => fn ($q) => $q->orderBy('sort_order'), 'parts.cards' => fn ($q) => $q->orderBy('sort_order')])
+            ->orderBy('id')
+            ->get();
+
+        foreach ($stories as $story) {
+            if (! $story->targetsPlatform($platform)) {
+                continue;
+            }
+            foreach ($story->parts as $part) {
+                foreach ($part->cards as $card) {
+                    if ($card->{$statusCol} === null) {
+                        return $card;
+                    }
+                }
+            }
+        }
+
+        return null;
     }
 
     /** TTS narration ka andaaz (GeminiTtsService::instructionFor ka style). */

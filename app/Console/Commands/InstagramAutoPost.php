@@ -184,6 +184,11 @@ class InstagramAutoPost extends Command
      */
     protected function nextPendingCard(int $userId)
     {
+        // Aaj ka rashifal sabse pehle (sirf apne din, Mesh→Meen kram me)
+        if ($rashi = Story::nextRashifalCard($userId, 'instagram', 'ig_status')) {
+            return $rashi;
+        }
+
         $stories = Story::where('status', 'published')
             ->where('user_id', $userId)
             ->with(['parts' => fn ($q) => $q->orderBy('sort_order'), 'parts.cards'])
@@ -195,6 +200,9 @@ class InstagramAutoPost extends Command
         foreach ($stories as $story) {
             if (! $story->targetsPlatform('instagram')) {
                 continue; // ye story Instagram ke liye target nahi
+            }
+            if ($story->type === 'rashifal') {
+                continue; // upar nextRashifalCard() sambhalta hai — doosre din ka rashifal kabhi nahi
             }
             $isCollection = $story->isCollection();
             foreach ($story->parts as $part) {

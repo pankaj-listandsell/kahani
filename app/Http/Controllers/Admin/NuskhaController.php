@@ -10,40 +10,37 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
 
-class MindReaderController extends Controller
+/**
+ * 🌿 Nuskhe & Recipe Studio — gharelu nuskhe ya recipe ke save-worthy text cards
+ * (ingredients + steps). Reel normal card→reel pipeline se banti hai.
+ */
+class NuskhaController extends Controller
 {
     public function index()
     {
-        $query = Story::withCount('parts')
-            ->where(function ($q) {
-                $q->where('type', 'mind_reader')
-                  ->orWhere(function ($sq) {
-                      $sq->where('type', 'quiz')->where('category', 'Mind Reading');
-                  });
-            })
-            ->latest();
+        $query = Story::withCount('parts')->where('type', 'nuskha')->latest();
 
         if (! auth()->user()->isAdmin()) {
             $query->where('user_id', auth()->id());
         }
 
-        return view('admin.mind_reader.index', ['collections' => $query->get()]);
+        return view('admin.nuskha.index', ['collections' => $query->get()]);
     }
 
     public function show(Story $story)
     {
-        abort_unless($story->type === 'mind_reader' || ($story->type === 'quiz' && $story->category === 'Mind Reading'), 404);
+        abort_unless($story->type === 'nuskha', 404);
         $this->authorize('view', $story);
 
         $story->load(['parts.cards']);
         $cards = $story->parts->flatMap->cards->values();
 
-        return view('admin.mind_reader.show', compact('story', 'cards'));
+        return view('admin.nuskha.show', compact('story', 'cards'));
     }
 
     public function destroy(Story $story, InstagramService $instagram)
     {
-        abort_unless($story->type === 'mind_reader' || ($story->type === 'quiz' && $story->category === 'Mind Reading'), 404);
+        abort_unless($story->type === 'nuskha', 404);
         $this->authorize('delete', $story);
 
         $story->load('parts.cards');
@@ -62,7 +59,7 @@ class MindReaderController extends Controller
 
         $story->delete();
 
-        return redirect()->route('admin.mind_reader.index')->with('success', 'Mind Reader collection delete ho gayi.');
+        return redirect()->route('admin.nuskha.index')->with('success', 'Nuskha collection delete ho gayi.');
     }
 
     public function generate(Request $request, ViralStudioAiService $ai)
@@ -70,10 +67,19 @@ class MindReaderController extends Controller
         $data = $request->validate([
             'count'    => ['required', 'integer', 'min:1', 'max:10'],
             'language' => ['required', 'in:gujarati,hindi,hinglish'],
+            'category' => ['nullable', 'string', 'max:150'],
+            'topic'    => ['nullable', 'string', 'max:200'],
+            'mode'     => ['required', 'in:nuskha,recipe'],
         ]);
 
         try {
-            $items = $ai->generateMindReader((int) $data['count'], $data['language']);
+            $items = $ai->generateNuskha(
+                (int) $data['count'],
+                $data['language'],
+                $data['mode'],
+                $data['category'] ?? '',
+                trim((string) ($data['topic'] ?? ''))
+            );
 
             return response()->json(['ok' => true, 'items' => $items]);
         } catch (\Throwable $e) {
@@ -84,30 +90,28 @@ class MindReaderController extends Controller
     public function save(Request $request)
     {
         $data = $request->validate([
-            'language'             => ['nullable', 'in:hindi,gujarati,hinglish'],
-            'cards'                => ['required', 'array', 'min:1', 'max:60'],
-            'cards.*.order'        => ['required', 'integer', 'min:1'],
-            'cards.*.text'         => ['required', 'string'],
-            'cards.*.answer'       => ['nullable', 'string', 'max:600'],
-            'cards.*.caption'      => ['nullable', 'string', 'max:2200'], // Instagram caption limit
-            'cards.*.hashtags'     => ['nullable', 'string', 'max:2000'],
-            'cards.*.image'        => ['required', 'string'],
-            'cards.*.answer_image' => ['nullable', 'string'],
+            'language'        => ['nullable', 'in:hindi,gujarati,hinglish'],
+            'category'        => ['nullable', 'string', 'max:150'],
+            'cards'           => ['required', 'array', 'min:1', 'max:30'],
+            'cards.*.order'   => ['required', 'integer', 'min:1'],
+            'cards.*.text'    => ['required', 'string'],
+            'cards.*.caption' => ['nullable', 'string', 'max:2200'], // Instagram caption limit
+            'cards.*.hashtags'=> ['nullable', 'string', 'max:2000'],
+            'cards.*.image'   => ['required', 'string'],
         ]);
 
         try {
             $cardsInput = $data['cards'];
-            $title = 'Mind Reader Magic — ' . now()->format('d M');
 
             $story = Story::create([
                 'user_id'  => auth()->id(),
-                'title'    => $title,
-                'type'     => 'mind_reader',
-                'category' => 'Mind Reading',
+                'title'    => ($data['category'] ?? 'Nuskhe') . ' — ' . now()->format('d M'),
+                'type'     => 'nuskha',
+                'category' => $data['category'] ?? null,
                 'language' => $data['language'] ?? 'gujarati',
                 'status'   => 'published',
             ]);
-            $part = $story->parts()->create(['sort_order' => 1, 'body' => $cardsInput[0]['text'] ?? 'Mind Reader']);
+            $part = $story->parts()->create(['sort_order' => 1, 'body' => $cardsInput[0]['text'] ?? 'Nuskha']);
 
             foreach ($cardsInput as $cardItem) {
                 $decoded = $this->decodeDataUrl($cardItem['image']);
@@ -116,32 +120,21 @@ class MindReaderController extends Controller
                 $path = 'cards/' . Str::uuid() . '.' . $decoded['ext'];
                 Storage::disk('public')->put($path, $decoded['binary']);
 
-                $answerPath = null;
-                if (filled($cardItem['answer_image'] ?? null)) {
-                    $ansDecoded = $this->decodeDataUrl($cardItem['answer_image']);
-                    if ($ansDecoded) {
-                        $answerPath = 'cards/' . Str::uuid() . '-a.' . $ansDecoded['ext'];
-                        Storage::disk('public')->put($answerPath, $ansDecoded['binary']);
-                    }
-                }
-
                 $tags = trim((string) ($cardItem['hashtags'] ?? ''));
                 $caption = trim(($cardItem['caption'] ?? '') . ($tags !== '' ? "\n\n" . $tags : ''));
 
                 $part->cards()->create([
-                    'sort_order'        => $cardItem['order'],
-                    'image_path'        => $path,
-                    'answer_image_path' => $answerPath,
-                    'text'              => $cardItem['text'],
-                    'answer_text'       => $cardItem['answer'] ?? null,
-                    'ig_caption'        => $caption !== '' ? $caption : null,
+                    'sort_order' => $cardItem['order'],
+                    'image_path' => $path,
+                    'text'       => $cardItem['text'],
+                    'ig_caption' => $caption !== '' ? $caption : null,
                 ]);
             }
 
             return response()->json([
                 'ok'         => true,
                 'collection' => $story->id,
-                'redirect'   => route('admin.mind_reader.show', $story),
+                'redirect'   => route('admin.nuskha.show', $story),
             ]);
         } catch (\Throwable $e) {
             return response()->json(['ok' => false, 'error' => $e->getMessage()], 500);

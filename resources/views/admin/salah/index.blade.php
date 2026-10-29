@@ -343,51 +343,6 @@
         return top + r.lines.length * r.lh;
     }
 
-    /**
-     * Mixed bold/regular paragraphs ko left-aligned wrap karo.
-     * paras = [[{t, b}], ...] → { lines: [{words:[{t,b,x}], gapBefore}], size, lh, height }
-     */
-    function layoutRich(ctx, paras, maxW, size) {
-        const lh = size * 1.38, paraGap = size * 0.45;
-        const lines = [];
-        paras.forEach((segs, pi) => {
-            let cur = [], x = 0;
-            const push = () => { if (cur.length) lines.push({ words: cur, gapBefore: 0 }); cur = []; x = 0; };
-            const start = lines.length;
-            segs.forEach(seg => {
-                ctx.font = K.font(size, seg.b ? 'bold' : '400');
-                const space = ctx.measureText(' ').width;
-                String(seg.t || '').split(/\s+/).filter(Boolean).forEach(word => {
-                    const w = ctx.measureText(word).width;
-                    const needed = (cur.length ? space : 0) + w;
-                    if (cur.length && x + needed > maxW) push();
-                    const wx = x + (cur.length ? space : 0);
-                    cur.push({ t: word, b: seg.b, x: wx });
-                    x = wx + w;
-                });
-            });
-            push();
-            if (pi > 0 && lines[start]) lines[start].gapBefore = paraGap;
-        });
-        const height = lines.reduce((h, l) => h + lh + l.gapBefore, 0);
-        return { lines, size, lh, height };
-    }
-
-    function drawRich(ctx, layout, x, top) {
-        ctx.textAlign = 'left';
-        ctx.textBaseline = 'middle';
-        ctx.fillStyle = '#21180e';
-        let y = top;
-        layout.lines.forEach(line => {
-            y += line.gapBefore;
-            line.words.forEach(w => {
-                ctx.font = K.font(layout.size, w.b ? 'bold' : '400');
-                ctx.fillText(w.t, x + w.x, y + layout.lh / 2);
-            });
-            y += layout.lh;
-        });
-    }
-
     function drawSalah(c, item) {
         const ctx = c.getContext('2d');
         const L = tr();
@@ -417,13 +372,8 @@
         // Body box me fit hone tak font chhota karo
         const x = 70, maxW = W - 140;
         const top = titleBottom + 30, bottom = H - 120;
-        let size = 44, layout;
-        for (;;) {
-            layout = layoutRich(ctx, paras, maxW, size);
-            if (layout.height <= bottom - top || size <= 24) break;
-            size -= 1;
-        }
-        drawRich(ctx, layout, x, top);
+        ctx.fillStyle = '#21180e';
+        K.drawRich(ctx, K.fitRich(ctx, paras, maxW, bottom - top, 44), x, top);
     }
 
     /** Reel ki voiceover ke liye — poora card nahi, sirf mukhya baatein (reel chhoti rahe). */

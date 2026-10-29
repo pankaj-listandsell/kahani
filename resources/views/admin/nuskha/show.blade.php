@@ -3,15 +3,15 @@
 
 @section('content')
 <div class="max-w-5xl">
-    <a href="{{ route('admin.yoga.index') }}" class="text-sm text-slate-500 hover:text-emerald-700">← Kids Yoga</a>
+    <a href="{{ route('admin.nuskha.index') }}" class="text-sm text-slate-500 hover:text-sky-700">← 🌿 Nuskhe &amp; Recipe</a>
 
     <div class="flex items-start justify-between gap-4 mt-2 mb-6 flex-wrap">
         <div>
-            <h2 class="text-xl font-bold">🧘 {{ $story->title }}</h2>
-            <p class="text-slate-500 mt-1 text-sm">{{ $cards->count() }} aasan cards · {{ ucfirst($story->status) }}</p>
+            <h2 class="text-xl font-bold">🌿 {{ $story->title }}</h2>
+            <p class="text-slate-500 mt-1 text-sm">{{ $cards->count() }} cards · {{ ucfirst($story->status) }}</p>
         </div>
-        <form method="POST" action="{{ route('admin.yoga.destroy', $story) }}"
-              onsubmit="return confirm('Poori yoga collection delete karein?')">
+        <form method="POST" action="{{ route('admin.nuskha.destroy', $story) }}"
+              onsubmit="return confirm('Poori collection delete karein?')">
             @csrf @method('DELETE')
             <button class="px-4 py-2 border border-red-300 text-red-600 rounded-lg hover:bg-red-50 text-sm">🗑 Delete</button>
         </form>
@@ -40,11 +40,11 @@
 
             <div class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4">
                 @foreach ($cards as $i => $card)
-                    <div class="bg-white rounded-xl border border-slate-200 p-2 relative">
+                    <div class="bg-white rounded-xl border border-slate-200 p-2 shadow-sm relative">
                         <div class="flex items-center justify-between mb-1">
                             <label class="flex items-center gap-1 cursor-pointer">
                                 <input type="checkbox" name="ids[]" value="{{ $card->id }}" class="bulk-card rounded border-slate-300 accent-emerald-600 w-4 h-4 cursor-pointer">
-                                <span class="text-[11px] font-medium text-emerald-600">🧘 आसन {{ $i + 1 }}</span>
+                                <span class="text-[11px] font-bold text-emerald-600">🌿 Card {{ $i + 1 }}</span>
                             </label>
                         </div>
                         <div class="media-slot">
@@ -58,10 +58,10 @@
                             <span class="{{ $card->isFbPosted() ? '' : 'opacity-25 grayscale' }}" title="Facebook">📘</span>
                         </div>
                         <button type="button"
-                                class="gen-reel mt-2 w-full text-[11px] bg-emerald-600 hover:bg-emerald-700 text-white rounded px-2 py-1.5"
+                                class="gen-reel mt-2 w-full text-[11px] bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded px-2 py-1.5"
                                 data-url="{{ route('admin.cards.reel', $card) }}">▶ Generate Reel</button>
                         <a href="{{ asset('storage/' . $card->image_path) }}" download
-                           class="block text-center text-[11px] text-emerald-600 hover:underline mt-1">⬇ Image</a>
+                           class="block text-center text-[11px] text-emerald-600 hover:underline mt-1 font-medium">⬇ Image</a>
                         <button type="button" onclick="if(confirm('Ye card delete karein?')) document.getElementById('card-del-{{ $card->id }}').submit();"
                                 class="w-full text-[11px] text-red-600 hover:bg-red-50 rounded px-2 py-1 mt-1 font-semibold">
                             🗑 Remove
@@ -78,7 +78,7 @@
             </form>
         @endforeach
 
-        <p class="text-xs text-slate-400 mt-4">Har card ek aasan hai. Caption me steps, fayda aur safety line jaati hai. Icon highlight = post ho chuka.</p>
+        <p class="text-xs text-slate-400 mt-4">Har card ek nuskha ya recipe hai. Auto-post inhe drip post karta hai.</p>
     @endif
 </div>
 

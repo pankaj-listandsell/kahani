@@ -165,6 +165,11 @@ class FacebookAutoPost extends Command
     /** Sirf is user ki published stories → parts → cards: pehla fb-unposted card. */
     protected function nextPendingCard(int $userId): ?PartCard
     {
+        // Aaj ka rashifal sabse pehle (sirf apne din, Mesh→Meen kram me)
+        if ($rashi = Story::nextRashifalCard($userId, 'facebook', 'fb_status')) {
+            return $rashi;
+        }
+
         $stories = Story::where('status', 'published')
             ->where('user_id', $userId)
             ->with(['parts' => fn ($q) => $q->orderBy('sort_order'), 'parts.cards' => fn ($q) => $q->orderBy('sort_order')])
@@ -176,6 +181,9 @@ class FacebookAutoPost extends Command
         foreach ($stories as $story) {
             if (! $story->targetsPlatform('facebook')) {
                 continue; // ye story Facebook ke liye target nahi
+            }
+            if ($story->type === 'rashifal') {
+                continue; // upar nextRashifalCard() sambhalta hai — doosre din ka rashifal kabhi nahi
             }
             $isCollection = $story->isCollection();
             foreach ($story->parts as $part) {

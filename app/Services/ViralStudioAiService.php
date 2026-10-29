@@ -15,129 +15,7 @@ class ViralStudioAiService
     }
 
     /**
-     * 1. 🔍 PUZZLES: Find the Odd One Out.
-     */
-    public function generatePuzzles(int $count = 5, string $language = 'gujarati'): array
-    {
-        $langPrompt = $this->langPrompt($language);
-
-        $prompt = <<<PROMPT
-You are a viral Instagram Reels puzzle generator.
-Generate {$count} highly engaging "Find the Odd Character / Emoji" puzzle cards for social media reels.
-Language: {$langPrompt}.
-
-Rules:
-- Choose similar-looking Gujarati/Hindi letters (e.g. 'ક' vs 'ફ', 'ધ' vs 'ઘ', 'દ' vs 'ડ', 'ત' vs 'ન', 'भ' vs 'म', 'घ' vs 'ध') or confusing emoji pairs (e.g. 😃 vs 😀, 🐱 vs 😸, 🍎 vs 🍏).
-- Grid dimensions: rows = 7, cols = 8 (total 56 characters).
-- Choose a random hidden location (row from 2 to 6, col from 2 to 7) for the odd character.
-- `hook`: Catchy viral hook line in {$langPrompt} (e.g. "૫ સેકન્ડમાં છુપાયેલો 'ફ' શોધો! ૯૯% લોકો ફેલ ❌").
-- `answer_text`: Reveal explanation (e.g. "સાચો જવાબ: ત્રીજી લાઈનમાં ૫મો અક્ષર 'ફ' છે! ✅").
-- `caption`: Must NOT reveal the answer (row/col or position) — only invite viewers to comment their answer.
-
-Return ONLY a raw JSON array of objects:
-[
-  {
-    "base_char": "ક",
-    "odd_char": "ફ",
-    "grid_rows": 7,
-    "grid_cols": 8,
-    "odd_row": 3,
-    "odd_col": 5,
-    "hook": "૫ સેકન્ડમાં છુપાયેલો 'ફ' શોધો!",
-    "answer_text": "સાચો જવાબ: ૩જી લાઈનમાં ૫મો અક્ષર 'ફ' છે! ✅",
-    "caption": "શું તમે 5 સેકન્ડમાં શોધી શક્યા? તમારો સમય કમેન્ટ કરો! 👇 #puzzle #gujarat #quiz #reels",
-    "hashtags": "#puzzle #gujarat #mindgame #viralquiz"
-  }
-]
-PROMPT;
-
-        return $this->callGeminiJson($prompt);
-    }
-
-    /**
-     * 2. 🔮 MIND READER: Magic Math & Psychology Tricks.
-     */
-    public function generateMindReader(int $count = 3, string $language = 'gujarati'): array
-    {
-        $langPrompt = $this->langPrompt($language);
-
-        $prompt = <<<PROMPT
-You are a viral mind-reading magic creator for Reels & Shorts.
-Generate {$count} interactive 4-step psychological or math mind-reading tricks.
-Language: {$langPrompt}.
-
-Structure for each trick:
-- `title`: Catchy trick title (e.g. "હું તમારું મન વાંચીશ! 🧠")
-- `step1`: First instruction (e.g. "૧ થી ૧૦ વચ્ચેનો કોઈ પણ એક નંબર ધારો...")
-- `step2`: Second instruction (e.g. "તેને ૨ વડે ગુણો અને ૮ ઉમેરો...")
-- `step3`: Third instruction (e.g. "હવે આવેલા જવાબને ૨ વડે ભાગો અને ધારેલો નંબર બાદ કરો...")
-- `final_answer`: The calculated result (e.g. "તમારો છેલ્લો જવાબ ૪ છે! 🎯")
-- `call_to_action`: "જો સાચું પડ્યું હોય તો હમણાં જ સબસ્ક્રાઇબ કરો! ✨"
-- `caption`: Full viral caption with emojis. Must NOT reveal the final answer — ask viewers to comment their answer.
-
-Return ONLY a raw JSON array of objects with keys: `title`, `step1`, `step2`, `step3`, `final_answer`, `call_to_action`, `caption`, `hashtags`.
-PROMPT;
-
-        return $this->callGeminiJson($prompt);
-    }
-
-    /**
-     * 3. ⚖️ THIS OR THAT: Choose 1 Debate Challenge.
-     */
-    public function generateThisOrThat(int $count = 5, string $language = 'gujarati', string $category = 'general'): array
-    {
-        $langPrompt = $this->langPrompt($language);
-
-        $prompt = <<<PROMPT
-You are a viral poll and debate reel creator for Instagram & YouTube Shorts.
-Generate {$count} highly engaging "This or That / Choose 1 (આ કે તે?)" split-screen choices in {$langPrompt}.
-Category: {$category} (Career, Lifestyle, Wealth, Food, Relationships).
-
-Rules:
-- Both Option A and Option B must be super exciting, relatable, and hard to choose.
-- `title`: Catchy title in {$langPrompt} (e.g. "તમે શું પસંદ કરશો? 🤔")
-- `option_a`: Short punchy text for Option A + emoji (e.g. "સરકારી નોકરી (GPSC/Talati) 🏢")
-- `option_b`: Short punchy text for Option B + emoji (e.g. "પોતાનો સફળ બિઝનેસ 🚀")
-- `hook`: Hook question spoken in voiceover.
-- `caption`: Viral caption inviting comments and debate.
-
-Return ONLY a raw JSON array of objects with keys: `title`, `option_a`, `option_b`, `hook`, `caption`, `hashtags`.
-PROMPT;
-
-        return $this->callGeminiJson($prompt);
-    }
-
-    /**
-     * 4. 🔤 NAME SECRETS: First Letter Personality Secrets.
-     */
-    public function generateNameSecrets(array $letters = ['A', 'S', 'P', 'R', 'K'], string $language = 'gujarati'): array
-    {
-        $langPrompt = $this->langPrompt($language);
-        $lettersStr = implode(', ', $letters);
-
-        $prompt = <<<PROMPT
-You are a viral personality & zodiac name secrets creator for Reels.
-Generate personality secret cards for these letters: [{$lettersStr}].
-Language: {$langPrompt}.
-
-For each letter, provide 3 deep, positive, relatable personality traits that make viewers feel amazed and tag their friends.
-- `letter`: The letter (e.g. "A" or "S")
-- `title`: (e.g. "'A' અક્ષર વાળા લોકોનું રહસ્ય 👑")
-- `trait_1`: First trait (e.g. "દિલના એકદમ સાફ હોય છે, ક્યારેય કોઈનું ખોટું નથી વિચારતા.")
-- `trait_2`: Second trait (e.g. "ગુસ્સો જલ્દી આવે પણ થોડી જ વારમાં શાંત થઈ જાય છે.")
-- `trait_3`: Third trait (e.g. "દોસ્તી અને પ્રેમ જીવ આપીને નિભાવે છે.")
-- `best_match`: Best compatibility letter (e.g. "S, P, K")
-- `tag_cta`: "આ અક્ષર વાળા ખાસ દોસ્તને ટેગ કરો! 🤝"
-- `caption`: Full viral caption with emojis and hashtags.
-
-Return ONLY a raw JSON array of objects with keys: `letter`, `title`, `trait_1`, `trait_2`, `trait_3`, `best_match`, `tag_cta`, `caption`, `hashtags`.
-PROMPT;
-
-        return $this->callGeminiJson($prompt);
-    }
-
-    /**
-     * 5. 💬 SALAH: Reader ka sawaal + expert jawab + 4 samadhan (advice column card).
+     * 💬 SALAH: Reader ka sawaal + expert jawab + 4 samadhan (advice column card).
      */
     public function generateSalah(int $count = 3, string $language = 'gujarati', string $category = 'Parenting', string $topic = '', string $style = 'normal'): array
     {
@@ -189,6 +67,78 @@ Fields (all text in {$langPrompt}):
 Keep total text per card under ~{$limit} words so it fits on one 9:16 card.
 
 Return ONLY a raw JSON array of objects with keys: `title`, `question`, `asker`, `answer`, `solutions`, `takeaway`, `cta_question`, `caption`, `hashtags`.
+PROMPT;
+
+        return $this->callGeminiJson($prompt, 90);
+    }
+
+    /**
+     * 🔯 RASHIFAL: Ek din ka 12 rashi ka bhavishya (Mesh → Meen, isi kram me).
+     */
+    public function generateRashifal(string $date, string $language = 'gujarati'): array
+    {
+        $langPrompt = $this->langPrompt($language);
+        $day = \Illuminate\Support\Carbon::parse($date)->locale('en')->isoFormat('dddd, D MMMM YYYY');
+
+        $prompt = <<<PROMPT
+You are a popular, positive daily horoscope (rashifal) writer for Gujarati/Hindi Instagram audiences.
+Write the horoscope for {$day} for all 12 Vedic moon signs, in {$langPrompt}.
+
+Rules:
+- Exactly 12 objects, in this exact order: Mesh, Vrishabh, Mithun, Kark, Simha, Kanya, Tula, Vrishchik, Dhanu, Makar, Kumbh, Meen.
+- Each sign must feel different (do not repeat the same sentences). Practical, hopeful, relatable daily-life tone.
+- No fear-mongering, no death/accident/disease predictions, no paid remedies, no gemstone selling, no superstition that harms anyone.
+- `rashi`: the English key exactly as in the list above.
+- `prediction`: 35-50 words — overall day, one opportunity and one thing to be careful about.
+- `love`, `career`, `health`: 8-15 words each.
+- `lucky_number`: one number 1-9 (as string). `lucky_color`: one colour name in {$langPrompt}.
+- `caption`: 1-2 short lines with emojis asking followers to share with someone of this rashi.
+- `hashtags`: 6-10 hashtags (include the rashi name and #rashifal).
+
+Return ONLY a raw JSON array of 12 objects with keys: `rashi`, `prediction`, `love`, `career`, `health`, `lucky_number`, `lucky_color`, `caption`, `hashtags`.
+PROMPT;
+
+        return $this->callGeminiJson($prompt, 120);
+    }
+
+    /**
+     * 🌿 NUSKHA / RECIPE: Gharelu nuskhe ya recipe ke save-worthy cards.
+     */
+    public function generateNuskha(int $count = 3, string $language = 'gujarati', string $mode = 'nuskha', string $category = '', string $topic = ''): array
+    {
+        $langPrompt = $this->langPrompt($language);
+        $topicLine = $topic !== '' ? "Specific topic: {$topic}. Every card must be about this topic (different variations)." : 'Pick a different, popular item for each card.';
+
+        $modeRules = $mode === 'recipe'
+            ? <<<R
+Content type: traditional Gujarati / Indian home RECIPES. Category: {$category}.
+- `title`: Dish name + a hook, 4-10 words (e.g. "ઘરે બનાવો હોટેલ જેવા ખમણ 😋").
+- `intro`: 15-25 words — why this recipe is special, prep time and serves (e.g. "૨૦ મિનિટ · ૪ વ્યક્તિ").
+- `items`: 5-10 ingredients with quantity (each 2-8 words).
+- `steps`: 4-7 clear cooking steps (each 8-20 words).
+- `tip`: one secret tip for perfect taste (10-20 words).
+R
+            : <<<R
+Content type: safe, traditional GHARELU NUSKHE (home remedies / kitchen tips / beauty tips). Category: {$category}.
+- Only for minor everyday issues (e.g. cold, cough, acidity, dandruff, tanning, cleaning hacks). Use common, safe kitchen ingredients.
+- Never claim to cure serious diseases (diabetes, cancer, BP, thyroid, etc.), never say "stop medicine", no dosages for babies or pregnant women.
+- `title`: Problem + solution hook, 5-10 words (e.g. "શરદી-ખાંસીમાં તરત રાહત આપતો દેશી ઉકાળો ☕").
+- `intro`: 15-25 words — what it helps with and why it works.
+- `items`: 3-7 ingredients/things needed with quantity (each 2-8 words).
+- `steps`: 3-6 steps how to make/use (each 8-20 words).
+- `tip`: one caution line — e.g. allergy test, and to consult a doctor if the problem lasts more than 2-3 days (10-20 words).
+R;
+
+        $prompt = <<<PROMPT
+You create highly save-worthy Instagram text cards in {$langPrompt}.
+Generate {$count} cards.
+{$topicLine}
+
+{$modeRules}
+- `caption`: 2-3 short lines with emojis, ask people to SAVE the post and share with family.
+- `hashtags`: 8-12 relevant hashtags in one string.
+
+Return ONLY a raw JSON array of objects with keys: `title`, `intro`, `items`, `steps`, `tip`, `caption`, `hashtags`.
 PROMPT;
 
         return $this->callGeminiJson($prompt, 90);

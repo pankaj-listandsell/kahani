@@ -1,4 +1,4 @@
-{{-- Viral studios (Puzzle / Mind Reader / This or That / Name Secret) ke shared canvas helpers --}}
+{{-- Text-card studios (Salah / Rashifal / Nuskhe) ke shared canvas helpers --}}
 <script>
 window.CanvasKit = window.CanvasKit || (function () {
     const STACK = '"Noto Sans Devanagari", "Noto Sans Gujarati", sans-serif';
@@ -97,6 +97,65 @@ window.CanvasKit = window.CanvasKit || (function () {
         return s;
     }
 
+    /**
+     * Mixed bold/regular paragraphs ko left-aligned wrap karo.
+     * paras = [[{t, b, c?}], ...]  (c = is hisse ka rang, warna ctx.fillStyle)
+     * → { lines: [{words:[{t,b,c,x}], gapBefore}], size, lh, height }
+     */
+    function layoutRich(ctx, paras, maxW, size, { lineHeight = 1.38, paraGap = 0.45 } = {}) {
+        const lh = size * lineHeight, gap = size * paraGap;
+        const lines = [];
+        paras.forEach((segs, pi) => {
+            let cur = [], x = 0;
+            const push = () => { if (cur.length) lines.push({ words: cur, gapBefore: 0 }); cur = []; x = 0; };
+            const start = lines.length;
+            segs.forEach(seg => {
+                ctx.font = font(size, seg.b ? 'bold' : '400');
+                const space = ctx.measureText(' ').width;
+                String(seg.t || '').split(/\s+/).filter(Boolean).forEach(word => {
+                    const w = ctx.measureText(word).width;
+                    const needed = (cur.length ? space : 0) + w;
+                    if (cur.length && x + needed > maxW) push();
+                    const wx = x + (cur.length ? space : 0);
+                    cur.push({ t: word, b: seg.b, c: seg.c, x: wx });
+                    x = wx + w;
+                });
+            });
+            push();
+            if (pi > 0 && lines[start]) lines[start].gapBefore = gap;
+        });
+        const height = lines.reduce((h, l) => h + lh + l.gapBefore, 0);
+        return { lines, size, lh, height };
+    }
+
+    /** layoutRich ko maxH me fit hone tak font chhota karo (minSize tak). */
+    function fitRich(ctx, paras, maxW, maxH, size, minSize = 24, opts = {}) {
+        let s = size, layout;
+        for (;;) {
+            layout = layoutRich(ctx, paras, maxW, s, opts);
+            if (layout.height <= maxH || s <= minSize) return layout;
+            s -= 1;
+        }
+    }
+
+    /** layoutRich ka result (x, top) se likho — rang ctx.fillStyle ya har hisse ka apna. */
+    function drawRich(ctx, layout, x, top) {
+        const base = ctx.fillStyle;
+        ctx.textAlign = 'left';
+        ctx.textBaseline = 'middle';
+        let y = top;
+        layout.lines.forEach(line => {
+            y += line.gapBefore;
+            line.words.forEach(w => {
+                ctx.font = font(layout.size, w.b ? 'bold' : '400');
+                ctx.fillStyle = w.c || base;
+                ctx.fillText(w.t, x + w.x, y + layout.lh / 2);
+            });
+            y += layout.lh;
+        });
+        ctx.fillStyle = base;
+    }
+
     /** AI text ko innerHTML me daalne se pehle escape. */
     function esc(s) {
         return String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -113,6 +172,6 @@ window.CanvasKit = window.CanvasKit || (function () {
         return (d && d.error) || (first && first[0]) || (d && d.message) || 'Failed to save';
     }
 
-    return { STACK, font, ensureFonts, reset, wrapLines, fit, drawLines, fitDraw, fitOneLine, esc, str, saveError };
+    return { STACK, font, ensureFonts, reset, wrapLines, fit, drawLines, fitDraw, fitOneLine, layoutRich, fitRich, drawRich, esc, str, saveError };
 })();
 </script>

@@ -7,43 +7,41 @@ use App\Models\Story;
 use App\Services\InstagramService;
 use App\Services\ViralStudioAiService;
 use Illuminate\Http\Request;
+use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
 
-class ThisOrThatController extends Controller
+/**
+ * 🔯 Aaj nu Rashifal — ek din ke 12 rashi cards. Story.category me din ('Y-m-d') rehta hai;
+ * auto-post (Story::nextRashifalCard) inhe sirf usi din, Mesh→Meen kram me post karta hai.
+ */
+class RashifalController extends Controller
 {
     public function index()
     {
-        $query = Story::withCount('parts')
-            ->where(function ($q) {
-                $q->where('type', 'this_or_that')
-                  ->orWhere(function ($sq) {
-                      $sq->where('type', 'quiz')->where('category', 'This or That');
-                  });
-            })
-            ->latest();
+        $query = Story::withCount('parts')->where('type', 'rashifal')->orderByDesc('category')->latest();
 
         if (! auth()->user()->isAdmin()) {
             $query->where('user_id', auth()->id());
         }
 
-        return view('admin.this_or_that.index', ['collections' => $query->get()]);
+        return view('admin.rashifal.index', ['collections' => $query->get()]);
     }
 
     public function show(Story $story)
     {
-        abort_unless($story->type === 'this_or_that' || ($story->type === 'quiz' && $story->category === 'This or That'), 404);
+        abort_unless($story->type === 'rashifal', 404);
         $this->authorize('view', $story);
 
         $story->load(['parts.cards']);
         $cards = $story->parts->flatMap->cards->values();
 
-        return view('admin.this_or_that.show', compact('story', 'cards'));
+        return view('admin.rashifal.show', compact('story', 'cards'));
     }
 
     public function destroy(Story $story, InstagramService $instagram)
     {
-        abort_unless($story->type === 'this_or_that' || ($story->type === 'quiz' && $story->category === 'This or That'), 404);
+        abort_unless($story->type === 'rashifal', 404);
         $this->authorize('delete', $story);
 
         $story->load('parts.cards');
@@ -56,27 +54,27 @@ class ThisOrThatController extends Controller
             }
         }
 
-        if ($story->cover_image) {
-            Storage::disk('public')->delete($story->cover_image);
-        }
-
         $story->delete();
 
-        return redirect()->route('admin.this_or_that.index')->with('success', 'This or That collection delete ho gayi.');
+        return redirect()->route('admin.rashifal.index')->with('success', 'Rashifal delete ho gaya.');
     }
 
     public function generate(Request $request, ViralStudioAiService $ai)
     {
         $data = $request->validate([
-            'count'    => ['required', 'integer', 'min:1', 'max:20'],
+            'date'     => ['required', 'date_format:Y-m-d'],
             'language' => ['required', 'in:gujarati,hindi,hinglish'],
-            'category' => ['nullable', 'string', 'max:50'],
         ]);
 
         try {
-            $items = $ai->generateThisOrThat((int) $data['count'], $data['language'], $data['category'] ?? 'general');
+            $items = $ai->generateRashifal($data['date'], $data['language']);
 
-            return response()->json(['ok' => true, 'items' => $items]);
+            $exists = Story::where('type', 'rashifal')
+                ->where('user_id', auth()->id())
+                ->where('category', $data['date'])
+                ->exists();
+
+            return response()->json(['ok' => true, 'items' => $items, 'exists' => $exists]);
         } catch (\Throwable $e) {
             return response()->json(['ok' => false, 'error' => $e->getMessage()], 422);
         }
@@ -85,28 +83,28 @@ class ThisOrThatController extends Controller
     public function save(Request $request)
     {
         $data = $request->validate([
-            'language'             => ['nullable', 'in:hindi,gujarati,hinglish'],
-            'cards'                => ['required', 'array', 'min:1', 'max:60'],
-            'cards.*.order'        => ['required', 'integer', 'min:1'],
-            'cards.*.text'         => ['required', 'string'],
-            'cards.*.caption'      => ['nullable', 'string', 'max:2200'], // Instagram caption limit
-            'cards.*.hashtags'     => ['nullable', 'string', 'max:2000'],
-            'cards.*.image'        => ['required', 'string'],
+            'date'            => ['required', 'date_format:Y-m-d'],
+            'language'        => ['nullable', 'in:hindi,gujarati,hinglish'],
+            'cards'           => ['required', 'array', 'min:1', 'max:13'],
+            'cards.*.order'   => ['required', 'integer', 'min:1'],
+            'cards.*.text'    => ['required', 'string'],
+            'cards.*.caption' => ['nullable', 'string', 'max:2200'], // Instagram caption limit
+            'cards.*.hashtags'=> ['nullable', 'string', 'max:2000'],
+            'cards.*.image'   => ['required', 'string'],
         ]);
 
         try {
             $cardsInput = $data['cards'];
-            $title = 'This or That Challenge — ' . now()->format('d M');
 
             $story = Story::create([
                 'user_id'  => auth()->id(),
-                'title'    => $title,
-                'type'     => 'this_or_that',
-                'category' => 'This or That',
+                'title'    => 'Rashifal — ' . Carbon::parse($data['date'])->format('d M Y'),
+                'type'     => 'rashifal',
+                'category' => $data['date'],
                 'language' => $data['language'] ?? 'gujarati',
                 'status'   => 'published',
             ]);
-            $part = $story->parts()->create(['sort_order' => 1, 'body' => $cardsInput[0]['text'] ?? 'This or That']);
+            $part = $story->parts()->create(['sort_order' => 1, 'body' => $cardsInput[0]['text'] ?? 'Rashifal']);
 
             foreach ($cardsInput as $cardItem) {
                 $decoded = $this->decodeDataUrl($cardItem['image']);
@@ -119,17 +117,17 @@ class ThisOrThatController extends Controller
                 $caption = trim(($cardItem['caption'] ?? '') . ($tags !== '' ? "\n\n" . $tags : ''));
 
                 $part->cards()->create([
-                    'sort_order'        => $cardItem['order'],
-                    'image_path'        => $path,
-                    'text'              => $cardItem['text'],
-                    'ig_caption'        => $caption !== '' ? $caption : null,
+                    'sort_order' => $cardItem['order'],
+                    'image_path' => $path,
+                    'text'       => $cardItem['text'],
+                    'ig_caption' => $caption !== '' ? $caption : null,
                 ]);
             }
 
             return response()->json([
                 'ok'         => true,
                 'collection' => $story->id,
-                'redirect'   => route('admin.this_or_that.show', $story),
+                'redirect'   => route('admin.rashifal.show', $story),
             ]);
         } catch (\Throwable $e) {
             return response()->json(['ok' => false, 'error' => $e->getMessage()], 500);

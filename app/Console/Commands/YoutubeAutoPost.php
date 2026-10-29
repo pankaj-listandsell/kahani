@@ -164,11 +164,19 @@ class YoutubeAutoPost extends Command
     /** Pehla card jise abhi tak YouTube par post nahi kiya. */
     protected function nextPendingCard(int $userId): ?PartCard
     {
+        // Aaj ka rashifal sabse pehle (sirf apne din, Mesh→Meen kram me)
+        if ($rashi = Story::nextRashifalCard($userId, 'youtube', 'yt_status')) {
+            return $rashi;
+        }
+
         $randomPool = []; // shayari/joke/quote/quiz — random order me post honge
 
         foreach ($this->publishedStories($userId) as $story) {
             if (! $story->targetsPlatform('youtube')) {
                 continue; // ye story YouTube ke liye target nahi
+            }
+            if ($story->type === 'rashifal') {
+                continue; // upar nextRashifalCard() sambhalta hai — doosre din ka rashifal kabhi nahi
             }
             $isCollection = $story->isCollection();
             foreach ($story->parts as $part) {
