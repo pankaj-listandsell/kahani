@@ -205,33 +205,42 @@ PROMPT;
             ],
         ];
 
-        $lastError = 'AI generation failed.';
+        $errors = [];
         $raw = '';
 
-        // 503 (Google busy) aksar kuch second me theek ho jaata hai — flash ek baar retry, fir flash-lite
-        foreach (['gemini-2.5-flash', 'gemini-2.5-flash', 'gemini-2.5-flash-lite'] as $i => $model) {
-            if ($i > 0) {
-                sleep(2);
+        // 503 (Google busy) aksar kuch second me theek ho jaata hai — har model ek baar retry, fir agla model
+        foreach (config('services.gemini.text_models') as $model) {
+            // thinkingBudget sirf 2.5 models samajhte hain — Gemini 3+ apna default use kare
+            $body = $payload;
+            if (! str_starts_with($model, 'gemini-2.5')) {
+                unset($body['generationConfig']['thinkingConfig']);
             }
             $url = "https://generativelanguage.googleapis.com/v1beta/models/{$model}:generateContent?key=" . $this->apiKey;
-            $res = Http::withHeaders(['Content-Type' => 'application/json'])
-                ->timeout($timeout)
-                ->post($url, $payload);
 
-            if ($res->successful()) {
-                $raw = (string) $res->json('candidates.0.content.parts.0.text');
-                if ($raw !== '') {
+            foreach ([0, 2] as $wait) {
+                sleep($wait);
+                $res = Http::withHeaders(['Content-Type' => 'application/json'])
+                    ->timeout($timeout)
+                    ->post($url, $body);
+
+                if ($res->successful()) {
+                    $raw = (string) $res->json('candidates.0.content.parts.0.text');
+                    if ($raw !== '') {
+                        break 2;
+                    }
+                }
+                Log::warning('ViralStudio Gemini model failed', ['model' => $model, 'status' => $res->status()]);
+                if ($res->status() !== 503) {
                     break;
                 }
             }
-            $lastError = $res->status() === 503
-                ? 'Gemini abhi busy hai (503) — 1-2 minute baad dobara try karo.'
-                : ($res->json('error.message') ?? $lastError);
-            Log::warning('ViralStudio Gemini model failed', ['model' => $model, 'status' => $res->status()]);
+            $errors[] = $model . ': ' . ($res->status() === 503
+                ? 'busy (503) — 1-2 minute baad dobara try karo'
+                : ($res->json('error.message') ?? 'HTTP ' . $res->status()));
         }
 
         if ($raw === '') {
-            throw new \RuntimeException('Gemini AI API Error: ' . $lastError);
+            throw new \RuntimeException('Gemini AI API Error: ' . implode(' | ', $errors));
         }
         $clean = trim($raw);
         $clean = preg_replace('/^```(?:json)?\s*/i', '', $clean);

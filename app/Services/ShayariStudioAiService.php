@@ -229,12 +229,17 @@ class ShayariStudioAiService
 
         $lastError = 'Gemini generation fail.';
 
-        // Fastest models first: gemini-2.5-flash (with budget 0), fir lite (preview model Google ne hata diya)
-        foreach (['gemini-2.5-flash', 'gemini-2.5-flash-lite', 'gemini-2.0-flash'] as $model) {
+        // Models config se (services.gemini.text_models) — pehla fail ho to agla
+        foreach (config('services.gemini.text_models') as $model) {
+            // thinkingBudget sirf 2.5 models samajhte hain — Gemini 3+ apna default use kare
+            $body = $payload;
+            if (! str_starts_with($model, 'gemini-2.5')) {
+                unset($body['generationConfig']['thinkingConfig']);
+            }
             $url = "https://generativelanguage.googleapis.com/v1beta/models/{$model}:generateContent";
             $res = Http::timeout(60)
                 ->withHeaders(['x-goog-api-key' => config('services.gemini.key')])
-                ->post($url, $payload);
+                ->post($url, $body);
 
             if ($res->successful()) {
                 $text = (string) $res->json('candidates.0.content.parts.0.text');

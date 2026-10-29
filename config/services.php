@@ -56,6 +56,8 @@ return [
         'tts_model'   => env('GEMINI_TTS_MODEL', 'gemini-2.5-flash-preview-tts'),
         'tts_voice'   => env('GEMINI_TTS_VOICE', 'Kore'), // default voice (Hindi supported)
         'image_model' => env('GEMINI_IMAGE_MODEL', 'gemini-2.5-flash-image'), // "Nano Banana"
+        // Studio text (JSON) ke models — pehla fail ho to agla. Google model band kare to .env se badlo.
+        'text_models' => array_filter(array_map('trim', explode(',', env('GEMINI_TEXT_MODELS', 'gemini-2.5-flash,gemini-3.5-flash-lite')))),
     ],
 
     // Pixabay — free stock vectors/illustrations (Kids Yoga ke pose images ke liye).
