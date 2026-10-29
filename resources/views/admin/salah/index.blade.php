@@ -31,7 +31,8 @@
             <div>
                 <label class="block text-xs font-bold text-slate-700 uppercase tracking-wide mb-1.5">🏷️ Category</label>
                 <select id="category" class="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:ring-2 focus:ring-amber-500 focus:outline-none font-medium">
-                    <option value="Parenting" selected>👩‍👧 Parenting / Bachche</option>
+                    <option value="Mix of relationship secrets: affairs, attraction, loneliness, secret crush, online chatting, trust and betrayal between adults" selected>🔥 Mix — Sambandh / Affair / Akarshan (badhu)</option>
+                    <option value="Parenting">👩‍👧 Parenting / Bachche</option>
                     <option value="Teenagers & Puberty">🧒 Teenagers &amp; Puberty</option>
                     <option value="Marriage & Husband-Wife">💑 Pati-Patni / Marriage</option>
                     <option value="Sasural & Joint Family">🏠 Sasural &amp; Joint Family</option>
@@ -43,6 +44,13 @@
                     <option value="Husband or boyfriend having an affair (wife/girlfriend asks for advice)">👨 Boy nu Affair (Pati / Boyfriend)</option>
                     <option value="Wrong deeds & mistakes in relationships (lies, betrayal, cheating by partner or relatives, own guilt)">😔 Sambandh ma khotu kaam / Galti</option>
                     <option value="Mental Health & Stress">🧠 Stress / Mann ki baat</option>
+                    <option value="Loneliness & attraction (living alone, attraction to an older neighbour or someone unavailable, one-sided feelings)">🥀 Ekla-pan &amp; Akarshan</option>
+                    <option value="Online chatting, social media & dating apps (emotional dependence on strangers online, fake profiles)">📲 Online Chatting / Social Media</option>
+                    <option value="Secret crush & age-gap feelings between adults">🙈 Secret Crush / Age-gap</option>
+                    <option value="Caught partner's secret chats (WhatsApp/Instagram chats with someone else, deleted messages)">🔍 Partner ni Secret Chat pakdai</option>
+                    <option value="Late-night chatting with an ex or old friend after marriage">🌙 Ex / Juna mitra sathe Raat ni Chat</option>
+                    <option value="Emotional attachment to an online stranger met through Instagram/Facebook DMs or online games">💬 Online Ajanya sathe Lagav</option>
+                    <option value="Chatting with a married person / office colleague crossing limits">💼 Office Colleague sathe Chat</option>
                     <option value="Old Age & Parents">👴 Buzurg Mata-Pita</option>
                 </select>
             </div>
@@ -61,7 +69,14 @@
             </div>
         </div>
         <div class="grid sm:grid-cols-4 gap-4">
-            <div class="sm:col-span-3">
+            <div>
+                <label class="block text-xs font-bold text-slate-700 uppercase tracking-wide mb-1.5">📝 Style</label>
+                <select id="style" class="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:ring-2 focus:ring-amber-500 focus:outline-none font-medium">
+                    <option value="normal" selected>Normal (chhota sawaal + 4 samadhan)</option>
+                    <option value="confession">Lambi Kahani / Confession</option>
+                </select>
+            </div>
+            <div class="sm:col-span-2">
                 <label class="block text-xs font-bold text-slate-700 uppercase tracking-wide mb-1.5">✍️ Topic (optional)</label>
                 <input id="topic" type="text" maxlength="200" placeholder="e.g. દીકરી મોબાઈલ વધારે વાપરે છે / सास-बहू में अनबन — khaali chhodo to AI khud chunega"
                        class="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:ring-2 focus:ring-amber-500 focus:outline-none">
@@ -186,7 +201,7 @@
             const r = await fetch(GEN_URL, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json', 'X-CSRF-TOKEN': CSRF, 'Accept': 'application/json' },
-                body: JSON.stringify({ count: el('count').value, language: el('language').value, category: el('category').value, topic: el('topic').value })
+                body: JSON.stringify({ count: el('count').value, language: el('language').value, category: el('category').value, topic: el('topic').value, style: el('style').value })
             });
             const d = await r.json();
             if (!d.ok) throw new Error(K.saveError(d));

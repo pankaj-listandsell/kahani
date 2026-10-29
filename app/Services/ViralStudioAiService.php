@@ -139,10 +139,27 @@ PROMPT;
     /**
      * 5. 💬 SALAH: Reader ka sawaal + expert jawab + 4 samadhan (advice column card).
      */
-    public function generateSalah(int $count = 3, string $language = 'gujarati', string $category = 'Parenting', string $topic = ''): array
+    public function generateSalah(int $count = 3, string $language = 'gujarati', string $category = 'Parenting', string $topic = '', string $style = 'normal'): array
     {
         $langPrompt = $this->langPrompt($language);
         $topicLine = $topic !== '' ? "Specific topic: {$topic}. Every card must be about this topic (different angles)." : 'Pick a different, common real-life problem for each card.';
+
+        // confession = lambi, dil kholkar likhi kahani (age, sheher, kya hua, kya mehsoos hua) + chhota jawab
+        [$questionRule, $askerRule, $answerRule, $solutionsRule, $limit] = $style === 'confession'
+            ? [
+                '150-200 words, a heartfelt first-person confession told like a story: age, city, living situation, how it started, what happened step by step, how they felt (loneliness, attraction, guilt, confusion), what they tried, ends asking "what should I do?". Bold, gossip-worthy, emotionally honest, but never explicit.',
+                'First name + city (e.g. "રિયા, અમદાવાદ").',
+                '45-60 words: name the psychology behind the feeling (e.g. validation craving, loneliness, emotional dependence) without judging.',
+                'Array of exactly 2 objects {"heading": 3-6 word step title, "text": 20-35 word explanation}.',
+                320,
+            ]
+            : [
+                '55-80 words, first person, starts with a greeting (e.g. "નમસ્તે,"), realistic detail, ends asking for advice.',
+                'Short anonymous signature: who + city (e.g. "એક ચિંતિત માતા, વડોદરા").',
+                '50-70 words: validate the feeling, explain the reason simply.',
+                'Array of exactly 4 objects {"heading": 3-7 word bold step title, "text": 12-25 word explanation}.',
+                260,
+            ];
 
         $prompt = <<<PROMPT
 You write a popular "reader asks, expert answers" advice column that is posted as Instagram Reels text cards.
@@ -155,19 +172,21 @@ Tone & safety:
 - Sensitive topics (health, puberty, marriage, mental health) must be handled tastefully and non-explicitly.
 - For health / medical / legal issues, never diagnose or prescribe medicine — recommend consulting a doctor or professional as one of the steps.
 - No shaming, no superstition, no fear-mongering.
+- Never mention, recommend or name any app, Telegram/WhatsApp bot, website, social media handle or brand — advice must point to real-life solutions (family, friends, hobbies, counsellor).
+- Characters are always adults unless the category is about children/parenting; never describe minors in any romantic or sexual context.
 
 Fields (all text in {$langPrompt}):
 - `title`: Headline, 10-22 words, emotional and curiosity-driven, describes the situation (no quotes around it).
-- `question`: The reader's letter, 55-80 words, first person, starts with a greeting (e.g. "નમસ્તે,"), realistic detail, ends asking for advice.
-- `asker`: Short anonymous signature: who + city (e.g. "એક ચિંતિત માતા, વડોદરા").
-- `answer`: Empathetic expert reply, 50-70 words: validate the feeling, explain the reason simply.
-- `solutions`: Array of exactly 4 objects {"heading": 3-7 word bold step title, "text": 12-25 word explanation}.
+- `question`: The reader's letter, {$questionRule}
+- `asker`: {$askerRule}
+- `answer`: Empathetic expert reply, {$answerRule}
+- `solutions`: {$solutionsRule}
 - `takeaway`: One closing line of wisdom, 15-25 words.
 - `cta_question`: One question asking viewers to share their opinion in comments, 12-25 words.
 - `caption`: Instagram caption, 2-4 short lines with a few emojis, asks people to comment / share with someone who needs it.
 - `hashtags`: 8-12 relevant hashtags in one string.
 
-Keep total text per card under ~260 words so it fits on one 9:16 card.
+Keep total text per card under ~{$limit} words so it fits on one 9:16 card.
 
 Return ONLY a raw JSON array of objects with keys: `title`, `question`, `asker`, `answer`, `solutions`, `takeaway`, `cta_question`, `caption`, `hashtags`.
 PROMPT;

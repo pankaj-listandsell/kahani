@@ -69,6 +69,7 @@ class SalahController extends Controller
             'language' => ['required', 'in:gujarati,hindi,hinglish'],
             'category' => ['nullable', 'string', 'max:150'],
             'topic'    => ['nullable', 'string', 'max:200'],
+            'style'    => ['nullable', 'in:normal,confession'],
         ]);
 
         try {
@@ -76,7 +77,8 @@ class SalahController extends Controller
                 (int) $data['count'],
                 $data['language'],
                 $data['category'] ?? 'Parenting',
-                trim((string) ($data['topic'] ?? ''))
+                trim((string) ($data['topic'] ?? '')),
+                $data['style'] ?? 'normal'
             );
 
             return response()->json(['ok' => true, 'items' => $items]);
