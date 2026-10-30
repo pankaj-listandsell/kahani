@@ -59,6 +59,7 @@ Route::middleware('auth')->prefix('admin')->name('admin.')->group(function () {
     Route::put('settings/password', [SettingsController::class, 'updatePassword'])->name('settings.password');
     Route::post('settings/reel-motion', [SettingsController::class, 'updateReelMotion'])->name('settings.reelmotion');
     Route::post('settings/reel-audio', [SettingsController::class, 'updateReelAudio'])->name('settings.reelaudio');
+    Route::post('settings/reel-outro', [SettingsController::class, 'updateReelOutro'])->name('settings.reeloutro');
     Route::put('settings/quiz-caption', [SettingsController::class, 'updateQuizCaption'])->name('settings.quizcaption');
 
     // Instagram

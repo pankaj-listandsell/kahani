@@ -332,6 +332,7 @@ class YoutubeService
         $segments = array_merge(
             $this->coverSegments($card->part),
             [$this->cardSegment($card, $seconds)],
+            $this->outroSegments($card),
         );
 
         $this->encodeSegments($segments, $mp4);
@@ -374,6 +375,8 @@ class YoutubeService
             throw new \RuntimeException('In cards ki koi image nahi mili.');
         }
 
+        $segments = array_merge($segments, $this->outroSegments($first));
+
         $this->encodeSegments($segments, $mp4);
 
         return $mp4;
@@ -401,6 +404,25 @@ class YoutubeService
         $dur = max(1, (int) $this->setting('yt_cover_seconds', 2));
 
         return [['path' => $disk->path($cover), 'dur' => $dur]];
+    }
+
+    /**
+     * End me "Follow karo" outro segment (Settings me ON ho to), warna khaali.
+     *
+     * @return list<array{path:string,dur:float,voice?:string}>
+     */
+    protected function outroSegments(?PartCard $card): array
+    {
+        $story = $card?->part?->story;
+        $seg   = ReelOutro::segment($story?->user_id, $story?->language, $story?->tts_voice);
+
+        // Music mode: voice wala segment poori video ko voice-path par le jaata (music hat jaati)
+        if ($seg && $this->ttsMode() === 'music') {
+            unset($seg['voice']);
+            $seg['dur'] = (float) max(ReelOutro::MIN_SECONDS, (float) $this->setting('reel_outro_seconds', 3));
+        }
+
+        return $seg ? [$seg] : [];
     }
 
     /**

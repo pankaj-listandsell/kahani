@@ -4,11 +4,14 @@ namespace App\Http\Controllers\Admin;
 
 use App\Http\Controllers\Controller;
 use App\Models\Setting;
+use App\Services\InstagramService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Storage;
+use Illuminate\Support\Str;
 use Illuminate\Validation\Rules\Password;
 
 class SettingsController extends Controller
@@ -106,6 +109,50 @@ class SettingsController extends Controller
         }
 
         return response()->json(['ok' => true]);
+    }
+
+    /**
+     * 🔔 Reel ke end ka "Follow karo" outro — card image (browser canvas me bani) + voice line.
+     */
+    public function updateReelOutro(Request $request, InstagramService $instagram)
+    {
+        $data = $request->validate([
+            'enabled'  => ['required', 'boolean'],
+            'headline' => ['nullable', 'string', 'max:120'],
+            'sub'      => ['nullable', 'string', 'max:120'],
+            'handle'   => ['nullable', 'string', 'max:60'],
+            'voice'    => ['nullable', 'string', 'max:200'],
+            'seconds'  => ['nullable', 'numeric', 'min:2.5', 'max:6'],
+            'image'    => ['nullable', 'string'],
+        ]);
+
+        $uid = Auth::id();
+
+        if (! empty($data['image'])) {
+            if (! preg_match('/^data:image\/png;base64,(.+)$/s', $data['image'], $m)
+                || ($png = base64_decode(str_replace(' ', '+', $m[1]), true)) === false) {
+                return response()->json(['ok' => false, 'error' => 'Image sahi nahi bani.'], 422);
+            }
+
+            $disk = Storage::disk('public');
+            $old  = (string) Setting::getFor($uid, 'reel_outro_image', '');
+            $path = 'outro/outro-' . $uid . '-' . Str::random(8) . '.png';
+            $disk->put($path, $png);
+            if ($old !== '' && $old !== $path) {
+                $disk->delete($old);
+            }
+            Setting::putFor($uid, 'reel_outro_image', $path);
+        }
+
+        Setting::putFor($uid, 'reel_outro_enabled', $data['enabled'] ? '1' : '0');
+        foreach (['headline', 'sub', 'handle', 'voice', 'seconds'] as $key) {
+            Setting::putFor($uid, 'reel_outro_' . $key, trim((string) ($data[$key] ?? '')));
+        }
+
+        // Music-mode wali cached reels purani (bina/purane outro wali) — nayi bane
+        $instagram->forUser($uid)->clearReelCache();
+
+        return response()->json(['ok' => true, 'image' => ($p = Setting::getFor($uid, 'reel_outro_image')) ? Storage::disk('public')->url($p) : null]);
     }
 
     /**

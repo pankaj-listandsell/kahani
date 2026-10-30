@@ -137,7 +137,9 @@ class QuizReelService
             }
 
             if ($result->successful() && $disk->exists($mp4)) {
-                return $mp4;
+                $story = $card->part?->story;
+
+                return ReelOutro::append($mp4, $userId, $story?->language, $story?->tts_voice);
             }
 
             $lastErr = $result->errorOutput() ?: $result->output();

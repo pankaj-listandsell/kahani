@@ -749,7 +749,10 @@ class InstagramService
             throw new \RuntimeException('Video (reel) banane me dikkat — ffmpeg fail. Path sahi hai? ' . Str::limit($result->errorOutput(), 200));
         }
 
-        return $mp4Path;
+        // End me "Follow karo" outro (Settings me ON ho to). Music-mode cache me ye pehle se juda rehta hai.
+        $story = $card->part?->story;
+
+        return ReelOutro::append($mp4Path, $story?->user_id, $story?->language, $story?->tts_voice);
     }
 
     /* ===================================================================
