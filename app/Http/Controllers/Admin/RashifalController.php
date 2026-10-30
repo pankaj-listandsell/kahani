@@ -62,17 +62,23 @@ class RashifalController extends Controller
     public function generate(Request $request, ViralStudioAiService $ai)
     {
         $data = $request->validate([
-            'date'     => ['required', 'date_format:Y-m-d'],
-            'language' => ['required', 'in:gujarati,hindi,hinglish'],
+            'date'          => ['required', 'date_format:Y-m-d'],
+            'language'      => ['required', 'in:gujarati,hindi,hinglish'],
+            'skip_existing' => ['nullable', 'boolean'],
         ]);
 
         try {
-            $items = $ai->generateRashifal($data['date'], $data['language']);
-
             $exists = Story::where('type', 'rashifal')
                 ->where('user_id', auth()->id())
                 ->where('category', $data['date'])
                 ->exists();
+
+            // "7 din" button: jo din pehle se save hai uska AI call bachao
+            if ($exists && ($data['skip_existing'] ?? false)) {
+                return response()->json(['ok' => true, 'skipped' => true, 'items' => [], 'exists' => true]);
+            }
+
+            $items = $ai->generateRashifal($data['date'], $data['language']);
 
             return response()->json(['ok' => true, 'items' => $items, 'exists' => $exists]);
         } catch (\Throwable $e) {

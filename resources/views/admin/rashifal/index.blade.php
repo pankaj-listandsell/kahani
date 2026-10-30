@@ -44,7 +44,12 @@
                 </button>
             </div>
         </div>
-        <p class="text-xs text-slate-500">💡 Tip: ek saath aage ke kai din bana ke save kar do — har din ka rashifal apne aap usi din post hoga. Purane din ke bache cards kabhi post nahi honge.</p>
+        <div class="flex flex-col sm:flex-row sm:items-center gap-3 pt-1 border-t border-slate-100">
+            <button id="weekBtn" class="shrink-0 bg-gradient-to-r from-fuchsia-600 to-purple-700 hover:from-fuchsia-700 hover:to-purple-800 text-white font-bold py-2 px-4 rounded-lg shadow transition disabled:opacity-50">
+                📅 Agle 7 din banao
+            </button>
+            <p class="text-xs text-slate-500">Upar ki date se 7 din ka rashifal ek click me ban ke <b>seedha save</b> ho jayega (pehle se save din skip). Har din usi din auto-post hoga. Page band mat karna — 3-7 minute lag sakte hain.</p>
+        </div>
 
         <div id="progressBox" class="hidden pt-2">
             <div class="text-xs font-semibold text-slate-600 mb-1"><span id="progressText">AI likh raha hai… (20–60 sec)</span></div>
@@ -405,16 +410,20 @@
     }
 
     // ---------- Save ----------
-    el('saveBtn').addEventListener('click', async () => {
-        if (!items.length) return;
-        if (dateExists && !confirm('Is date ka rashifal pehle se save hai. Phir bhi naya save karein? (dono post honge)')) return;
-        const btn = el('saveBtn');
-        btn.disabled = true;
-        el('progressBox').classList.remove('hidden');
-        el('progressText').textContent = 'Saving…';
-        el('progressBar').style.width = '30%';
-        await K.ensureFonts();
+    async function postJson(url, body) {
+        const r = await fetch(url, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'X-CSRF-TOKEN': CSRF, 'Accept': 'application/json' },
+            body: JSON.stringify(body)
+        });
+        const d = await r.json();
+        if (!d.ok) throw new Error(K.saveError(d));
+        return d;
+    }
 
+    /** Abhi ke items (itemsDate / itemsLang) ke 12 cards bana ke save karo. */
+    async function saveCurrent() {
+        await K.ensureFonts();
         const off = document.createElement('canvas'); off.width = W; off.height = H;
         const cardsToSave = items.map(item => {
             drawRashi(off, item);
@@ -426,18 +435,20 @@
                 image: off.toDataURL('image/webp', 0.92),
             };
         });
+        return postJson(SAVE_URL, { date: itemsDate, language: itemsLang, cards: cardsToSave });
+    }
 
-        el('progressBar').style.width = '75%';
+    el('saveBtn').addEventListener('click', async () => {
+        if (!items.length) return;
+        if (dateExists && !confirm('Is date ka rashifal pehle se save hai. Phir bhi naya save karein? (dono post honge)')) return;
+        const btn = el('saveBtn');
+        btn.disabled = true;
+        el('progressBox').classList.remove('hidden');
+        el('progressText').textContent = 'Saving…';
+        el('progressBar').style.width = '50%';
 
         try {
-            const r = await fetch(SAVE_URL, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json', 'X-CSRF-TOKEN': CSRF, 'Accept': 'application/json' },
-                body: JSON.stringify({ date: itemsDate, language: itemsLang, cards: cardsToSave })
-            });
-            const d = await r.json();
-            if (!d.ok) throw new Error(K.saveError(d));
-
+            const d = await saveCurrent();
             el('progressBar').style.width = '100%';
             setTimeout(() => window.location = d.redirect, 400);
         } catch (e) {
@@ -445,6 +456,51 @@
             btn.disabled = false;
             el('progressBox').classList.add('hidden');
         }
+    });
+
+    // ---------- Agle 7 din: generate + seedha save, ek ke baad ek ----------
+    el('weekBtn').addEventListener('click', async () => {
+        const start = el('date').value;
+        if (!start) { alert('Date chuno'); return; }
+        const lang = el('language').value;
+        const days = [...Array(7)].map((_, i) => {
+            const d = new Date(start + 'T00:00:00');
+            d.setDate(d.getDate() + i);
+            return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
+        });
+        if (!confirm(`${days[0]} se ${days[6]} tak 7 din ka rashifal banake save karein?`)) return;
+
+        const btns = ['weekBtn', 'genBtn', 'saveBtn'].map(el);
+        btns.forEach(b => b.disabled = true);
+        el('progressBox').classList.remove('hidden');
+        const done = [], skipped = [], failed = [];
+
+        for (const [i, day] of days.entries()) {
+            el('progressText').textContent = `Din ${i + 1}/7 (${day}) — AI likh raha hai…`;
+            el('progressBar').style.width = Math.round((i / 7) * 100) + '%';
+            try {
+                const d = await postJson(GEN_URL, { date: day, language: lang, skip_existing: true });
+                if (d.skipped) { skipped.push(day); continue; }
+
+                items = orderItems(Array.isArray(d.items) ? d.items : []);
+                if (items.length < 12) throw new Error(`AI ne sirf ${items.length} rashi di`);
+                itemsLang = lang;
+                itemsDate = day;
+                el('progressText').textContent = `Din ${i + 1}/7 (${day}) — save ho raha hai…`;
+                await saveCurrent();
+                done.push(day);
+            } catch (e) {
+                failed.push(day + ': ' + e.message);
+            }
+        }
+
+        el('progressBar').style.width = '100%';
+        alert(
+            `✅ Save hua: ${done.length} din` +
+            (skipped.length ? `\n⏭ Pehle se tha (skip): ${skipped.join(', ')}` : '') +
+            (failed.length ? `\n⚠ Fail (dobara try karo):\n${failed.join('\n')}` : '')
+        );
+        window.location.reload();
     });
 
     // ---------- Bulk Delete ----------
