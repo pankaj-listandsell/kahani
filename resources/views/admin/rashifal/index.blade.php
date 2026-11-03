@@ -267,6 +267,36 @@
     }
 
     // ---------- Card drawing ----------
+    const CY = 420; // rashi chinh / chakra ka centre (y)
+
+    // AI ka "shubh rang" (gu/hi/en) → asli colour. Lambe naam pehle, taaki "આસમાની" "લાલ" se pehle mile.
+    const COLORS = [
+        [['આસમાની', 'આકાશી', 'आसमानी', 'sky blue', 'sky'], '#38bdf8'],
+        [['મરૂન', 'मैरून', 'maroon'], '#7f1d1d'],
+        [['ગુલાબી', 'गुलाबी', 'pink'], '#ec4899'],
+        [['જાંબલી', 'જાંબુડી', 'बैंगनी', 'जामुनी', 'purple', 'violet'], '#7c3aed'],
+        [['કેસરી', 'નારંગી', 'केसरिया', 'नारंगी', 'saffron', 'orange'], '#f97316'],
+        [['સોનેરી', 'सुनहरा', 'golden', 'gold'], '#d4a017'],
+        [['ચાંદી', 'રૂપેરી', 'चांदी', 'सिल्वर', 'silver'], '#c0c0c0'],
+        [['ક્રીમ', 'क्रीम', 'cream'], '#fef3c7'],
+        [['કથ્થઈ', 'ભૂરો', 'भूरा', 'brown'], '#8b5a2b'],
+        [['રાખોડી', 'ગ્રે', 'स्लेटी', 'ग्रे', 'grey', 'gray'], '#9ca3af'],
+        [['પીળો', 'પીળા', 'पीला', 'yellow'], '#facc15'],
+        [['લીલો', 'લીલા', 'हरा', 'green'], '#16a34a'],
+        [['વાદળી', 'નીલો', 'નીલા', 'नीला', 'blue'], '#2563eb'],
+        [['લાલ', 'लाल', 'red'], '#dc2626'],
+        [['સફેદ', 'सफेद', 'सफ़ेद', 'white'], '#ffffff'],
+        [['કાળો', 'કાળા', 'काला', 'black'], '#111827'],
+    ];
+    function colorHex(name) {
+        const s = K.str(name).toLowerCase();
+        if (!s) return null;
+        for (const [words, hex] of COLORS) {
+            if (words.some(w => s.includes(w))) return hex;
+        }
+        return null;
+    }
+
     function rng(seed) {
         return () => (seed = (seed * 16807) % 2147483647) / 2147483647;
     }
@@ -291,13 +321,13 @@
         ctx.save();
         ctx.strokeStyle = 'rgba(250, 204, 21, 0.18)';
         ctx.lineWidth = 3;
-        [250, 300].forEach(rad => { ctx.beginPath(); ctx.arc(W / 2, 470, rad, 0, Math.PI * 2); ctx.stroke(); });
-        ctx.font = K.font(34, '400');
+        [200, 245].forEach(rad => { ctx.beginPath(); ctx.arc(W / 2, CY, rad, 0, Math.PI * 2); ctx.stroke(); });
+        ctx.font = K.font(30, '400');
         ctx.fillStyle = 'rgba(250, 204, 21, 0.35)';
         ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
         SYMBOLS.forEach((sym, i) => {
             const a = (i / 12) * Math.PI * 2 - Math.PI / 2;
-            ctx.fillText(sym + '︎', W / 2 + Math.cos(a) * 275, 470 + Math.sin(a) * 275);
+            ctx.fillText(sym + '︎', W / 2 + Math.cos(a) * 223, CY + Math.sin(a) * 223);
         });
         ctx.restore();
     }
@@ -322,29 +352,29 @@
         ctx.save();
         ctx.shadowColor = 'rgba(250, 204, 21, 0.7)';
         ctx.shadowBlur = 50;
-        const cg = ctx.createRadialGradient(W / 2, 470, 20, W / 2, 470, 200);
+        const cg = ctx.createRadialGradient(W / 2, CY, 20, W / 2, CY, 160);
         cg.addColorStop(0, '#fde68a');
         cg.addColorStop(1, '#d97706');
         ctx.fillStyle = cg;
-        ctx.beginPath(); ctx.arc(W / 2, 470, 190, 0, Math.PI * 2); ctx.fill();
+        ctx.beginPath(); ctx.arc(W / 2, CY, 150, 0, Math.PI * 2); ctx.fill();
         ctx.restore();
         ctx.fillStyle = '#3b0764';
-        ctx.font = `200px "Segoe UI Symbol", "Noto Sans Symbols 2", ${K.STACK}`;
+        ctx.font = `160px "Segoe UI Symbol", "Noto Sans Symbols 2", ${K.STACK}`;
         ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-        ctx.fillText(SYMBOLS[i] + '︎', W / 2, 480);
+        ctx.fillText(SYMBOLS[i] + '︎', W / 2, CY + 8);
 
         // Rashi naam + akshar
         ctx.fillStyle = '#ffffff';
-        ctx.font = K.font(96);
-        ctx.fillText(L.names[i], W / 2, 750);
+        ctx.font = K.font(88);
+        ctx.fillText(L.names[i], W / 2, 650);
         if (L.letters) {
             ctx.fillStyle = '#fcd34d';
             K.fitOneLine(ctx, '(' + L.letters[i] + ')', W - 200, 40, 28, '400');
-            ctx.fillText('(' + L.letters[i] + ')', W / 2, 830);
+            ctx.fillText('(' + L.letters[i] + ')', W / 2, 722);
         }
 
         // Bhavishya — kaanch jaisa panel
-        const px = 70, pw = W - 140, py = 890, ph = 520;
+        const px = 60, pw = W - 120, py = 770, ph = 720;
         ctx.fillStyle = 'rgba(255,255,255,0.10)';
         ctx.strokeStyle = 'rgba(250, 204, 21, 0.45)';
         ctx.lineWidth = 3;
@@ -358,7 +388,7 @@
             [{ t: '🩺 ' + L.health, b: true, c: gold }, { t: K.str(item.health), b: false }],
         ].filter(p => p.some(s => !s.b && s.t.trim()));
         ctx.fillStyle = '#ffffff';
-        const layout = K.fitRich(ctx, paras, pw - 80, ph - 70, 42, 24, { paraGap: 0.6 });
+        const layout = K.fitRich(ctx, paras, pw - 80, ph - 70, 54, 28, { paraGap: 0.55 });
         K.drawRich(ctx, layout, px + 40, py + (ph - layout.height) / 2);
 
         // Shubh ank / rang
@@ -366,12 +396,30 @@
             L.num + ': ' + num(item.lucky_number),
             L.color + ': ' + K.str(item.lucky_color),
         ];
+        const swatch = colorHex(item.lucky_color);
         pills.forEach((t, k) => {
-            const cx = k === 0 ? W * 0.28 : W * 0.72, cy = 1500, w = 420, h = 96;
+            const cx = k === 0 ? W * 0.27 : W * 0.73, cy = 1580, w = 450, h = 100;
             ctx.fillStyle = 'rgba(250, 204, 21, 0.95)';
             ctx.beginPath(); ctx.roundRect(cx - w / 2, cy - h / 2, w, h, 48); ctx.fill();
             ctx.fillStyle = '#3b0764';
             ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+
+            // Shubh rang wali pill me us rang ka gola (rang pehchana na jaaye to bina gole)
+            if (k === 1 && swatch) {
+                const dot = 30, gap = 14;
+                const size = K.fitOneLine(ctx, t, w - 60 - dot * 2 - gap, 38, 24);
+                const tw = ctx.measureText(t).width;
+                const left = cx - (dot * 2 + gap + tw) / 2;
+                ctx.fillStyle = swatch;
+                ctx.strokeStyle = '#ffffff';
+                ctx.lineWidth = 5;
+                ctx.beginPath(); ctx.arc(left + dot, cy, dot, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
+                ctx.fillStyle = '#3b0764';
+                ctx.font = K.font(size);
+                ctx.fillText(t, left + dot * 2 + gap + tw / 2, cy + 2);
+                return;
+            }
+
             K.fitOneLine(ctx, t, w - 40, 38, 24);
             ctx.fillText(t, cx, cy + 2);
         });
@@ -379,7 +427,7 @@
         // CTA
         ctx.fillStyle = '#ffffff';
         K.fitOneLine(ctx, L.cta, W - 120, 46, 30);
-        ctx.fillText(L.cta, W / 2, 1640);
+        ctx.fillText(L.cta, W / 2, 1700);
     }
 
     /** Reel voiceover: rashi ka naam + bhavishya + prem/kaam/swasthya. */
