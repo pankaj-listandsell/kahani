@@ -95,7 +95,7 @@
 </div>
 
 {{-- Quick Studio Shortcuts --}}
-<div class="grid sm:grid-cols-2 md:grid-cols-5 gap-3 mb-6">
+<div class="grid sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3 mb-6">
     <a href="{{ route('admin.quiz.index') }}" class="flex items-center gap-3 p-3.5 bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-600 hover:to-amber-700 text-white rounded-xl shadow-sm transition">
         <span class="text-2xl">🎯</span>
         <div>
@@ -129,6 +129,13 @@
         <div>
             <p class="font-bold text-sm">Nuskhe &amp; Recipe</p>
             <p class="text-[11px] text-emerald-100">Save-worthy Cards</p>
+        </div>
+    </a>
+    <a href="{{ route('admin.patra.index') }}" class="flex items-center gap-3 p-3.5 bg-gradient-to-r from-rose-500 to-pink-600 hover:from-rose-600 hover:to-pink-700 text-white rounded-xl shadow-sm transition">
+        <span class="text-2xl">💌</span>
+        <div>
+            <p class="font-bold text-sm">Prem Patra</p>
+            <p class="text-[11px] text-rose-100">Love Letter Cards</p>
         </div>
     </a>
 </div>

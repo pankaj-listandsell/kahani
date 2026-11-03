@@ -7,6 +7,7 @@ use App\Http\Controllers\Admin\DashboardController;
 use App\Http\Controllers\Admin\FacebookController;
 use App\Http\Controllers\Admin\InstagramController;
 use App\Http\Controllers\Admin\NuskhaController;
+use App\Http\Controllers\Admin\PremPatraController;
 use App\Http\Controllers\Admin\PartController;
 use App\Http\Controllers\Admin\RashifalController;
 use App\Http\Controllers\Admin\SalahController;
@@ -132,6 +133,13 @@ Route::middleware('auth')->prefix('admin')->name('admin.')->group(function () {
     Route::post('nuskha/save', [NuskhaController::class, 'save'])->name('nuskha.save');
     Route::get('nuskha/{story}', [NuskhaController::class, 'show'])->name('nuskha.show');
     Route::delete('nuskha/{story}', [NuskhaController::class, 'destroy'])->name('nuskha.destroy');
+
+    // 💌 Prem Patra (love letters — har card alag love theme)
+    Route::get('patra', [PremPatraController::class, 'index'])->name('patra.index');
+    Route::post('patra/generate', [PremPatraController::class, 'generate'])->name('patra.generate');
+    Route::post('patra/save', [PremPatraController::class, 'save'])->name('patra.save');
+    Route::get('patra/{story}', [PremPatraController::class, 'show'])->name('patra.show');
+    Route::delete('patra/{story}', [PremPatraController::class, 'destroy'])->name('patra.destroy');
 
     // Topic se AI kahani generate (create form bharne ke liye) — resource se pehle
     Route::post('stories/generate', [StoryController::class, 'generateFromTopic'])->name('stories.generate');

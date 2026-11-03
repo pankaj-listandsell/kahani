@@ -36,7 +36,7 @@ class Story extends Model
      */
     public const COLLECTION_TYPES = [
         'shayari', 'joke', 'quote', 'quiz', 'status', 'fact', 'yoga', 'ukhana',
-        'puzzle', 'mind_reader', 'this_or_that', 'name_secret', 'salah', 'nuskha',
+        'puzzle', 'mind_reader', 'this_or_that', 'name_secret', 'salah', 'nuskha', 'prem_patra',
     ];
 
     public function isCollection(): bool
@@ -82,6 +82,8 @@ class Story extends Model
     {
         return match ($this->type) {
             'shayari', 'quote', 'joke', 'yoga', 'quiz', 'ukhana' => $this->type,
+            // Love letter — shayari jaisa dheema, ehsaas bhara padhna
+            'prem_patra' => 'shayari',
             // Interactive studios — quiz-master wala andaaz
             'puzzle', 'mind_reader', 'this_or_that', 'name_secret' => 'quiz',
             default => 'story',

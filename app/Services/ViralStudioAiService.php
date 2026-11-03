@@ -144,6 +144,87 @@ PROMPT;
         return $this->callGeminiJson($prompt, 90);
     }
 
+    /**
+     * 💌 Prem Patra ki love themes (key → AI ke liye matlab). Card ka design (rang/emoji)
+     * view me isi key se chunta hai — key badlo to patra/index.blade.php ka THEMES bhi.
+     */
+    public const PATRA_THEMES = [
+        'pehlo_prem'    => 'First love — innocent first love from college days (both adults), shy feelings, the first meeting and first conversation.',
+        'pati_patni'    => 'Husband/wife letter — gratitude and deep love for the life partner after years of marriage, small everyday moments together.',
+        'long_distance' => 'Long-distance love — partners living in different cities or countries, missing each other, late-night calls, counting days to meet.',
+        'judaai'        => 'Separation / breakup — a letter to a love that has ended; pain with dignity, no blame, wishing them happiness, moving on with strength.',
+        'ek_tarfi'      => 'One-sided love — a letter never sent, to someone who never knew about this silent love.',
+        'maafi'         => 'Sorry letter — apologising to the partner after a fight, admitting the mistake with honesty and promising to change.',
+        'proposal'      => 'Confession / proposal — finally admitting love to a close friend and asking them to become the life partner.',
+        'anniversary'   => 'Anniversary — celebrating years together, memories from the wedding day until today.',
+        'budhapa'       => 'Old-age love — an elderly husband or wife after 40-50 years together; companionship, grey hair, holding hands, still in love.',
+        'fauji'         => "Soldier's love — an army man posted at the border writing to his wife (or the wife writing to him); duty, pride and longing.",
+        'yaad'          => 'Missing you / memories — remembering beautiful moments together: monsoon rain, old songs, the first gift, a shared cup of tea.',
+        'sagai'         => 'Engagement / newly married — dreams for the new life together, nervous excitement, promises for the future.',
+    ];
+
+    /**
+     * Love letter cards — har card ko ALAG theme. $theme = 'mix' ho to $count alag
+     * themes random chuni jaati hain; warna sab cards usi ek theme me (alag kahani).
+     */
+    public function generatePremPatra(int $count = 3, string $language = 'gujarati', string $theme = 'mix', string $topic = ''): array
+    {
+        $langPrompt = $this->langPrompt($language);
+        $count = max(1, min(12, $count));
+
+        if (isset(self::PATRA_THEMES[$theme])) {
+            $assigned = array_fill(0, $count, $theme);
+        } else {
+            $keys = array_keys(self::PATRA_THEMES);
+            shuffle($keys);
+            $assigned = array_slice($keys, 0, $count);
+        }
+
+        $plan = collect($assigned)
+            ->map(fn ($key, $i) => 'Card ' . ($i + 1) . ": theme `{$key}` — " . self::PATRA_THEMES[$key])
+            ->implode("\n");
+        $topicLine = $topic !== '' ? "Extra direction from the page owner: {$topic}." : '';
+
+        $prompt = <<<PROMPT
+You write heart-touching, emotional LOVE LETTERS (prem patra) for Instagram cards in {$langPrompt}.
+Generate exactly {$count} letters, one per line of this plan, in the same order. Each letter must clearly feel like its theme:
+{$plan}
+{$topicLine}
+
+Rules for every letter:
+- Written in first person, directly to the beloved ("તું/તમે" or "तुम/आप"), like a real handwritten letter — warm, specific, vivid little details (places, smells, songs, seasons), not generic lines.
+- Different story, names and situation in every letter. Vary between a man writing and a woman writing.
+- Both people are adults. Never involve minors. Nothing sexual or explicit — romantic and emotional only.
+- No real or famous people, no brands, apps, social media handles or phone numbers.
+- Sad themes stay hopeful and dignified: no self-harm, no threats, no stalking or obsession.
+- `theme`: the theme key from the plan, exactly.
+- `hook`: a short line shown above the letter, 4-9 words, makes people stop scrolling (e.g. "એક પત્ર, જે ક્યારેય મોકલી ન શક્યો 💔"). Max 1 emoji, never a flag emoji (flags show as letters on many phones).
+- `salutation`: opening address, 2-4 words (e.g. "મારી વહાલી નેહા,").
+- `body`: the letter, 90-130 words, 2-3 short paragraphs separated by "\\n\\n".
+- `closing`: 2-4 words before the name (e.g. "હંમેશા તારો જ,").
+- `signature`: just a common first name (e.g. "આકાશ").
+- `caption`: 2-3 short lines with emojis — ask people to tag or send this letter to the person they love, and to save it.
+- `hashtags`: 8-12 relevant hashtags (love letter, prem patra, language-specific) in one string.
+
+Return ONLY a raw JSON array of objects with keys: `theme`, `hook`, `salutation`, `body`, `closing`, `signature`, `caption`, `hashtags`.
+PROMPT;
+
+        $items = $this->callGeminiJson($prompt, 120);
+
+        // Design theme par chalta hai — AI galat/khaali key de to plan wali key lagao
+        foreach ($items as $i => &$item) {
+            if (! is_array($item)) {
+                continue;
+            }
+            if (! isset(self::PATRA_THEMES[$item['theme'] ?? ''])) {
+                $item['theme'] = $assigned[$i] ?? 'pehlo_prem';
+            }
+        }
+        unset($item);
+
+        return array_values(array_filter($items, 'is_array'));
+    }
+
     /** Prompt ke liye language ka naam — hinglish = Hindi words, Roman (English) letters me. */
     protected function langPrompt(string $language): string
     {

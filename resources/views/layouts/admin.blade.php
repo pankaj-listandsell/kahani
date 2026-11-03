@@ -27,6 +27,7 @@
         ['route' => 'admin.salah.index',       'active' => 'admin.salah.*',        'icon' => '💬', 'label' => 'Salah (Q&A)'],
         ['route' => 'admin.rashifal.index',    'active' => 'admin.rashifal.*',     'icon' => '🔯', 'label' => 'Aaj nu Rashifal'],
         ['route' => 'admin.nuskha.index',      'active' => 'admin.nuskha.*',       'icon' => '🌿', 'label' => 'Nuskhe & Recipe'],
+        ['route' => 'admin.patra.index',       'active' => 'admin.patra.*',        'icon' => '💌', 'label' => 'Prem Patra'],
         ['route' => 'admin.instagram.index','active' => 'admin.instagram.*', 'icon' => '📸', 'label' => 'Instagram'],
         ['route' => 'admin.youtube.index',  'active' => 'admin.youtube.*',   'icon' => '▶️', 'label' => 'YouTube'],
         ['route' => 'admin.facebook.index', 'active' => 'admin.facebook.*',  'icon' => '📘', 'label' => 'Facebook'],
