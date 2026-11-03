@@ -224,6 +224,26 @@ class YoutubeService
     }
 
     /**
+     * Channel ke subscribers. YouTube 1000+ par ginti round karke deta hai (jaise 12,345 → 12,300),
+     * aur "subscribers chhupao" ON ho to null.
+     */
+    public function subscriberCount(): ?int
+    {
+        $res = Http::withToken($this->accessToken())->timeout(20)
+            ->get('https://www.googleapis.com/youtube/v3/channels', [
+                'part' => 'statistics',
+                'mine' => 'true',
+            ]);
+
+        $s = $res->json('items.0.statistics');
+        if (! $s || ! empty($s['hiddenSubscriberCount'])) {
+            return null;
+        }
+
+        return (int) ($s['subscriberCount'] ?? 0);
+    }
+
+    /**
      * Videos ke views/likes/comments (YouTube Data API, 50 id ek call me).
      *
      * @param  list<string>  $videoIds

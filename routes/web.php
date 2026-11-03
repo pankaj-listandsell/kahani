@@ -53,6 +53,7 @@ Route::middleware('auth')->prefix('admin')->name('admin.')->group(function () {
     Route::get('/', [DashboardController::class, 'index'])->name('dashboard');
     Route::get('analytics', [AnalyticsController::class, 'index'])->name('analytics.index');
     Route::post('analytics/refresh', [AnalyticsController::class, 'refresh'])->name('analytics.refresh');
+    Route::post('followers/refresh', [AnalyticsController::class, 'refreshFollowers'])->name('followers.refresh');
 
     // Settings
     Route::get('settings', [SettingsController::class, 'index'])->name('settings.index');

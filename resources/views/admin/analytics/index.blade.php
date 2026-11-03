@@ -35,6 +35,9 @@
         </div>
     </div>
 
+    {{-- Followers ka roz ka badhaav --}}
+    @include('admin.partials._followers', ['chart' => true])
+
     {{-- Totals --}}
     <div class="grid grid-cols-2 lg:grid-cols-4 gap-4">
         <div class="bg-white p-5 rounded-xl border border-slate-200 shadow-sm">

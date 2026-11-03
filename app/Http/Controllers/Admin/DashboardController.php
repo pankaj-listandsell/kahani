@@ -6,12 +6,13 @@ use App\Http\Controllers\Controller;
 use App\Models\Part;
 use App\Models\PartCard;
 use App\Models\Story;
+use App\Services\FollowerTracker;
 use App\Services\InstagramService;
 use App\Services\YoutubeService;
 
 class DashboardController extends Controller
 {
-    public function index(InstagramService $instagramService, YoutubeService $youtubeService)
+    public function index(InstagramService $instagramService, YoutubeService $youtubeService, FollowerTracker $followerTracker)
     {
         $user = auth()->user();
 
@@ -48,6 +49,9 @@ class DashboardController extends Controller
             ->take(6)
             ->get();
 
-        return view('admin.dashboard', compact('stats', 'recent', 'igHealth', 'ytHealth', 'failedCards'));
+        // Aaj ke naye followers (followers:fetch har ghante ginti save karta hai)
+        $followers = $followerTracker->summary($user->id, 7);
+
+        return view('admin.dashboard', compact('stats', 'recent', 'igHealth', 'ytHealth', 'failedCards', 'followers'));
     }
 }

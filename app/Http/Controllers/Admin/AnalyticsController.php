@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Models\CardMetric;
 use App\Models\PartCard;
 use App\Models\Story;
+use App\Services\FollowerTracker;
 use Illuminate\Http\Request;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Artisan;
@@ -16,7 +17,7 @@ use Illuminate\Support\Facades\Artisan;
  */
 class AnalyticsController extends Controller
 {
-    public function index(Request $request)
+    public function index(Request $request, FollowerTracker $followerTracker)
     {
         $user = auth()->user();
         $scope = fn ($q) => $q->whereHas('part.story', fn ($s) => $user->isAdmin() ? $s : $s->where('user_id', $user->id));
@@ -43,6 +44,7 @@ class AnalyticsController extends Controller
             'bestHours'   => $this->bestHours($platform('ig')),
             'topPosts'    => $metrics->sortByDesc(fn (CardMetric $m) => [(int) $m->views, $m->interactions()])->take(10)->values(),
             'lastFetched' => $metrics->max('fetched_at'),
+            'followers'   => $followerTracker->summary($user->id, 30),
             'categoryBreakdown' => Story::when(! $user->isAdmin(), fn ($q) => $q->where('user_id', $user->id))
                 ->selectRaw('category, COUNT(*) as count')
                 ->whereNotNull('category')
@@ -60,6 +62,7 @@ class AnalyticsController extends Controller
 
         try {
             Artisan::call('analytics:fetch', ['--user' => auth()->id()]);
+            app(FollowerTracker::class)->fetch(auth()->id());
         } catch (\Throwable $e) {
             report($e);
 
@@ -67,6 +70,22 @@ class AnalyticsController extends Controller
         }
 
         return back()->with('success', '🔄 Analytics update ho gaya.');
+    }
+
+    /** "Abhi check karo" — followers ki ginti turant laao (cron har ghante bhi karta hai). */
+    public function refreshFollowers(FollowerTracker $tracker)
+    {
+        @set_time_limit(120);
+
+        try {
+            $tracker->fetch(auth()->id());
+        } catch (\Throwable $e) {
+            report($e);
+
+            return back()->with('error', 'Followers check nahi ho paye: ' . $e->getMessage());
+        }
+
+        return back()->with('success', '👥 Followers update ho gaye.');
     }
 
     /** @return array{posts:int,views:int,likes:int,comments:int,saves:int,shares:int} */

@@ -43,6 +43,11 @@
     </div>
 </div>
 
+{{-- Aaj ke naye followers --}}
+<div class="mb-6">
+    @include('admin.partials._followers', ['chart' => false])
+</div>
+
 {{-- Failed Auto-Post Alerts / Retry Box (If Any) --}}
 @if (isset($failedCards) && $failedCards->isNotEmpty())
 <div class="bg-rose-50 border border-rose-200 rounded-xl p-4 mb-6">

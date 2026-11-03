@@ -31,3 +31,6 @@ Schedule::command('analytics:fetch')->everySixHours()->withoutOverlapping(60)->r
 // Roz raat purani reels / voice cache / temp files hatao (disk na bhare).
 // Card images aur music kabhi nahi hatte — dekho PruneMedia command.
 Schedule::command('media:prune')->dailyAt('03:30')->withoutOverlapping(30);
+
+// Followers ki ginti har ghante — Dashboard ka "aaj kitne follow aaye"
+Schedule::command('followers:fetch')->hourly()->withoutOverlapping(30)->runInBackground();
