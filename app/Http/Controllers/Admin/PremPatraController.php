@@ -108,6 +108,7 @@ class PremPatraController extends Controller
                 'category' => $data['category'] ?? null,
                 'language' => $data['language'] ?? 'gujarati',
                 'status'   => 'published',
+                'tts_mode' => 'music', // naye cards: Reel Audio pehle se "Music only" (page par badal sakte ho)
             ]);
             $part = $story->parts()->create(['sort_order' => 1, 'body' => $cardsInput[0]['text'] ?? 'Prem Patra']);
 
