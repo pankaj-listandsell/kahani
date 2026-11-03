@@ -168,6 +168,16 @@
             return num(new Date(itemsDate + 'T00:00:00').toLocaleDateString(tr().locale, { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' }));
         } catch (e) { return itemsDate; }
     };
+    /** Card ke liye [vaar, taarikh] alag — dono alag rang me dikhte hain. */
+    const dateParts = () => {
+        try {
+            const d = new Date(itemsDate + 'T00:00:00');
+            return [
+                d.toLocaleDateString(tr().locale, { weekday: 'long' }),
+                num(d.toLocaleDateString(tr().locale, { day: 'numeric', month: 'long', year: 'numeric' })),
+            ];
+        } catch (e) { return ['', itemsDate]; }
+    };
 
 
     /** AI ke items ko Mesh→Meen kram me lagao (rashi key se, warna jis kram me aaye). */
@@ -267,7 +277,7 @@
     }
 
     // ---------- Card drawing ----------
-    const CY = 420; // rashi chinh / chakra ka centre (y)
+    const CY = 455; // rashi chinh / chakra ka centre (y)
 
     // AI ka "shubh rang" (gu/hi/en) → asli colour. Lambe naam pehle, taaki "આસમાની" "લાલ" se pehle mile.
     const COLORS = [
@@ -343,10 +353,25 @@
         ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
         ctx.fillStyle = '#facc15';
         K.fitOneLine(ctx, '✨ ' + L.head + ' ✨', W - 120, 64, 40);
-        ctx.fillText('✨ ' + L.head + ' ✨', W / 2, 95);
-        ctx.fillStyle = 'rgba(255,255,255,0.85)';
-        K.fitOneLine(ctx, dateLabel(), W - 160, 36, 26, '400');
-        ctx.fillText(dateLabel(), W / 2, 160);
+        ctx.fillText('✨ ' + L.head + ' ✨', W / 2, 90);
+
+        // Vaar + taarikh — gold border wali pill me, vaar gold, taarikh safed
+        const [day, date] = dateParts();
+        const sep = '  •  ';
+        const ds = K.fitOneLine(ctx, day + sep + date, W - 220, 46, 30);
+        const dw = ctx.measureText(day).width, sw = ctx.measureText(sep).width, tw = ctx.measureText(date).width;
+        const pw2 = dw + sw + tw + 90, ph2 = 82, py2 = 175;
+        ctx.fillStyle = 'rgba(11, 16, 51, 0.85)';
+        ctx.strokeStyle = '#facc15';
+        ctx.lineWidth = 3;
+        ctx.beginPath(); ctx.roundRect(W / 2 - pw2 / 2, py2 - ph2 / 2, pw2, ph2, ph2 / 2); ctx.fill(); ctx.stroke();
+        ctx.font = K.font(ds);
+        ctx.textAlign = 'left';
+        let x = W / 2 - (dw + sw + tw) / 2;
+        ctx.fillStyle = '#facc15'; ctx.fillText(day, x, py2 + 2); x += dw;
+        ctx.fillStyle = 'rgba(250, 204, 21, 0.6)'; ctx.fillText(sep, x, py2 + 2); x += sw;
+        ctx.fillStyle = '#ffffff'; ctx.fillText(date, x, py2 + 2);
+        ctx.textAlign = 'center';
 
         // Beech me rashi ka chinh
         ctx.save();
@@ -366,15 +391,15 @@
         // Rashi naam + akshar
         ctx.fillStyle = '#ffffff';
         ctx.font = K.font(88);
-        ctx.fillText(L.names[i], W / 2, 650);
+        ctx.fillText(L.names[i], W / 2, 680);
         if (L.letters) {
             ctx.fillStyle = '#fcd34d';
             K.fitOneLine(ctx, '(' + L.letters[i] + ')', W - 200, 40, 28, '400');
-            ctx.fillText('(' + L.letters[i] + ')', W / 2, 722);
+            ctx.fillText('(' + L.letters[i] + ')', W / 2, 750);
         }
 
         // Bhavishya — kaanch jaisa panel
-        const px = 60, pw = W - 120, py = 770, ph = 720;
+        const px = 60, pw = W - 120, py = 800, ph = 690;
         ctx.fillStyle = 'rgba(255,255,255,0.10)';
         ctx.strokeStyle = 'rgba(250, 204, 21, 0.45)';
         ctx.lineWidth = 3;
