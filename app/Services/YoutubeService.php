@@ -535,8 +535,7 @@ class YoutubeService
 
         // ---- No voice: pehle jaisa (music loop ya silent, -shortest) ----
         if (! $hasVoice) {
-            $music     = $this->setting('yt_music');
-            $musicPath = ($music && $disk->exists($music)) ? $disk->path($music) : null;
+            $musicPath = ReelMusic::path($this->settingsUserId, 'yt_music');
             if ($musicPath) {
                 $cmd = array_merge($cmd, ['-stream_loop', '-1', '-i', $musicPath]);
             } else {
@@ -563,11 +562,11 @@ class YoutubeService
         }
 
         // Music (optional, sirf voice_music mode)
-        $music     = $this->setting('yt_music');
-        $withMusic = $this->ttsMode() === 'voice_music' && $music && $disk->exists($music);
+        $music     = $this->ttsMode() === 'voice_music' ? ReelMusic::path($this->settingsUserId, 'yt_music') : null;
+        $withMusic = $music !== null;
         $musicIdx  = null;
         if ($withMusic) {
-            $cmd = array_merge($cmd, ['-stream_loop', '-1', '-i', $disk->path($music)]);
+            $cmd = array_merge($cmd, ['-stream_loop', '-1', '-i', $music]);
             $musicIdx = $n + $k;
         }
 

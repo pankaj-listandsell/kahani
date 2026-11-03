@@ -87,7 +87,7 @@
         </div>
         <div class="flex items-center gap-2">
             <span id="bgmSfxSaved" class="text-green-600 text-xs font-medium"></span>
-            <p class="text-xs text-slate-400">Background music halka (22% volume) background me mix hota hai taaki voiceover bilkul clear rahe.</p>
+            <p class="text-xs text-slate-400">Quiz reels me ye track halka (22% volume) voice ke peeche bajta hai. Baaki reels me ye tab bajta hai jab Instagram / YouTube page par apna music upload na kiya ho.</p>
         </div>
 
     </div>

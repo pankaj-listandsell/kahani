@@ -666,11 +666,7 @@ class InstagramService
         // Voice mode ON + card text ho to voice-over reel; warna music/silent.
         $voice = $this->voiceFor($card);
 
-        // Music-mode: cache reuse. Voice-mode: hamesha regenerate (mode/voice/text badal sakta hai).
-        if (! $voice && $disk->exists($mp4Path)) {
-            return $mp4Path;
-        }
-
+        // Hamesha nayi reel — music / mode / outro badalne par purani (jaise bina music wali) cached file na chale
         $disk->makeDirectory('reels');
 
         $ffmpeg = config('services.ffmpeg.path', 'ffmpeg');
@@ -702,14 +698,14 @@ class InstagramService
             $dur = $this->fnum(max(3.0, $voice['seconds'] + 0.6));
             $cmd = [$ffmpeg, '-y', '-loop', '1', '-i', $in, '-i', $disk->path($voice['path'])];
 
-            $music     = $this->setting('ig_reel_music');
-            $withMusic = $this->ttsMode() === 'voice_music' && $music && $disk->exists($music);
+            $music     = $this->ttsMode() === 'voice_music' ? ReelMusic::path($this->settingsUserId, 'ig_reel_music') : null;
+            $withMusic = $music !== null;
 
             $filter = $vfilter . ';[1:a]aresample=44100,apad,atrim=duration=' . $dur . ','
                 . 'aformat=sample_rates=44100:channel_layouts=stereo[sp]';
 
             if ($withMusic) {
-                $cmd = array_merge($cmd, ['-stream_loop', '-1', '-i', $disk->path($music)]);
+                $cmd = array_merge($cmd, ['-stream_loop', '-1', '-i', $music]);
                 $filter .= ';[2:a]volume=0.15[mus];[sp][mus]amix=inputs=2:duration=first:normalize=0[a]';
             } else {
                 $filter .= ';[sp]anull[a]';
@@ -725,8 +721,7 @@ class InstagramService
         } else {
             // Music (loop) ya silent — pehle jaisa
             $cmd = [$ffmpeg, '-y', '-loop', '1', '-i', $in];
-            $music = $this->setting('ig_reel_music');
-            $musicPath = ($music && $disk->exists($music)) ? $disk->path($music) : null;
+            $musicPath = ReelMusic::path($this->settingsUserId, 'ig_reel_music');
             if ($musicPath) {
                 $cmd = array_merge($cmd, ['-stream_loop', '-1', '-i', $musicPath]);
             } else {
@@ -749,7 +744,7 @@ class InstagramService
             throw new \RuntimeException('Video (reel) banane me dikkat — ffmpeg fail. Path sahi hai? ' . Str::limit($result->errorOutput(), 200));
         }
 
-        // End me "Follow karo" outro (Settings me ON ho to). Music-mode cache me ye pehle se juda rehta hai.
+        // End me "Follow karo" outro (Settings me ON ho to)
         $story = $card->part?->story;
 
         return ReelOutro::append($mp4Path, $story?->user_id, $story?->language, $story?->tts_voice);
