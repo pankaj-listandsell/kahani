@@ -19,7 +19,7 @@
 
     {{-- Controls --}}
     <div class="bg-white rounded-xl border border-slate-200 p-5 shadow-sm space-y-4">
-        <div class="grid sm:grid-cols-4 gap-4">
+        <div class="grid sm:grid-cols-3 gap-4">
             <div>
                 <label class="block text-xs font-bold text-slate-700 uppercase tracking-wide mb-1.5">📅 Date</label>
                 <input id="date" type="date" value="{{ now()->addDay()->toDateString() }}"
@@ -32,11 +32,6 @@
                     <option value="hindi">हिंदी (Hindi)</option>
                     <option value="hinglish">Hinglish</option>
                 </select>
-            </div>
-            <div>
-                <label class="block text-xs font-bold text-slate-700 uppercase tracking-wide mb-1.5">🏷 Page / Brand Name</label>
-                <input id="brand" type="text" maxlength="30" placeholder="e.g. દિલની વાત"
-                       class="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:ring-2 focus:ring-indigo-500 focus:outline-none font-medium">
             </div>
             <div class="flex items-end">
                 <button id="genBtn" class="w-full bg-gradient-to-r from-indigo-600 to-purple-700 hover:from-indigo-700 hover:to-purple-800 text-white font-bold py-2 px-4 rounded-lg shadow transition">
@@ -149,38 +144,31 @@
             letters: ['અ, લ, ઈ', 'બ, વ, ઉ', 'ક, છ, ઘ', 'ડ, હ', 'મ, ટ', 'પ, ઠ, ણ', 'ર, ત', 'ન, ય', 'ભ, ધ, ફ, ઢ', 'ખ, જ', 'ગ, શ, સ, ષ', 'દ, ચ, ઝ, થ'],
             head: 'આજનું રાશિફળ', love: 'પ્રેમ:', career: 'કામકાજ:', health: 'સ્વાસ્થ્ય:',
             num: 'શુભ અંક', color: 'શુભ રંગ', cta: 'તમારી રાશિ કઈ છે? કોમેન્ટમાં લખો 👇',
-            locale: 'gu-IN', digits: '૦૧૨૩૪૫૬૭૮૯', brand: 'દિલની વાત',
+            locale: 'gu-IN', digits: '૦૧૨૩૪૫૬૭૮૯',
         },
         hindi: {
             names: ['मेष', 'वृषभ', 'मिथुन', 'कर्क', 'सिंह', 'कन्या', 'तुला', 'वृश्चिक', 'धनु', 'मकर', 'कुंभ', 'मीन'],
             letters: null,
             head: 'आज का राशिफल', love: 'प्रेम:', career: 'करियर:', health: 'स्वास्थ्य:',
             num: 'शुभ अंक', color: 'शुभ रंग', cta: 'आपकी राशि कौन सी है? कमेंट करें 👇',
-            locale: 'hi-IN', digits: '०१२३४५६७८९', brand: 'दिल की बात',
+            locale: 'hi-IN', digits: '०१२३४५६७८९',
         },
         hinglish: {
             names: ['Mesh', 'Vrishabh', 'Mithun', 'Kark', 'Simha', 'Kanya', 'Tula', 'Vrishchik', 'Dhanu', 'Makar', 'Kumbh', 'Meen'],
             letters: ['Aries', 'Taurus', 'Gemini', 'Cancer', 'Leo', 'Virgo', 'Libra', 'Scorpio', 'Sagittarius', 'Capricorn', 'Aquarius', 'Pisces'],
             head: 'Aaj Ka Rashifal', love: 'Love:', career: 'Career:', health: 'Health:',
             num: 'Lucky Number', color: 'Lucky Color', cta: 'Aapki rashi kaunsi hai? Comment karo 👇',
-            locale: 'en-IN', digits: '0123456789', brand: 'Dil Ki Baat',
+            locale: 'en-IN', digits: '0123456789',
         },
     };
     const tr = () => I18N[itemsLang] || I18N.gujarati;
     const num = n => String(n ?? '').replace(/\d/g, d => tr().digits[d]);
-    const brandName = () => el('brand').value.trim() || tr().brand;
     const dateLabel = () => {
         try {
             return num(new Date(itemsDate + 'T00:00:00').toLocaleDateString(tr().locale, { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' }));
         } catch (e) { return itemsDate; }
     };
 
-    // Brand naam yaad rakho (Salah studio wali hi key — sab studios me ek hi naam)
-    try { el('brand').value = localStorage.getItem('salahBrand') || ''; } catch (e) {}
-    el('brand').addEventListener('input', () => {
-        try { localStorage.setItem('salahBrand', el('brand').value); } catch (e) {}
-        if (items.length) renderAllPreviews();
-    });
 
     /** AI ke items ko Mesh→Meen kram me lagao (rashi key se, warna jis kram me aaye). */
     function orderItems(raw) {
@@ -388,13 +376,10 @@
             ctx.fillText(t, cx, cy + 2);
         });
 
-        // CTA + brand
+        // CTA
         ctx.fillStyle = '#ffffff';
         K.fitOneLine(ctx, L.cta, W - 120, 46, 30);
         ctx.fillText(L.cta, W / 2, 1640);
-        ctx.fillStyle = 'rgba(255,255,255,0.6)';
-        K.fitOneLine(ctx, '— ' + brandName() + ' —', W - 200, 36, 24, '400');
-        ctx.fillText('— ' + brandName() + ' —', W / 2, 1715);
     }
 
     /** Reel voiceover: rashi ka naam + bhavishya + prem/kaam/swasthya. */
