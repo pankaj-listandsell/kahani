@@ -196,7 +196,9 @@ class YoutubeService
         if (! $res->successful() || ! $res->json('access_token')) {
             Log::error('YT token refresh failed', ['body' => $res->json()]);
             // Google ne token revoke/expire kar diya (e.g. testing app 7-din baad)
-            throw new \RuntimeException(($res->json('error_description') ?? 'Token refresh fail.') . ' Channel dobara connect karo.');
+            // "token refresh" shabd zaroori — auto-post ise account error maanta hai (card 'failed' nahi hota)
+            throw new \RuntimeException('YouTube token refresh fail (' . ($res->json('error') ?? 'error') . ': '
+                . ($res->json('error_description') ?? '?') . '). Channel dobara connect karo.');
         }
 
         $token = $res->json('access_token');

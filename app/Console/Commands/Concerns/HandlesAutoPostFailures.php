@@ -78,7 +78,7 @@ trait HandlesAutoPostFailures
     {
         return (bool) preg_match(
             '/access.?token|oauth|session has expired|invalid_grant|unauthori[sz]ed|quota|rate.?limit|request limit|'
-            . 'permission|not configured|configured nahi|public host|connection refused|could not resolve host|timed out/i',
+            . 'permission|not configured|configured nahi|dobara connect|token refresh|public host|connection refused|could not resolve host|timed out/i',
             $e->getMessage()
         );
     }

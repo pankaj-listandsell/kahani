@@ -49,6 +49,7 @@ class YoutubeController extends Controller
             'configured'    => $this->youtube->isConfigured(),
             'appConfigured' => $this->youtube->appConfigured(),
             'diag'          => $this->autoPostDiagnosis(),
+            'tokenFailed'   => $this->tokenFailedCards()->count(),
         ]);
     }
 
@@ -115,6 +116,23 @@ class YoutubeController extends Controller
     private function hhmm(string $v): ?int
     {
         return preg_match('/^(\d{1,2}):(\d{2})$/', $v, $m) ? (int) $m[1] * 60 + (int) $m[2] : null;
+    }
+
+    /** Token toota hone ki wajah se 'failed' hue cards — card ki galti nahi thi, wapas pending karo. */
+    protected function tokenFailedCards()
+    {
+        return PartCard::where('yt_status', 'failed')
+            ->where(fn ($q) => $q->where('yt_error', 'like', '%dobara connect%')->orWhere('yt_error', 'like', '%token refresh%'))
+            ->whereHas('part.story', fn ($q) => $q->where('user_id', auth()->id()));
+    }
+
+    public function retryTokenFailed()
+    {
+        $n = $this->tokenFailedCards()->update(['yt_status' => null, 'yt_error' => null]);
+        Setting::putFor(auth()->id(), 'yt_auto_cooldown_until', null);
+        Setting::putFor(auth()->id(), 'yt_auto_fail_count', '0');
+
+        return back()->with('success', "🔁 {$n} cards dobara auto-post ki line me daal diye.");
     }
 
     /** 🧪 Window/cooldown chhodkar abhi ek Short upload karo — command ka output dikhao. */
