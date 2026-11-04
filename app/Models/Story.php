@@ -52,6 +52,31 @@ class Story extends Model
      * @param  string  $platform  instagram | youtube | facebook
      * @param  string  $statusCol  ig_status | yt_status | fb_status
      */
+    /**
+     * Aaj ke Rashifal YouTube Shorts (type 'rashifal_short', category = din) me se agla part
+     * jo upload nahi hua — har part = ek Short (12 rashi, fir Top 3). Status pehle card par.
+     */
+    public static function nextRashifalShortPart(int $userId): ?Part
+    {
+        $stories = static::where('status', 'published')->where('user_id', $userId)
+            ->where('type', 'rashifal_short')->where('category', now()->toDateString())
+            ->with(['parts' => fn ($q) => $q->orderBy('sort_order'), 'parts.cards' => fn ($q) => $q->orderBy('sort_order')])
+            ->orderBy('id')->get();
+
+        foreach ($stories as $story) {
+            foreach ($story->parts as $part) {
+                $first = $part->cards->first();
+                $stuck = $first?->yt_status === 'posting'
+                    && $first->updated_at?->lt(now()->subMinutes(PartCard::POSTING_STALE_MINUTES));
+                if ($first && ($first->yt_status === null || $stuck)) {
+                    return $part;
+                }
+            }
+        }
+
+        return null;
+    }
+
     public static function nextRashifalCard(int $userId, string $platform, string $statusCol): ?PartCard
     {
         $stories = static::where('status', 'published')

@@ -104,6 +104,29 @@ class YoutubeAutoPost extends Command
             }
         }
 
+        // Aaj ke Rashifal Shorts (12 rashi / Top 3) sabse pehle — har ek poora part = ek Short
+        if ($part = Story::nextRashifalShortPart($uid)) {
+            $first = $part->cards->first();
+            $this->note($uid, "Rashifal Short (part #{$part->id}) upload shuru (is line par atka = server ne process kill kiya)");
+            Log::info('YT auto-post: Rashifal Short shuru', ['user' => $uid, 'part' => $part->id]);
+
+            try {
+                $id = $youtube->postPart($part);
+                $this->info("User #{$uid}: uploaded Rashifal Short (part #{$part->id}) → {$id}");
+                $this->recordSuccess($uid, 'yt', $now);
+                $this->note($uid, "Rashifal Short (part #{$part->id}) upload ho gaya → {$id}");
+                Log::info('YT auto-post: Rashifal Short ho gaya', ['user' => $uid, 'part' => $part->id, 'video' => $id]);
+            } catch (CardBusyException $e) {
+                $this->note($uid, 'Rashifal Short busy: ' . $e->getMessage());
+            } catch (\Throwable $e) {
+                $this->error("User #{$uid} Rashifal Short (part #{$part->id}) failed: " . $e->getMessage());
+                $this->recordFailure($uid, 'yt', $first, $e, $now);
+                $this->note($uid, "Rashifal Short (part #{$part->id}) fail: " . $e->getMessage());
+            }
+
+            return;
+        }
+
         $card = $this->nextPendingCard($uid);
         if (! $card) {
             $this->note($uid, 'koi pending card nahi mila');
@@ -206,8 +229,8 @@ class YoutubeAutoPost extends Command
             if (! $story->targetsPlatform('youtube')) {
                 continue; // ye story YouTube ke liye target nahi
             }
-            if ($story->type === 'rashifal') {
-                continue; // upar nextRashifalCard() sambhalta hai — doosre din ka rashifal kabhi nahi
+            if (in_array($story->type, ['rashifal', 'rashifal_short'], true)) {
+                continue; // upar nextRashifalShortPart() / nextRashifalCard() sambhalte hain — doosre din ka kabhi nahi
             }
             $isCollection = $story->isCollection();
             foreach ($story->parts as $part) {

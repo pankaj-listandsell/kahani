@@ -94,8 +94,10 @@ Rules:
 - `lucky_number`: one number 1-9 (as string). `lucky_color`: one colour name in {$langPrompt}.
 - `caption`: 1-2 short lines with emojis asking followers to share with someone of this rashi.
 - `hashtags`: 6-10 hashtags (include the rashi name and #rashifal).
+- `short`: ONE punchy line for a YouTube Short, 8-14 words, the day's main message (no emoji).
+- `rating`: how good the day is, integer 1-5. Vary it honestly across signs: exactly 3 signs get 5, the rest 2-4 (never 1).
 
-Return ONLY a raw JSON array of 12 objects with keys: `rashi`, `prediction`, `love`, `career`, `health`, `lucky_number`, `lucky_color`, `caption`, `hashtags`.
+Return ONLY a raw JSON array of 12 objects with keys: `rashi`, `prediction`, `love`, `career`, `health`, `lucky_number`, `lucky_color`, `caption`, `hashtags`, `short`, `rating`.
 PROMPT;
 
         return $this->callGeminiJson($prompt, 120);

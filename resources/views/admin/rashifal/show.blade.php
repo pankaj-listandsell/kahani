@@ -17,6 +17,44 @@
         </form>
     </div>
 
+    @if ($story->type === 'rashifal_short')
+        {{-- 📺 YouTube Shorts — har part = ek Short (sirf YouTube) --}}
+        <div class="space-y-4 mb-6">
+            @foreach ($story->parts->sortBy('sort_order') as $part)
+                @php($first = $part->cards->sortBy('sort_order')->first())
+                <div class="bg-white rounded-xl border border-red-200 p-4 shadow-sm">
+                    <div class="flex items-center justify-between gap-3 flex-wrap">
+                        <div>
+                            <h3 class="font-bold">{{ str_contains($part->body, 'top3') ? '🍀 Top 3 Lucky Rashi' : '🔯 12 Rashi' }} — YouTube Short</h3>
+                            <p class="text-xs text-slate-500 mt-0.5">
+                                {{ $part->cards->count() }} frames •
+                                @if ($first?->yt_status === 'posted')
+                                    ✅ Upload ho gaya{{ $first->yt_video_id ? ' (' . $first->yt_video_id . ')' : '' }}
+                                @elseif ($first?->yt_status === 'failed')
+                                    ❌ Fail: {{ \Illuminate\Support\Str::limit($first->yt_error, 120) }}
+                                @else
+                                    ⏳ Auto-post {{ \Illuminate\Support\Carbon::parse($story->category)->format('d M') }} ko upload karega
+                                @endif
+                            </p>
+                        </div>
+                        <div class="flex gap-2">
+                            <button type="button" class="short-preview text-xs font-semibold bg-slate-100 hover:bg-slate-200 border border-slate-300 rounded-lg px-3 py-1.5"
+                                    data-url="{{ route('admin.rashifal.short.preview', $part) }}" data-slot="short-video-{{ $part->id }}">▶ Video dekho</button>
+                            @if ($first?->yt_status !== 'posted')
+                                <form method="POST" action="{{ route('admin.rashifal.short.upload', $part) }}"
+                                      onsubmit="if(!confirm('Ye Short abhi YouTube par upload karein?')) return false; this.querySelector('button').disabled=true; this.querySelector('button').textContent='⏳ Upload ho raha hai…'">
+                                    @csrf
+                                    <button class="text-xs font-semibold text-white bg-red-600 hover:bg-red-700 rounded-lg px-3 py-1.5">⬆ Abhi YouTube par upload karo</button>
+                                </form>
+                            @endif
+                        </div>
+                    </div>
+                    <div id="short-video-{{ $part->id }}" class="mt-3"></div>
+                </div>
+            @endforeach
+        </div>
+    @endif
+
     {{-- Reel & auto-post settings --}}
     <div class="mb-6">
         @include('admin.partials._reel_settings')
@@ -86,6 +124,24 @@
 <script>
 (function () {
     const CSRF = document.querySelector('meta[name=csrf-token]').content;
+
+    // 📺 Short ka video banake dikhao (upload nahi)
+    document.querySelectorAll('.short-preview').forEach(btn => {
+        btn.addEventListener('click', async () => {
+            const lbl = btn.textContent, slot = document.getElementById(btn.dataset.slot);
+            btn.disabled = true; btn.textContent = '⏳ Video ban raha hai… (1-2 min)';
+            try {
+                const r = await fetch(btn.dataset.url, { method: 'POST', headers: { 'X-CSRF-TOKEN': CSRF, 'Accept': 'application/json' } });
+                const d = await r.json();
+                if (!d.ok) throw new Error(d.error || 'Fail');
+                slot.innerHTML = '<video controls playsinline class="w-full max-w-xs rounded-lg border border-slate-200" src="' + d.url + '"></video>';
+                slot.querySelector('video').play().catch(() => {});
+                btn.textContent = '🔄 Dobara banao';
+            } catch (e) { btn.textContent = '⚠ ' + e.message; setTimeout(() => { btn.textContent = lbl; }, 4000); }
+            btn.disabled = false;
+        });
+    });
+
     document.querySelectorAll('.gen-reel').forEach(btn => {
         btn.addEventListener('click', async () => {
             const cell = btn.closest('div'); const lbl = btn.textContent;

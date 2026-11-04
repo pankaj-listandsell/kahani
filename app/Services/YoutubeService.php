@@ -855,6 +855,175 @@ class YoutubeService
         return $description;
     }
 
+    /* ===================================================================
+     |  POORA PART = EK SHORT (Rashifal YouTube Shorts: 12 rashi / Top 3)
+     * =================================================================== */
+
+    /**
+     * Part ke saare cards (frames) ko ek Short bana ke upload karo. Lock/status pehle card par
+     * (auto-post ka failure handling usi par chalta hai); safal hone par saare cards 'posted'.
+     */
+    public function postPart(Part $part): string
+    {
+        $part->loadMissing(['story', 'cards' => fn ($q) => $q->orderBy('sort_order')]);
+        $cards = $part->cards->values();
+        $first = $cards->first();
+        if (! $first) {
+            throw new \RuntimeException('Is Short me koi frame nahi hai.');
+        }
+
+        $this->forUser($part->story?->user_id);
+        if (! $this->isConfigured()) {
+            throw new \RuntimeException('YouTube configured nahi. Pehle channel connect karo.');
+        }
+
+        @set_time_limit(900);
+        $first->claimFor('yt');
+
+        try {
+            $mp4 = $this->mp4ForPart($part);
+            $id  = $this->uploadShort(
+                Storage::disk('public')->path($mp4),
+                $this->buildTitle($first, $part),
+                $this->buildDescription($first, $part),
+                (string) $this->setting('yt_privacy', 'public'),
+            );
+
+            foreach ($cards as $card) {
+                $this->markCardPosted($card, $id);
+            }
+
+            return $id;
+        } catch (\Throwable $e) {
+            Log::error('YT part (Short) post failed', ['part' => $part->id, 'error' => $e->getMessage()]);
+            $this->markCardFailed($first, $e->getMessage());
+            throw $e;
+        }
+    }
+
+    /**
+     * Frames → ek Short. Shared host par 13+ tasveeron wala ek bada ffmpeg graph OOM (signal 9)
+     * se kill hota hai, isliye: har frame ka chhota clip alag → concat (copy, bina re-encode)
+     * → music → "Follow karo" outro. Ek waqt me sirf ek tasveer memory me rehti hai.
+     */
+    public function mp4ForPart(Part $part): string
+    {
+        $story = $part->story;
+        $this->withAudioMode($story?->tts_mode);
+        $this->withVoice($story?->tts_voice);
+
+        $cards = $part->cards->sortBy('sort_order')->values();
+        $disk  = Storage::disk('public');
+        $disk->makeDirectory('yt');
+        $tmpDir = 'yt/part-' . $part->id . '-tmp';
+        $disk->deleteDirectory($tmpDir);
+        $disk->makeDirectory($tmpDir);
+        $mp4 = 'yt/part-' . $part->id . '.mp4';
+
+        $ffmpeg = config('services.ffmpeg.path', 'ffmpeg');
+        $enc = [
+            '-c:v', 'libx264', '-preset', 'ultrafast', '-tune', 'stillimage', '-threads', '1',
+            '-x264-params', 'ref=1:bframes=0:rc-lookahead=10:sync-lookahead=0',
+            '-profile:v', 'high', '-level', '3.1',
+            '-pix_fmt', 'yuv420p', '-color_range', 'tv', '-r', '25',
+            '-g', '50', '-keyint_min', '50', '-sc_threshold', '0', '-flags', '+cgop',
+            '-c:a', 'aac', '-b:a', '128k', '-ar', '44100', '-ac', '2',
+        ];
+
+        try {
+            $lastErr = '';
+            foreach ([[720, 1280], [540, 960], [480, 854]] as [$w, $h]) {
+                $list = [];
+                $ok = true;
+
+                foreach ($cards as $i => $card) {
+                    if (! $card->image_path || ! $disk->exists($card->image_path)) {
+                        continue;
+                    }
+                    // Frame ka time: pehla (intro) / aakhri (Like-Share-Subscribe) 3 sec, rashi frame 4.5
+                    // (Top 3 me 5.5 — kam frames, aaram se padhe). Voice ho to us jitna.
+                    $edge = $i === 0 || $i === $cards->count() - 1;
+                    $seg = ['path' => $disk->path($card->image_path),
+                        'dur' => $edge ? 3.0 : (str_contains((string) $part->body, 'top3') ? 5.5 : 4.5)];
+                    if ($voice = $this->voiceFor($card)) {
+                        $seg['voice'] = $disk->path($voice['path']);
+                        $seg['dur'] = max($seg['dur'], $voice['seconds'] + 0.5);
+                    }
+
+                    $clip = $disk->path("{$tmpDir}/c{$i}.mp4");
+                    $dur  = $this->fnum($seg['dur']);
+                    $cmd  = [$ffmpeg, '-y', '-loop', '1', '-t', $dur, '-i', $seg['path']];
+                    $cmd  = ! empty($seg['voice'])
+                        ? array_merge($cmd, ['-i', $seg['voice']])
+                        : array_merge($cmd, ['-f', 'lavfi', '-t', $dur, '-i', 'anullsrc=channel_layout=stereo:sample_rate=44100']);
+                    $cmd = array_merge($cmd, [
+                        '-filter_complex', '[0:v]' . ReelMotion::chain($w, $h, $seg['dur'], $i, false) . '[v];'
+                            . "[1:a]aresample=44100,apad,atrim=duration={$dur},aformat=sample_rates=44100:channel_layouts=stereo[a]",
+                        '-map', '[v]', '-map', '[a]', '-t', $dur, ...$enc, $clip,
+                    ]);
+
+                    try {
+                        $res = Process::timeout(180)->run($cmd);
+                    } catch (\Throwable $e) {
+                        $res = null;
+                        $lastErr = $e->getMessage();
+                    }
+                    if (! $res || ! $res->successful() || ! is_file($clip)) {
+                        $lastErr = $res ? ($res->errorOutput() ?: $res->output()) : $lastErr;
+                        $ok = false;
+                        break;
+                    }
+                    $list[] = "file '" . str_replace("'", "'\\''", str_replace('\\', '/', $clip)) . "'";
+                }
+
+                if ($ok && $list) {
+                    break;
+                }
+                Log::warning('YT part clip fail, lower-res retry', ['part' => $part->id, 'res' => "{$w}x{$h}", 'err' => Str::limit($lastErr, 300)]);
+                $list = [];
+            }
+
+            if (! $list) {
+                throw new \RuntimeException('Short nahi ban paaya (ffmpeg). ' . Str::limit($lastErr, 150));
+            }
+
+            // Clips jodo (sab same settings ke — re-encode ki zaroorat nahi)
+            $listFile = $disk->path("{$tmpDir}/list.txt");
+            file_put_contents($listFile, implode("\n", $list) . "\n");
+            $joined = $disk->path("{$tmpDir}/joined.mp4");
+            $res = Process::timeout(180)->run([$ffmpeg, '-y', '-f', 'concat', '-safe', '0', '-i', $listFile, '-c', 'copy', $joined]);
+            if (! $res->successful() || ! is_file($joined)) {
+                throw new \RuntimeException('Short ke clips jud nahi paaye. ' . Str::limit($res->errorOutput(), 150));
+            }
+
+            // Music: music-mode me poori awaaz, voice_music me voice ke peeche halka; sirf voice → bina music
+            $out = $disk->path($mp4);
+            $mode = $this->ttsMode();
+            $music = $mode === 'voice' ? null : ReelMusic::path($this->settingsUserId, 'yt_music');
+            if ($music) {
+                $vol = $mode === 'music' ? '1.0' : '0.15';
+                $res = Process::timeout(300)->run([
+                    $ffmpeg, '-y', '-i', $joined, '-stream_loop', '-1', '-i', $music,
+                    '-filter_complex', "[1:a]volume={$vol},aformat=sample_rates=44100:channel_layouts=stereo[m];[0:a][m]amix=inputs=2:duration=first:normalize=0[a]",
+                    '-map', '0:v', '-map', '[a]', '-c:v', 'copy', '-c:a', 'aac', '-b:a', '128k', '-ar', '44100', '-ac', '2',
+                    '-movflags', '+faststart', '-shortest', $out,
+                ]);
+                if (! $res->successful() || ! is_file($out)) {
+                    throw new \RuntimeException('Short me music nahi jud paaya. ' . Str::limit($res->errorOutput(), 150));
+                }
+            } else {
+                $res = Process::timeout(120)->run([$ffmpeg, '-y', '-i', $joined, '-c', 'copy', '-movflags', '+faststart', $out]);
+                if (! $res->successful() || ! is_file($out)) {
+                    throw new \RuntimeException('Short save nahi hua. ' . Str::limit($res->errorOutput(), 150));
+                }
+            }
+        } finally {
+            $disk->deleteDirectory($tmpDir);
+        }
+
+        return ReelOutro::append($mp4, $story?->user_id, $story?->language, $story?->tts_voice);
+    }
+
     protected function markCardPosted(PartCard $card, string $videoId): void
     {
         $card->update([

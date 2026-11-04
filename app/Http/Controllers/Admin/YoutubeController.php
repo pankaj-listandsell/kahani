@@ -106,7 +106,7 @@ class YoutubeController extends Controller
         $pending = Story::where('user_id', $uid)->where('status', 'published')
             ->withCount(['cards as yt_pending' => fn ($q) => $q->whereNull('yt_status')])
             ->get()
-            ->filter(fn (Story $s) => $s->targetsPlatform('youtube'))
+            ->filter(fn (Story $s) => $s->targetsPlatform('youtube') && $s->type !== 'rashifal_short') // Shorts ke frames card nahi
             ->sum('yt_pending');
         $rows[] = [$pending > 0, 'Post karne ke liye cards', $pending > 0
             ? "{$pending} cards baaki hain." : 'Koi pending card nahi (sab post ho chuke, ya collections me YouTube unchecked hai).'];
