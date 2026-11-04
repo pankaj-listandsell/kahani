@@ -11,6 +11,7 @@ use App\Models\User;
 use App\Services\YoutubeService;
 use Illuminate\Console\Command;
 use Illuminate\Support\Carbon;
+use Illuminate\Support\Facades\Cache;
 
 class YoutubeAutoPost extends Command
 {
@@ -24,6 +25,9 @@ class YoutubeAutoPost extends Command
     {
         $force = (bool) $this->option('force');
         $now = Carbon::now();
+
+        // Dhadkan — YouTube page batata hai ki ye command sach me chal raha hai (lock me atka nahi)
+        Cache::forever('autopost:yt:last_run', $now->toIso8601String());
 
         // Jin users ne YouTube connect kiya hai (refresh token maujood)
         $userIds = Setting::where('key', 'yt_refresh_token')

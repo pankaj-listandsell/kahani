@@ -71,6 +71,14 @@ class YoutubeController extends Controller
             ? 'Aakhri baar ' . Carbon::parse($beat)->diffForHumans() . ' chala' . ($beatAgo > 5 ? ' — cron band lagta hai! Hosting panel me "* * * * * php artisan schedule:run" wala cron job check karo.' : '.')
             : 'Abhi tak koi record nahi. Nayi files upload karke 2-3 minute ruko; fir bhi yahi dikhe to hosting ka cron job ("php artisan schedule:run" har minute) set nahi hai.'];
 
+        // Cron chal raha hai par YouTube command nahi = scheduler lock me atka (process kill hua tha)
+        $yt = Cache::get('autopost:yt:last_run');
+        $ytAgo = $yt ? Carbon::parse($yt)->diffInMinutes($now) : null;
+        $cronOk = $beat !== null && $beatAgo <= 5;
+        $rows[] = [$yt && $ytAgo <= 5 ? true : ($cronOk ? false : null), 'YouTube auto-post command', $yt
+            ? 'Aakhri baar ' . Carbon::parse($yt)->diffForHumans() . ' chala' . ($ytAgo > 5 && $cronOk ? ' — cron chal raha hai par ye nahi: lock me atka hai. "🔓 Lock hatao" dabao.' : '.')
+            : 'Abhi tak nahi chala. Nayi files ke baad 2-3 minute me bhi ye line na badle, to lock me atka hai — "🔓 Lock hatao" dabao.'];
+
         $rows[] = [$this->youtube->isConfigured(), 'YouTube connected', $this->youtube->isConfigured()
             ? 'Channel juda hua hai.' : 'Channel connect nahi — upar "Connect YouTube" dabao.'];
 
@@ -133,6 +141,20 @@ class YoutubeController extends Controller
         Setting::putFor(auth()->id(), 'yt_auto_fail_count', '0');
 
         return back()->with('success', "🔁 {$n} cards dobara auto-post ki line me daal diye.");
+    }
+
+    /** 🔓 Scheduler ke phanse "chal raha hai" locks hatao — agle minute se auto-post fir chalega. */
+    public function unlock()
+    {
+        try {
+            Artisan::call('schedule:clear-cache');
+        } catch (\Throwable $e) {
+            report($e);
+
+            return back()->with('error', 'Lock nahi hata: ' . $e->getMessage());
+        }
+
+        return back()->with('success', '🔓 Lock hat gaya — 1-2 minute me "YouTube auto-post command" line ✅ ho jaani chahiye.');
     }
 
     /** 🧪 Window/cooldown chhodkar abhi ek Short upload karo — command ka output dikhao. */

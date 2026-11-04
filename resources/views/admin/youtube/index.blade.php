@@ -13,6 +13,10 @@
                 @csrf
                 <button class="text-xs font-semibold text-white bg-red-600 hover:bg-red-700 px-3 py-1.5 rounded-lg transition">🧪 Abhi 1 Short upload karo (test)</button>
             </form>
+            <form method="POST" action="{{ route('admin.youtube.unlock') }}">
+                @csrf
+                <button class="text-xs font-semibold text-slate-700 bg-slate-100 hover:bg-slate-200 border border-slate-300 px-3 py-1.5 rounded-lg transition">🔓 Lock hatao</button>
+            </form>
         </div>
         <ul class="space-y-1.5 text-sm">
             @foreach ($diag as [$ok, $title, $detail])
