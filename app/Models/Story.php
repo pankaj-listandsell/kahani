@@ -5,6 +5,7 @@ namespace App\Models;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\Relations\HasManyThrough;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Str;
 
@@ -115,6 +116,12 @@ class Story extends Model
     public function parts(): HasMany
     {
         return $this->hasMany(Part::class)->orderBy('sort_order');
+    }
+
+    /** Saare parts ke saare cards (ginti/filter ke liye). */
+    public function cards(): HasManyThrough
+    {
+        return $this->hasManyThrough(PartCard::class, Part::class);
     }
 
     /**

@@ -69,6 +69,7 @@ trait HandlesAutoPostFailures
     protected function startCooldown(int $uid, string $prefix, Carbon $until, string $reason): void
     {
         Setting::putFor($uid, "{$prefix}_auto_cooldown_until", $until->toIso8601String());
+        Setting::putFor($uid, "{$prefix}_auto_cooldown_reason", mb_substr($reason, 0, 500)); // page par wajah dikhane ke liye
         $this->warn("User #{$uid}: {$prefix} auto-post {$until->format('d M H:i')} tak ruka — {$reason}");
     }
 

@@ -4,6 +4,26 @@
 @section('content')
 <div class="max-w-4xl">
 
+    {{-- ================= 🩺 AUTO-POST STATUS ================= --}}
+    <div class="bg-white rounded-xl border border-slate-200 p-5 mb-6">
+        <div class="flex items-center justify-between gap-3 flex-wrap mb-3">
+            <h3 class="font-semibold flex items-center gap-2">🩺 Auto-post status <span class="text-xs font-normal text-slate-400">— pehli ❌ line hi asli wajah hai</span></h3>
+            <form method="POST" action="{{ route('admin.youtube.runnow') }}"
+                  onsubmit="if(!confirm('Time window aur cooldown chhodkar abhi 1 Short YouTube par upload karein?')) return false; this.querySelector('button').disabled=true; this.querySelector('button').textContent='⏳ Upload ho raha hai… (1-3 min)'">
+                @csrf
+                <button class="text-xs font-semibold text-white bg-red-600 hover:bg-red-700 px-3 py-1.5 rounded-lg transition">🧪 Abhi 1 Short upload karo (test)</button>
+            </form>
+        </div>
+        <ul class="space-y-1.5 text-sm">
+            @foreach ($diag as [$ok, $title, $detail])
+                <li class="flex gap-2">
+                    <span class="shrink-0">{{ $ok === true ? '✅' : ($ok === false ? '❌' : 'ℹ️') }}</span>
+                    <span><b class="text-slate-700">{{ $title }}:</b> <span class="text-slate-600">{{ $detail }}</span></span>
+                </li>
+            @endforeach
+        </ul>
+    </div>
+
     {{-- ================= SUB-MENU TABS ================= --}}
     <div class="flex gap-1 border-b border-slate-200 mb-6 overflow-x-auto">
         <button type="button" class="yt-tab whitespace-nowrap px-4 py-2.5 text-sm border-b-2 border-transparent -mb-px" data-tab="manual">

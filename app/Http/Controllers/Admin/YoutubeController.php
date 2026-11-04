@@ -10,6 +10,9 @@ use App\Models\Story;
 use App\Services\AiCaptionService;
 use App\Services\YoutubeService;
 use Illuminate\Http\Request;
+use Illuminate\Support\Carbon;
+use Illuminate\Support\Facades\Artisan;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
 
@@ -45,7 +48,91 @@ class YoutubeController extends Controller
             'stories'       => $storiesQuery->get(),
             'configured'    => $this->youtube->isConfigured(),
             'appConfigured' => $this->youtube->appConfigured(),
+            'diag'          => $this->autoPostDiagnosis(),
         ]);
+    }
+
+    /**
+     * 🩺 Auto-post kyun nahi chal raha — har shart ek line: [ok?, title, detail].
+     * Pehli laal line hi asli wajah hoti hai.
+     *
+     * @return list<array{0:bool|null,1:string,2:string}>
+     */
+    protected function autoPostDiagnosis(): array
+    {
+        $uid = auth()->id();
+        $now = now();
+        $rows = [];
+
+        $beat = Cache::get('scheduler:last_run');
+        $beatAgo = $beat ? Carbon::parse($beat)->diffInMinutes($now) : null;
+        $rows[] = [$beat !== null && $beatAgo <= 5, 'Server cron (scheduler)', $beat
+            ? 'Aakhri baar ' . Carbon::parse($beat)->diffForHumans() . ' chala' . ($beatAgo > 5 ? ' — cron band lagta hai! Hosting panel me "* * * * * php artisan schedule:run" wala cron job check karo.' : '.')
+            : 'Abhi tak koi record nahi. Nayi files upload karke 2-3 minute ruko; fir bhi yahi dikhe to hosting ka cron job ("php artisan schedule:run" har minute) set nahi hai.'];
+
+        $rows[] = [$this->youtube->isConfigured(), 'YouTube connected', $this->youtube->isConfigured()
+            ? 'Channel juda hua hai.' : 'Channel connect nahi — upar "Connect YouTube" dabao.'];
+
+        $enabled = Setting::getFor($uid, 'yt_auto_enabled', '0') === '1';
+        $rows[] = [$enabled, 'Auto Post ON', $enabled ? 'Chalu hai.' : 'Band hai — Settings me "Auto Post" ON karke Save karo.'];
+
+        $windows = json_decode((string) Setting::getFor($uid, 'yt_auto_windows', '[]'), true) ?: [];
+        $mins = $now->hour * 60 + $now->minute;
+        $inWindow = collect($windows)->first(function ($w) use ($mins) {
+            $s = $this->hhmm($w['start'] ?? ''); $e = $this->hhmm($w['end'] ?? '');
+
+            return $s !== null && $e !== null && $mins >= $s && $mins <= $e;
+        });
+        $list = collect($windows)->map(fn ($w) => ($w['start'] ?? '?') . '–' . ($w['end'] ?? '?') . ' (har ' . ($w['interval'] ?? 60) . ' min)')->implode(', ');
+        $rows[] = [$windows ? ($inWindow ? true : null) : false, 'Time window', ! $windows
+            ? 'Koi time window nahi — Settings me kam se kam ek window jodo.'
+            : ($inWindow ? "Abhi window chalu hai: {$list}." : "Abhi ({$now->format('H:i')}) koi window nahi chal rahi. Windows: {$list}.")];
+
+        $until = Setting::getFor($uid, 'yt_auto_cooldown_until');
+        $cool = $until && Carbon::parse($until)->greaterThan($now);
+        $rows[] = [! $cool, 'Cooldown (error ke baad rukna)', $cool
+            ? 'Ruka hua hai ' . Carbon::parse($until)->format('d M H:i') . ' tak. Wajah: ' . (Setting::getFor($uid, 'yt_auto_cooldown_reason') ?: 'pichhle upload me error')
+            : 'Koi rukawat nahi.'];
+
+        $pending = Story::where('user_id', $uid)->where('status', 'published')
+            ->withCount(['cards as yt_pending' => fn ($q) => $q->whereNull('yt_status')])
+            ->get()
+            ->filter(fn (Story $s) => $s->targetsPlatform('youtube'))
+            ->sum('yt_pending');
+        $rows[] = [$pending > 0, 'Post karne ke liye cards', $pending > 0
+            ? "{$pending} cards baaki hain." : 'Koi pending card nahi (sab post ho chuke, ya collections me YouTube unchecked hai).'];
+
+        $last = Setting::getFor($uid, 'yt_auto_last_post_at');
+        $lastFail = PartCard::where('yt_status', 'failed')
+            ->whereHas('part.story', fn ($q) => $q->where('user_id', $uid))
+            ->latest('updated_at')->first();
+        $rows[] = [null, 'Aakhri koshish', ($last ? Carbon::parse($last)->diffForHumans() : 'kabhi nahi')
+            . ($lastFail && filled($lastFail->yt_error) ? ' • Aakhri error: ' . Str::limit($lastFail->yt_error, 220) : '')];
+
+        return $rows;
+    }
+
+    private function hhmm(string $v): ?int
+    {
+        return preg_match('/^(\d{1,2}):(\d{2})$/', $v, $m) ? (int) $m[1] * 60 + (int) $m[2] : null;
+    }
+
+    /** 🧪 Window/cooldown chhodkar abhi ek Short upload karo — command ka output dikhao. */
+    public function runNow()
+    {
+        @set_time_limit(600);
+
+        try {
+            Artisan::call('youtube:auto-post', ['--force' => true, '--user' => auth()->id()]);
+            $out = trim(Artisan::output()) ?: 'Koi pending card nahi mila.';
+        } catch (\Throwable $e) {
+            report($e);
+            $out = 'Error: ' . $e->getMessage();
+        }
+
+        $failed = str_contains($out, 'failed') || str_starts_with($out, 'Error');
+
+        return back()->with($failed ? 'error' : 'success', '🧪 Test upload: ' . Str::limit($out, 600));
     }
 
     /* ================= OAuth ================= */

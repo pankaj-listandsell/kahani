@@ -34,3 +34,7 @@ Schedule::command('media:prune')->dailyAt('03:30')->withoutOverlapping(30);
 
 // Followers ki ginti har ghante — Dashboard ka "aaj kitne follow aaye"
 Schedule::command('followers:fetch')->hourly()->withoutOverlapping(30)->runInBackground();
+
+// Scheduler ki dhadkan — YouTube page ka "Auto-post status" isse batata hai ki server ka cron chal raha hai ya nahi
+Schedule::call(fn () => \Illuminate\Support\Facades\Cache::forever('scheduler:last_run', now()->toIso8601String()))
+    ->everyMinute()->name('scheduler-heartbeat')->withoutOverlapping();

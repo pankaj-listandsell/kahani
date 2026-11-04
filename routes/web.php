@@ -88,6 +88,7 @@ Route::middleware('auth')->prefix('admin')->name('admin.')->group(function () {
     Route::post('youtube/disconnect', [YoutubeController::class, 'disconnect'])->name('youtube.disconnect');
     Route::post('youtube/test', [YoutubeController::class, 'test'])->name('youtube.test');
     Route::put('youtube/auto-post', [YoutubeController::class, 'saveAutoPost'])->name('youtube.autopost');
+    Route::post('youtube/run-now', [YoutubeController::class, 'runNow'])->name('youtube.runnow');
     Route::post('youtube/music', [YoutubeController::class, 'saveMusic'])->name('youtube.music');
     Route::delete('youtube/music', [YoutubeController::class, 'removeMusic'])->name('youtube.music.remove');
     Route::get('youtube/cards/{card}/caption', [YoutubeController::class, 'getCaption'])->name('youtube.card.caption.get');
