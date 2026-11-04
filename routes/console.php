@@ -11,14 +11,16 @@ Artisan::command('inspire', function () {
 // Instagram auto-post — har minute chalta hai; command khud check karta hai ki
 // auto-post ON hai, abhi kisi time-window me hai, aur interval beet gaya.
 // Chalane ke liye ye background me chahiye:  php artisan schedule:work
-Schedule::command('instagram:auto-post')->everyMinute()->withoutOverlapping();
+// withoutOverlapping(30): hosting process ko beech me kill kare to lock 30 min me khud hat jaaye
+// (default 24 ghante tha — tab tak auto-post chup-chaap skip hota rehta tha)
+Schedule::command('instagram:auto-post')->everyMinute()->withoutOverlapping(30);
 
 // YouTube Shorts auto-post — IG jaisa hi. Command khud check karta hai ki
 // auto-post ON hai, time-window me hai, aur slot due hai.
-Schedule::command('youtube:auto-post')->everyMinute()->withoutOverlapping();
+Schedule::command('youtube:auto-post')->everyMinute()->withoutOverlapping(30);
 
 // Facebook Page auto-post (photo/reel) — IG jaisa hi.
-Schedule::command('facebook:auto-post')->everyMinute()->withoutOverlapping();
+Schedule::command('facebook:auto-post')->everyMinute()->withoutOverlapping(30);
 
 // Background queue (bulk "All as Reels / Posts") — har minute worker chalao, jobs khatam
 // hote hi ruk jaata hai. Lambe reel jobs ke liye overlap lock 60 min.
@@ -37,4 +39,4 @@ Schedule::command('followers:fetch')->hourly()->withoutOverlapping(30)->runInBac
 
 // Scheduler ki dhadkan — YouTube page ka "Auto-post status" isse batata hai ki server ka cron chal raha hai ya nahi
 Schedule::call(fn () => \Illuminate\Support\Facades\Cache::forever('scheduler:last_run', now()->toIso8601String()))
-    ->everyMinute()->name('scheduler-heartbeat')->withoutOverlapping();
+    ->everyMinute()->name('scheduler-heartbeat')->withoutOverlapping(2);

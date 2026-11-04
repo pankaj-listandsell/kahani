@@ -32,7 +32,9 @@ class SettingsController extends Controller
     public function clearCache()
     {
         $done = [];
-        foreach (['config:clear', 'route:clear', 'view:clear', 'event:clear', 'clear-compiled'] as $cmd) {
+        // schedule:clear-cache = sirf scheduler ke "chal raha hai" locks — process kill hone par phanse
+        // lock se auto-post (khaaskar YouTube) ghanto skip hota rehta tha
+        foreach (['config:clear', 'route:clear', 'view:clear', 'event:clear', 'clear-compiled', 'schedule:clear-cache'] as $cmd) {
             try {
                 Artisan::call($cmd);
                 $done[] = $cmd;

@@ -181,7 +181,10 @@ class YoutubeAutoPost extends Command
             $isCollection = $story->isCollection();
             foreach ($story->parts as $part) {
                 foreach ($part->cards as $card) {
-                    if ($card->yt_status !== null) {
+                    // 'posting' 30+ min purana = pichhla upload beech me kill hua — dobara try karo
+                    $stuck = $card->yt_status === 'posting'
+                        && $card->updated_at?->lt(now()->subMinutes(PartCard::POSTING_STALE_MINUTES));
+                    if ($card->yt_status !== null && ! $stuck) {
                         continue;
                     }
                     if ($isCollection) {
