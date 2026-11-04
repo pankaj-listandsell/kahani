@@ -47,6 +47,17 @@ trait HandlesAutoPostFailures
         // Ye slot use ho gaya — har minute naya card try (aur fail) nahi hoga
         Setting::putFor($uid, "{$prefix}_auto_last_post_at", $now->toIso8601String());
 
+        if ($this->isDailyLimitError($e)) {
+            // Roz ki limit poori — card ki galti nahi. Google ka quota Pacific aadhi-raat ko reset hota hai,
+            // tab tak har slot par try karke cards 'failed' karne ka koi fayda nahi.
+            $card->update(["{$prefix}_status" => null, "{$prefix}_error" => null]);
+            $reset = $now->copy()->setTimezone('America/Los_Angeles')->addDay()->startOfDay()->addMinutes(5)->setTimezone($now->getTimezone());
+            $this->startCooldown($uid, $prefix, $reset->max($now->copy()->addHours(3)), 'roz ki upload limit poori: ' . $e->getMessage());
+            Setting::putFor($uid, "{$prefix}_auto_fail_count", '0');
+
+            return;
+        }
+
         if ($this->isAccountError($e)) {
             // Card ki galti nahi — wapas pending, account theek hone par post hoga
             $card->update(["{$prefix}_status" => null]);
@@ -71,6 +82,15 @@ trait HandlesAutoPostFailures
         Setting::putFor($uid, "{$prefix}_auto_cooldown_until", $until->toIso8601String());
         Setting::putFor($uid, "{$prefix}_auto_cooldown_reason", mb_substr($reason, 0, 500)); // page par wajah dikhane ke liye
         $this->warn("User #{$uid}: {$prefix} auto-post {$until->format('d M H:i')} tak ruka — {$reason}");
+    }
+
+    /** YouTube / Instagram ki roz ki upload ya API limit poori ho gayi. */
+    protected function isDailyLimitError(\Throwable $e): bool
+    {
+        return (bool) preg_match(
+            '/exceeded the number of videos|uploadLimitExceeded|quotaExceeded|exceeded your quota|dailyLimitExceeded/i',
+            $e->getMessage()
+        );
     }
 
     /** Token / quota / permission / hosting jaisi problem — card nahi, account ya setup kharab hai. */

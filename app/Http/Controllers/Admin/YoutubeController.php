@@ -129,11 +129,12 @@ class YoutubeController extends Controller
         return preg_match('/^(\d{1,2}):(\d{2})$/', $v, $m) ? (int) $m[1] * 60 + (int) $m[2] : null;
     }
 
-    /** Token toota hone ki wajah se 'failed' hue cards — card ki galti nahi thi, wapas pending karo. */
+    /** Token toota hone ya roz ki upload limit ki wajah se 'failed' hue cards — card ki galti nahi thi, wapas pending karo. */
     protected function tokenFailedCards()
     {
         return PartCard::where('yt_status', 'failed')
-            ->where(fn ($q) => $q->where('yt_error', 'like', '%dobara connect%')->orWhere('yt_error', 'like', '%token refresh%'))
+            ->where(fn ($q) => $q->where('yt_error', 'like', '%dobara connect%')->orWhere('yt_error', 'like', '%token refresh%')
+                ->orWhere('yt_error', 'like', '%exceeded the number of videos%')->orWhere('yt_error', 'like', '%quota%'))
             ->whereHas('part.story', fn ($q) => $q->where('user_id', auth()->id()));
     }
 

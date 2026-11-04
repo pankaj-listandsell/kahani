@@ -29,7 +29,7 @@
         @if ($tokenFailed > 0)
             <form method="POST" action="{{ route('admin.youtube.retrytoken') }}" class="mt-3 bg-amber-50 border border-amber-200 rounded-lg p-3 flex items-center justify-between gap-3 flex-wrap">
                 @csrf
-                <span class="text-sm text-amber-800">⚠️ {{ $tokenFailed }} cards YouTube token toota hone ki wajah se "failed" pade hain (card ki galti nahi thi).</span>
+                <span class="text-sm text-amber-800">⚠️ {{ $tokenFailed }} cards YouTube token toota hone ya roz ki upload limit ki wajah se "failed" pade hain (card ki galti nahi thi).</span>
                 <button class="text-xs font-semibold text-white bg-amber-600 hover:bg-amber-700 px-3 py-1.5 rounded-lg">🔁 Inhe dobara line me daalo</button>
             </form>
         @endif
