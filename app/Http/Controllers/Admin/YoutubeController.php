@@ -111,6 +111,9 @@ class YoutubeController extends Controller
         $rows[] = [$pending > 0, 'Post karne ke liye cards', $pending > 0
             ? "{$pending} cards baaki hain." : 'Koi pending card nahi (sab post ho chuke, ya collections me YouTube unchecked hai).'];
 
+        $note = Cache::get("autopost:yt:note:{$uid}");
+        $rows[] = [null, 'Command ka aakhri faisla', $note ?: 'Abhi record nahi (nayi files ke baad agle minute me aayega).'];
+
         $last = Setting::getFor($uid, 'yt_auto_last_post_at');
         $lastFail = PartCard::where('yt_status', 'failed')
             ->whereHas('part.story', fn ($q) => $q->where('user_id', $uid))

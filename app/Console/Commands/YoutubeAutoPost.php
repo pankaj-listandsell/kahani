@@ -12,6 +12,7 @@ use App\Services\YoutubeService;
 use Illuminate\Console\Command;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Cache;
+use Illuminate\Support\Facades\Log;
 
 class YoutubeAutoPost extends Command
 {
@@ -56,19 +57,24 @@ class YoutubeAutoPost extends Command
     protected function runForUser(YoutubeService $youtube, User $user, Carbon $now, bool $force): void
     {
         $uid = $user->id;
+        $this->note($uid, 'shuru hua (is line par atka = beech me crash/kill hua)');
 
         if (! $force && Setting::getFor($uid, 'yt_auto_enabled', '0') !== '1') {
+            $this->note($uid, 'Auto Post OFF — skip');
+
             return;
         }
 
         if (! $youtube->forUser($uid)->isConfigured()) {
             $this->warn("User #{$uid}: YouTube configured nahi.");
+            $this->note($uid, 'YouTube configured nahi — skip');
 
             return;
         }
 
         if (! $force && $until = $this->cooldownUntil($uid, 'yt', $now)) {
             $this->warn("User #{$uid}: YouTube cooldown (until {$until}) — skip.");
+            $this->note($uid, "cooldown {$until} tak — skip");
 
             return;
         }
@@ -76,11 +82,15 @@ class YoutubeAutoPost extends Command
         if (! $force) {
             $window = $this->activeWindow($uid, $now);
             if (! $window) {
+                $this->note($uid, 'abhi koi time window nahi — skip');
+
                 return;
             }
 
             $slot = $this->currentSlot($window, $now);
             if ($slot === null) {
+                $this->note($uid, 'slot nahi mila — skip');
+
                 return;
             }
 
@@ -88,25 +98,42 @@ class YoutubeAutoPost extends Command
             $slotTime = $now->copy()->startOfDay()->addMinutes($slot);
             $last = Setting::getFor($uid, 'yt_auto_last_post_at');
             if ($last && Carbon::parse($last)->greaterThanOrEqualTo($slotTime)) {
+                $this->note($uid, 'is slot (' . $slotTime->format('H:i') . ') me upload ho chuka — agle slot ka intezaar');
+
                 return;
             }
         }
 
         $card = $this->nextPendingCard($uid);
         if (! $card) {
+            $this->note($uid, 'koi pending card nahi mila');
+
             return;
         }
+
+        $this->note($uid, "card #{$card->id} upload shuru (is line par atka = video banate/upload karte waqt server ne process kill kiya)");
+        Log::info('YT auto-post: upload shuru', ['user' => $uid, 'card' => $card->id]);
 
         try {
             $id = $youtube->postCard($card);
             $this->info("User #{$uid}: uploaded Short (card #{$card->id}) → {$id}");
             $this->recordSuccess($uid, 'yt', $now);
+            $this->note($uid, "card #{$card->id} upload ho gaya → {$id}");
+            Log::info('YT auto-post: upload ho gaya', ['user' => $uid, 'card' => $card->id, 'video' => $id]);
         } catch (CardBusyException $e) {
             $this->warn("User #{$uid}: " . $e->getMessage()); // button se upload ho raha hai — slot rehne do
+            $this->note($uid, 'card busy: ' . $e->getMessage());
         } catch (\Throwable $e) {
             $this->error("User #{$uid} card #{$card->id} YouTube upload failed: " . $e->getMessage());
             $this->recordFailure($uid, 'yt', $card, $e, $now);
+            $this->note($uid, "card #{$card->id} fail: " . $e->getMessage());
         }
+    }
+
+    /** Is user ke liye command ka aakhri faisla — YouTube page ke status box me dikhta hai. */
+    protected function note(int $uid, string $msg): void
+    {
+        Cache::forever("autopost:yt:note:{$uid}", now()->format('d M H:i:s') . ' — ' . mb_substr($msg, 0, 400));
     }
 
     /* ================= scheduling helpers (IG command jaise) ================= */
