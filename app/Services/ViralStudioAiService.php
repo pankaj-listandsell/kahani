@@ -17,6 +17,16 @@ class ViralStudioAiService
     /**
      * 💬 SALAH: Reader ka sawaal + expert jawab + 4 samadhan (advice column card).
      */
+    /** Salah ke patr me sheher — poore Gujarat se (AI warna har baar Ahmedabad/Surat hi likhta hai). */
+    public const GUJARAT_CITIES = [
+        'અમદાવાદ', 'સુરત', 'વડોદરા', 'રાજકોટ', 'ભાવનગર', 'જામનગર', 'જૂનાગઢ', 'ગાંધીનગર', 'આણંદ', 'નડિયાદ',
+        'ભરૂચ', 'અંકલેશ્વર', 'વાપી', 'વલસાડ', 'નવસારી', 'મહેસાણા', 'પાટણ', 'પાલનપુર', 'ડીસા', 'હિંમતનગર',
+        'મોડાસા', 'ગોધરા', 'દાહોદ', 'પોરબંદર', 'ગોંડલ', 'જેતપુર', 'મોરબી', 'સુરેન્દ્રનગર', 'અમરેલી', 'બોટાદ',
+        'ભુજ', 'ગાંધીધામ', 'અંજાર', 'માંડવી', 'દ્વારકા', 'વેરાવળ', 'કેશોદ', 'ઉના', 'મહુવા', 'પાલિતાણા',
+        'વિસનગર', 'કલોલ', 'ઊંઝા', 'સિદ્ધપુર', 'ખંભાત', 'પેટલાદ', 'બારડોલી', 'વ્યારા', 'રાજપીપળા', 'ધોરાજી',
+        'ઉપલેટા', 'વાંકાનેર', 'લીંબડી', 'ધ્રાંગધ્રા', 'સાવરકુંડલા', 'ધંધુકા', 'વિરમગામ', 'ઝાલોદ', 'છોટા ઉદેપુર', 'લુણાવાડા',
+    ];
+
     public function generateSalah(int $count = 3, string $language = 'gujarati', string $category = 'Parenting', string $topic = '', string $style = 'normal'): array
     {
         $langPrompt = $this->langPrompt($language);
@@ -39,11 +49,18 @@ class ViralStudioAiService
                 260,
             ];
 
+        // Har card ka alag sheher — poore Gujarat se random
+        $cities   = collect(self::GUJARAT_CITIES)->shuffle()->take(max(1, $count))->values();
+        $cityLine = 'Cities for `asker` (use them in this order, one per card; write the name in the output language/script): '
+            . $cities->map(fn ($c, $i) => 'card ' . ($i + 1) . ' = ' . $c)->implode(', ')
+            . '. Use the same city inside the letter (`question`) where a city is mentioned. Do NOT default to Ahmedabad/Surat.';
+
         $prompt = <<<PROMPT
 You write a popular "reader asks, expert answers" advice column that is posted as Instagram Reels text cards.
 Generate {$count} cards in {$langPrompt}.
 Category: {$category}.
 {$topicLine}
+{$cityLine}
 
 Tone & safety:
 - Warm, respectful, practical — like a trusted elder sister / family counsellor. Relatable to Indian (Gujarati/Hindi) families.
