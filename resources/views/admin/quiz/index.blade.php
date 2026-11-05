@@ -70,6 +70,10 @@
                     <input type="checkbox" id="listOptions" class="accent-violet-600">
                     Options bhi dikhao <span class="text-slate-400">(kam sawaal fit honge)</span>
                 </label>
+                <label id="levelWrap" class="flex items-center gap-2 mt-2 text-xs font-semibold text-rose-700 cursor-pointer">
+                    <input type="checkbox" id="levelMode" class="accent-rose-600">
+                    🔥 Level Quiz — 3 sawaal (Easy → Medium → Hard) = 1 reel
+                </label>
             </div>
             {{-- Header text ab fixed — Simple / List / Sahitya designs card ke upar yahi likhte hain --}}
             <input type="hidden" id="headerText" value="Daily GK Quiz">
@@ -1446,12 +1450,14 @@ function boostHookText(item, idx, language) {
 function drawBoost(canvas, item, idx, language) {
     const o = boostOpts();
     const row1 = o.series || o.follow;
-    if (!o.hook && !row1) return;
+    const showHook = o.hook || !!item.levelLabel;   // Level Quiz me hook ki jagah LEVEL label
+    if (!showHook && !row1) return;
     const ctx = canvas.getContext('2d');
     // Design ka header patti ke neeche se na jhaanke — har design ki minimum height
-    const style = el('style').value;
+    // Answer frame (Level Quiz) alag renderer se banta hai — uska header chhota
+    const style = item.isAnswer ? '' : el('style').value;
     const MIN_BH = { poster: 372, clean: 205, simple: 205, sahitya: 405 };
-    const BH = Math.max(o.hook ? (row1 ? 290 : 220) : 130, POSTERS[style] ? 398 : (MIN_BH[style] || 0));
+    const BH = Math.max(showHook ? (row1 ? 290 : 220) : 130, POSTERS[style] ? 398 : (MIN_BH[style] || 0));
     const L = 48, R = W - 290;
 
     ctx.save();
@@ -1487,15 +1493,198 @@ function drawBoost(canvas, item, idx, language) {
         }
         y += 84;
     }
-    if (o.hook) {
-        const hook = boostHookText(item, idx, language);
+    if (showHook) {
+        const hook = item.levelLabel || boostHookText(item, idx, language);
         const areaH = BH - y - 26;
         const f = fitLines(ctx, hook, R - L, areaH, sans, '900', 60);
-        ctx.font = `900 ${f.size}px ${sans}`; ctx.fillStyle = '#ffffff'; ctx.textBaseline = 'top';
+        ctx.font = `900 ${f.size}px ${sans}`; ctx.fillStyle = item.levelColor || '#ffffff'; ctx.textBaseline = 'top';
         let hy = y + Math.max(0, (areaH - f.lines.length * f.lh) / 2);
         f.lines.forEach(l => { ctx.fillText(l, L, hy); hy += f.lh; });
     }
     ctx.textBaseline = 'alphabetic';
+}
+
+// ---------- 🔥 Level Quiz (3 sawaal = 1 reel) ----------
+const LEVEL_I18N = {
+    gujarati: {
+        labels: ['લેવલ ૧ • સરળ 🟢', 'લેવલ ૨ • મધ્યમ 🟡', 'લેવલ ૩ • અઘરો 🔴'],
+        done: (n) => `✅ લેવલ ${['૧', '૨', '૩'][n]} નો જવાબ`,
+        title: 'તમારા કેટલા સાચા પડ્યા?',
+        rows: [['૩/૩', 'જિનિયસ', '🏆'], ['૨/૩', 'સ્માર્ટ', '😎'], ['૧/૩', 'સારો પ્રયાસ', '🙂'], ['૦/૩', 'ફરી ટ્રાય કરો', '😅']],
+        cta: '👇 કોમેન્ટમાં તમારો સ્કોર લખો',
+        follow: '🔔 ફોલો કરો — રોજ નવો લેવલ ક્વિઝ',
+        caption: '🔥 ૩ સવાલ, ૩ લેવલ — તમારા કેટલા સાચા પડ્યા? કોમેન્ટમાં સ્કોર લખો 👇',
+    },
+    hindi: {
+        labels: ['लेवल 1 • आसान 🟢', 'लेवल 2 • मध्यम 🟡', 'लेवल 3 • कठिन 🔴'],
+        done: (n) => `✅ लेवल ${n + 1} का जवाब`,
+        title: 'आपके कितने सही हुए?',
+        rows: [['3/3', 'जीनियस', '🏆'], ['2/3', 'स्मार्ट', '😎'], ['1/3', 'अच्छी कोशिश', '🙂'], ['0/3', 'फिर से ट्राय करो', '😅']],
+        cta: '👇 कमेंट में अपना स्कोर लिखो',
+        follow: '🔔 फॉलो करें — रोज़ नया लेवल क्विज़',
+        caption: '🔥 3 सवाल, 3 लेवल — आपके कितने सही हुए? कमेंट में स्कोर लिखो 👇',
+    },
+    hinglish: {
+        labels: ['LEVEL 1 • EASY 🟢', 'LEVEL 2 • MEDIUM 🟡', 'LEVEL 3 • HARD 🔴'],
+        done: (n) => `✅ Level ${n + 1} ka jawab`,
+        title: 'Aapke kitne sahi hue?',
+        rows: [['3/3', 'Genius', '🏆'], ['2/3', 'Smart', '😎'], ['1/3', 'Achhi koshish', '🙂'], ['0/3', 'Phir try karo', '😅']],
+        cta: '👇 Comment me apna score likho',
+        follow: '🔔 Follow karo — roz naya level quiz',
+        caption: '🔥 3 sawaal, 3 level — aapke kitne sahi hue? Comment me score likho 👇',
+    },
+};
+const LEVEL_COLORS = ['#4ade80', '#facc15', '#f87171'];
+const SCORE_COLORS = ['#facc15', '#4ade80', '#60a5fa', '#f87171'];
+const isLevelMode = () => el('levelMode').checked && el('style').value !== 'list';
+const levelT = (language) => LEVEL_I18N[language] || LEVEL_I18N.hindi;
+
+/** Sawaalon ko 3-3 ke set me baanto: har set me level 1, 2, 3 (AI ka "level" dekh kar). */
+function groupLevels(list) {
+    const pools = { 1: [], 2: [], 3: [] }, rest = [];
+    list.forEach(it => { const l = parseInt(it.level, 10); (pools[l] || rest).push(it); });
+    const take = (l) => pools[l].shift() || rest.shift() || pools[1].shift() || pools[2].shift() || pools[3].shift();
+    const sets = [];
+    for (let s = 0; s < Math.floor(list.length / 3); s++) {
+        const set = [take(1), take(2), take(3)];
+        if (set.some(x => !x)) break;
+        sets.push(set);
+    }
+    return sets;
+}
+
+/** Aakhri frame — "kitne sahi hue?" + score table + comment CTA. */
+function renderLevelEnd(canvas, handle, language) {
+    const L = levelT(language);
+    canvas.width = W; canvas.height = H;
+    const ctx = canvas.getContext('2d');
+    const g = ctx.createLinearGradient(0, 0, 0, H);
+    g.addColorStop(0, '#0b1020'); g.addColorStop(0.55, '#1e1b4b'); g.addColorStop(1, '#3b0764');
+    ctx.fillStyle = g; ctx.fillRect(0, 0, W, H);
+
+    ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+    ctx.font = `200px ${EMOJI}`; ctx.fillText('🧠', W / 2, 330);
+
+    const ts = fitOne(ctx, L.title, W - 140, sans, '900', 84);
+    ctx.font = `900 ${ts}px ${sans}`; ctx.fillStyle = '#ffffff';
+    ctx.fillText(L.title, W / 2, 560);
+
+    // Score table
+    const top = 680, rowH = 150, x = 110, w = W - 220;
+    L.rows.forEach(([score, name, emo], i) => {
+        const y = top + i * (rowH + 22);
+        roundRect(ctx, x, y, w, rowH, 30);
+        ctx.fillStyle = 'rgba(255,255,255,0.08)'; ctx.fill();
+        ctx.lineWidth = 3; ctx.strokeStyle = SCORE_COLORS[i]; ctx.stroke();
+        ctx.textAlign = 'left';
+        ctx.font = `900 64px ${sans}`; ctx.fillStyle = SCORE_COLORS[i];
+        ctx.fillText(score, x + 44, y + rowH / 2 + 4);
+        ctx.font = `800 58px ${sans}`; ctx.fillStyle = '#ffffff';
+        ctx.fillText(name, x + 250, y + rowH / 2 + 4);
+        ctx.textAlign = 'right'; ctx.font = `80px ${EMOJI}`;
+        ctx.fillText(emo, x + w - 40, y + rowH / 2 + 4);
+    });
+
+    // Comment CTA
+    ctx.textAlign = 'center';
+    const cy = 1440, cs = fitOne(ctx, L.cta, W - 220, sans, '900', 56);
+    ctx.font = `900 ${cs}px ${sans}`;
+    const cw = ctx.measureText(L.cta).width + 90;
+    roundRect(ctx, (W - cw) / 2, cy - 60, cw, 120, 60); ctx.fillStyle = '#facc15'; ctx.fill();
+    ctx.fillStyle = '#111827'; ctx.fillText(L.cta, W / 2, cy + 4);
+
+    const fs = fitOne(ctx, L.follow, W - 160, sans, '700', 46);
+    ctx.font = `700 ${fs}px ${sans}`; ctx.fillStyle = '#e0e7ff';
+    ctx.fillText(L.follow, W / 2, 1600);
+
+    const hh = (handle || '').trim();
+    if (hh) { ctx.font = `700 40px ${sans}`; ctx.fillStyle = '#facc15'; ctx.fillText(hh, W / 2, 1700); }
+}
+
+/** Ek sawaal ka question frame — chuna hua design. */
+function renderQ(off, item, theme, handle, category, language, headerText, style) {
+    if (style === 'simple') renderSimple(off, item, theme, handle, category, language, headerText);
+    else if (style === 'sahitya') renderSahitya(off, item, handle, category, language, headerText);
+    else if (POSTERS[style]) renderLogoPoster(off, item, handle, category, language, POSTERS[style]);
+    else if (style === 'poster') renderQuestionPoster(off, item, handle, category, language);
+    else renderQuestion(off, item, theme, handle, category);
+}
+/** Level Quiz ka jawab frame — design se alag, ek jaisa saaf: sawaal, bada hara jawab, wajah. */
+const LEVEL_ANS_I18N = {
+    gujarati: { right: 'સાચો જવાબ', ask: 'તમે સાચા હતા? 👇' },
+    hindi:    { right: 'सही जवाब', ask: 'क्या आप सही थे? 👇' },
+    hinglish: { right: 'Sahi jawab', ask: 'Kya aap sahi the? 👇' },
+};
+function renderLevelAnswer(canvas, item, n, handle, language) {
+    const T = LEVEL_ANS_I18N[language] || LEVEL_ANS_I18N.hindi;
+    canvas.width = W; canvas.height = H;
+    const ctx = canvas.getContext('2d');
+    const g = ctx.createLinearGradient(0, 0, 0, H);
+    g.addColorStop(0, '#0b1020'); g.addColorStop(1, '#14532d');
+    ctx.fillStyle = g; ctx.fillRect(0, 0, W, H);
+
+    const pad = 90, maxW = W - pad * 2;
+    ctx.textAlign = 'center'; ctx.textBaseline = 'top';
+
+    // Sawaal (chhota, halka)
+    const q = fitLines(ctx, item.question || '', maxW, 300, sans, '800', 58);
+    ctx.font = `800 ${q.size}px ${sans}`; ctx.fillStyle = 'rgba(255,255,255,0.82)';
+    let y = 400;
+    q.lines.forEach(l => { ctx.fillText(l, W / 2, y); y += q.lh; });
+
+    // ✅ + "Sahi jawab"
+    y = Math.max(y + 70, 760);
+    ctx.textBaseline = 'middle';
+    ctx.font = `150px ${EMOJI}`; ctx.fillText('✅', W / 2, y + 60);
+    y += 170;
+    ctx.font = `800 50px ${sans}`; ctx.fillStyle = '#86efac'; ctx.fillText(T.right, W / 2, y);
+
+    // Bada hara jawab
+    const k = (item.answer || 'A').charCodeAt(0) - 65;
+    const ans = (item.answer || 'A') + ') ' + ((item.options || [])[k] || '');
+    y += 70;
+    const a = fitLines(ctx, ans, maxW - 80, 260, sans, '900', 76);
+    const boxH = a.lines.length * a.lh + 70;
+    roundRect(ctx, pad, y, maxW, boxH, 40);
+    ctx.fillStyle = '#22c55e'; ctx.fill();
+    ctx.font = `900 ${a.size}px ${sans}`; ctx.fillStyle = '#ffffff'; ctx.textBaseline = 'top';
+    let ay = y + 35 + (a.lh - a.size) / 2;
+    a.lines.forEach(l => { ctx.fillText(l, W / 2, ay); ay += a.lh; });
+    y += boxH + 60;
+
+    // Wajah
+    if ((item.reason || '').trim()) {
+        const r = fitLines(ctx, '💡 ' + item.reason.trim(), maxW, 220, sans, '700', 46);
+        ctx.font = `700 ${r.size}px ${sans}`; ctx.fillStyle = '#fef9c3';
+        r.lines.forEach(l => { ctx.fillText(l, W / 2, y); y += r.lh; });
+    }
+
+    ctx.textBaseline = 'middle';
+    ctx.font = `800 52px ${sans}`; ctx.fillStyle = '#facc15';
+    ctx.fillText(T.ask, W / 2, 1690);
+
+    const hh = (handle || '').trim();
+    if (hh) { ctx.font = `700 38px ${sans}`; ctx.fillStyle = 'rgba(255,255,255,0.8)'; ctx.fillText(hh, W / 2, 1790); }
+}
+
+
+/** Ek level set ke 7 frames (q1,a1,q2,a2,q3,a3,end) — har frame callback ko. */
+function renderLevelSet(set, setIdx, opts, onFrame) {
+    const { theme, handle, category, language, headerText, style } = opts;
+    const L = levelT(language);
+    const off = document.createElement('canvas');
+    set.forEach((item, n) => {
+        const q = { ...item, levelLabel: L.labels[n], levelColor: LEVEL_COLORS[n] };
+        renderQ(off, q, theme, handle, category, language, headerText, style);
+        drawBoost(off, q, setIdx, language);
+        onFrame(off, `Set ${setIdx + 1} · L${n + 1} ❓`);
+        const a = { ...q, levelLabel: L.done(n), isAnswer: true };
+        renderLevelAnswer(off, a, n, handle, language);
+        drawBoost(off, a, setIdx, language);
+        onFrame(off, `Set ${setIdx + 1} · L${n + 1} ✅`);
+    });
+    renderLevelEnd(off, handle, language);
+    onFrame(off, `Set ${setIdx + 1} · Score 🏆`);
 }
 
 function renderPreviews() {
@@ -1525,6 +1714,18 @@ function renderPreviews() {
         });
         el('itemCount').textContent = items.length;
         el('cardCount').textContent = pages.length;
+        el('previewWrap').classList.remove('hidden');
+        return;
+    }
+
+    if (isLevelMode()) {
+        const sets = groupLevels(items);
+        sets.forEach((set, s) => renderLevelSet(set, s, { theme, handle, category, language, headerText, style }, (c, label) => {
+            off.width = W; off.height = H; off.getContext('2d').drawImage(c, 0, 0);
+            addCell(label);
+        }));
+        el('itemCount').textContent = sets.length + ' level reels · ' + sets.length * 3 + ' sawaal ·';
+        el('cardCount').textContent = sets.length;
         el('previewWrap').classList.remove('hidden');
         return;
     }
@@ -1635,11 +1836,14 @@ el('genBtn').addEventListener('click', async () => {
                 ? `⚠ Sirf ${res.pages.length} card ban paaye (${items.length} sawaal) — AI is topic par aur naye sawaal nahi de paaya${repeatNote()}.`
                 : `✓ ${res.pages.length} cards ready — kul ${items.length} sawaal${repeatNote()}. Theme badal ke dekho, phir Save karo.`;
         } else {
-            // Baaki designs me 1 sawaal = 1 card
-            items = await fetchQuizBatch(base, Math.min(30, wanted), []);
+            // Baaki designs me 1 sawaal = 1 card. Level Quiz: 1 card = 3 sawaal
+            const level = isLevelMode();
+            items = await fetchQuizBatch(level ? { ...base, levels: true } : base, Math.min(30, level ? wanted * 3 : wanted), []);
             await Promise.all([ensureFonts(), ensureLogo()]);
             renderPreviews();
-            msg.textContent = `✓ ${items.length} cards ready${repeatNote()} — theme badal ke dekho, phir Save karo.`;
+            msg.textContent = level
+                ? `✓ ${groupLevels(items).length} level reels ready (${items.length} sawaal)${repeatNote()} — phir Save karo.`
+                : `✓ ${items.length} cards ready${repeatNote()} — theme badal ke dekho, phir Save karo.`;
         }
     } catch(e){ msg.textContent = '⚠ ' + (e.message || 'Error aaya, dobara try karo.'); }
     btn.disabled=false; btn.textContent=lbl;
@@ -1650,13 +1854,15 @@ function syncStyleFields() {
     const s = el('style').value;
     el('listOptsWrap').classList.toggle('hidden', s !== 'list');
     el('listOptsWrap').classList.toggle('flex', s === 'list');
+    el('levelWrap').classList.toggle('hidden', s === 'list');
     el('countHint').textContent = s === 'list'
         ? 'Har card me jitne sawaal fit honge utne aayenge'
-        : '1 sawaal = 1 card';
+        : (el('levelMode').checked ? '1 card = 3 sawaal = 1 reel (max 10)' : '1 sawaal = 1 card');
 }
 el('style').addEventListener('change', syncStyleFields);
 syncStyleFields();
 
+el('levelMode').addEventListener('change', () => { syncStyleFields(); if (items.length) renderPreviews(); });
 ['theme','handle','style','category','language','headerText','listOptions'].forEach(id => el(id).addEventListener('change', () => { if(items.length) renderPreviews(); }));
 ['boostHook','boostFollow','boostSeries','seriesLabel','seriesStart'].forEach(id => el(id).addEventListener('change', () => {
     if (BOOST_KEYS.includes(id)) {
@@ -1687,7 +1893,26 @@ el('saveBtn').addEventListener('click', async () => {
     const cardsToSave = [];
 
     try {
-        if (style === 'list') {
+        if (isLevelMode()) {
+            const sets = groupLevels(items);
+            const L = levelT(language);
+            const ansLine = (it) => { const k = (it.answer || 'A').charCodeAt(0) - 65; return (it.answer || 'A') + ') ' + ((it.options || [])[k] || ''); };
+            sets.forEach((set, s) => {
+                const frames = [];
+                renderLevelSet(set, s, { theme, handle, category, language, headerText, style }, (c) => frames.push(getCanvasData(c)));
+                cardsToSave.push({
+                    order: s + 1,
+                    text: set.map((it, n) => 'Level ' + (n + 1) + ': ' + it.question + '\n' + (it.options || []).map((o, k) => String.fromCharCode(65 + k) + ') ' + o).join('\n')).join('\n\n'),
+                    answer: set.map((it, n) => '✅ Level ' + (n + 1) + ': ' + ansLine(it)).join('\n'),
+                    caption: L.caption,
+                    questions: set.map(it => it.question),
+                    hashtags: set[0].hashtags || '',
+                    image: frames[0],
+                    level_frames: frames,
+                });
+            });
+            if (!cardsToSave.length) throw new Error('Level set banane ke liye kam se kam 3 sawaal chahiye.');
+        } else if (style === 'list') {
             const showOpts = el('listOptions').checked;
             const pages = packQuizPages(items, showOpts);
             for (let p = 0; p < pages.length; p++) {
@@ -1748,7 +1973,8 @@ el('saveBtn').addEventListener('click', async () => {
                 language,
                 cards: cardsToSave,
                 // 🔢 Series agla number isse aage se — List design par series nahi lagti
-                series_last: (style !== 'list' && el('boostSeries').checked) ? boostOpts().start + items.length - 1 : null,
+                series_last: (style !== 'list' && el('boostSeries').checked)
+                    ? boostOpts().start + (isLevelMode() ? cardsToSave.length : items.length) - 1 : null,
             })
         });
 

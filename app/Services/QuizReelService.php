@@ -81,6 +81,11 @@ class QuizReelService
      */
     public function mp4For(PartCard $card): string
     {
+        // 🔥 Level Quiz — 3 sawaal (Easy → Medium → Hard) + score frame, ek reel
+        if ($frames = self::levelFrames($card)) {
+            return $this->levelMp4($card, $frames);
+        }
+
         if (! $this->supports($card)) {
             throw new \RuntimeException('Is card me answer image nahi hai — timer reel nahi ban sakti.');
         }
@@ -148,6 +153,175 @@ class QuizReelService
 
         Log::error('Quiz ffmpeg failed (all resolutions)', ['err' => $lastErr]);
         throw new \RuntimeException('Quiz reel nahi ban paayi (ffmpeg signal 9 / OOM / crash). ' . Str::limit($lastErr, 150));
+    }
+
+    /* ===================================================================
+     |  🔥 Level Quiz — 3 sawaal (Easy → Medium → Hard) + "kitne sahi?" frame
+     |
+     |  Frames ek folder me: cards/level-{uuid}/q1,a1,q2,a2,q3,a3,end.{webp|png}
+     |  Card ka image_path = q1 (photo post / thumbnail), answer_image_path = end.
+     |  Isliye koi naya DB column nahi chahiye.
+     * =================================================================== */
+
+    public const LEVEL_FRAMES = ['q1', 'a1', 'q2', 'a2', 'q3', 'a3', 'end'];
+
+    /** Har level ka jawab kitni der dikhe. */
+    private const LEVEL_ANSWER_SECONDS = 2.5;
+
+    /** Aakhri "kitne sahi hue?" frame kitni der. */
+    private const LEVEL_END_SECONDS = 3.5;
+
+    /** Level card hai to uske 7 frame paths (storage-relative), warna null. */
+    public static function levelFrames(?PartCard $card): ?array
+    {
+        if (! $card || ! preg_match('#^(cards/level-[A-Za-z0-9-]+)/q1\.[a-z0-9]+$#i', (string) $card->image_path, $m)) {
+            return null;
+        }
+
+        $disk = Storage::disk('public');
+        $out  = [];
+        foreach (self::LEVEL_FRAMES as $name) {
+            $found = null;
+            foreach (['webp', 'png', 'jpg'] as $ext) {
+                if ($disk->exists("{$m[1]}/{$name}.{$ext}")) {
+                    $found = "{$m[1]}/{$name}.{$ext}";
+                    break;
+                }
+            }
+            if ($found === null) {
+                return null;
+            }
+            $out[$name] = $found;
+        }
+
+        return $out;
+    }
+
+    /** Level card ka folder (delete ke liye), warna null. */
+    public static function levelDir(?PartCard $card): ?string
+    {
+        return $card && preg_match('#^(cards/level-[A-Za-z0-9-]+)/#i', (string) $card->image_path, $m) ? $m[1] : null;
+    }
+
+    /**
+     * Level reel: har level ek chhoti clip (sawaal + countdown + jawab, tick/ding ke
+     * saath), fir score frame — concat (-c copy), aakhir me BGM. Tukdon me isliye
+     * ki shared hosting ek bade ffmpeg process ko signal 9 se maar deta hai.
+     */
+    protected function levelMp4(PartCard $card, array $frames): string
+    {
+        $disk   = Storage::disk('public');
+        $userId = $card->part?->story?->user_id;
+        $base   = $this->timerSeconds($userId);
+        // Hard level ko thoda zyada time
+        $timers = [$base, $base, min(self::MAX_TIMER, $base + 2)];
+
+        $sfx      = (string) Setting::getFor($userId, 'quiz_sfx_enabled', '1') !== '0';
+        $bgmTrack = (string) Setting::getFor($userId, 'quiz_bgm_track', 'suspense');
+        $motion   = ReelMotion::enabled($userId);
+        $ffmpeg   = config('services.ffmpeg.path', 'ffmpeg');
+
+        $disk->makeDirectory('reels');
+        $tmp = 'reels/level-' . $card->id . '-tmp';
+        $out = 'reels/quiz-' . $card->id . '.mp4';
+        $lastErr = '';
+
+        try {
+            foreach ([[720, 1280], [540, 960], [480, 854]] as [$w, $h]) {
+                $disk->deleteDirectory($tmp);
+                $disk->makeDirectory($tmp);
+
+                try {
+                    $clips = [];
+                    foreach ([1, 2, 3] as $n) {
+                        $clip = "{$tmp}/l{$n}.mp4";
+                        $this->runFfmpeg($this->buildCommand(
+                            $disk->path($frames["q{$n}"]),
+                            $disk->path($frames["a{$n}"]),
+                            null,
+                            null,
+                            (float) $timers[$n - 1],
+                            self::LEVEL_ANSWER_SECONDS,
+                            $timers[$n - 1],
+                            $disk->path($clip),
+                            $motion,
+                            $w,
+                            $h,
+                            $sfx,
+                            'none',            // BGM poori reel par ek saath, neeche
+                        ));
+                        $clips[] = $clip;
+                    }
+
+                    // Score frame — chup (BGM baad me)
+                    $end = "{$tmp}/end.mp4";
+                    $this->runFfmpeg(array_merge([
+                        $ffmpeg, '-y',
+                        '-loop', '1', '-t', $this->num(self::LEVEL_END_SECONDS), '-i', $disk->path($frames['end']),
+                        '-f', 'lavfi', '-t', $this->num(self::LEVEL_END_SECONDS), '-i', 'anullsrc=channel_layout=stereo:sample_rate=44100',
+                        '-filter_complex', '[0:v]' . ReelMotion::chain($w, $h, self::LEVEL_END_SECONDS, 3, $motion) . '[v]',
+                        '-map', '[v]', '-map', '1:a',
+                    ], $this->encodeArgs(), [$disk->path($end)]));
+                    $clips[] = $end;
+
+                    // Jodo (sab clips same settings se bani hain → -c copy)
+                    $list = "{$tmp}/list.txt";
+                    $disk->put($list, collect($clips)
+                        ->map(fn ($c) => "file '" . str_replace('\\', '/', $disk->path($c)) . "'")
+                        ->implode("\n"));
+                    $joined = "{$tmp}/joined.mp4";
+                    $this->runFfmpeg([$ffmpeg, '-y', '-f', 'concat', '-safe', '0', '-i', $disk->path($list), '-c', 'copy', $disk->path($joined)]);
+
+                    // BGM
+                    $bgmFile = public_path("audio/bgm/{$bgmTrack}.mp3");
+                    if ($bgmTrack !== 'none' && file_exists($bgmFile)) {
+                        $this->runFfmpeg([
+                            $ffmpeg, '-y', '-i', $disk->path($joined), '-stream_loop', '-1', '-i', $bgmFile,
+                            '-filter_complex', '[1:a]volume=0.22,aformat=sample_rates=44100:channel_layouts=stereo[b];'
+                                . '[0:a][b]amix=inputs=2:duration=first:dropout_transition=2,aformat=sample_rates=44100:channel_layouts=stereo[a]',
+                            '-map', '0:v', '-map', '[a]', '-c:v', 'copy',
+                            '-c:a', 'aac', '-b:a', '128k', '-ar', '44100', '-ac', '2',
+                            '-movflags', '+faststart', $disk->path($out),
+                        ]);
+                    } else {
+                        $this->runFfmpeg([$ffmpeg, '-y', '-i', $disk->path($joined), '-c', 'copy', '-movflags', '+faststart', $disk->path($out)]);
+                    }
+
+                    $story = $card->part?->story;
+
+                    return ReelOutro::append($out, $userId, $story?->language, $story?->tts_voice);
+                } catch (\Throwable $e) {
+                    $lastErr = $e->getMessage();
+                    Log::warning('Level quiz reel fail, lower-res retry', ['res' => "{$w}x{$h}", 'err' => Str::limit($lastErr, 300)]);
+                }
+            }
+        } finally {
+            $disk->deleteDirectory($tmp);
+        }
+
+        throw new \RuntimeException('Level quiz reel nahi ban paayi. ' . Str::limit($lastErr, 150));
+    }
+
+    /** ffmpeg chalao; fail ho to exception (error ke saath). */
+    protected function runFfmpeg(array $cmd): void
+    {
+        $result = Process::timeout(600)->run($cmd);
+        if (! $result->successful()) {
+            throw new \RuntimeException(Str::limit($result->errorOutput() ?: $result->output(), 400));
+        }
+    }
+
+    /** Video/audio encode settings — buildCommand jaise hi (concat -c copy ke liye zaroori). */
+    protected function encodeArgs(): array
+    {
+        return [
+            '-c:v', 'libx264', '-preset', 'ultrafast', '-tune', 'stillimage', '-threads', '1',
+            '-x264-params', 'ref=1:bframes=0:rc-lookahead=10:sync-lookahead=0',
+            '-profile:v', 'high', '-level', '3.1',
+            '-pix_fmt', 'yuv420p', '-color_range', 'tv', '-r', '25',
+            '-g', '50', '-keyint_min', '50', '-sc_threshold', '0', '-flags', '+cgop',
+            '-c:a', 'aac', '-b:a', '128k', '-ar', '44100', '-ac', '2',
+        ];
     }
 
     /** Countdown kitne second ka — Settings me badal sakte hain. */

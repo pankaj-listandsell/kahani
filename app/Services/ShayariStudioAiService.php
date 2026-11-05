@@ -51,12 +51,19 @@ class ShayariStudioAiService
      * @return list<array{question:string, options:list<string>, answer:string, reason:string, hashtags:string}>
      * @throws \RuntimeException
      */
-    public function generateQuiz(string $category, int $count, string $language = 'hindi', array $exclude = []): array
+    public function generateQuiz(string $category, int $count, string $language = 'hindi', array $exclude = [], bool $levels = false): array
     {
         $count    = max(1, min(30, $count));
         $category = trim($category) ?: 'general knowledge';
 
         $prompt = $this->quizPrompt($category, $count, $language, $exclude);
+        if ($levels) {
+            // 🔥 Level Quiz — 3-3 ke group, aasaan → kathin
+            $prompt .= "
+EXTRA: Har item me \"level\" bhi do — 1 (aasaan), 2 (madhyam) ya 3 (kathin). "
+                . "Sawaal barabar baanto: ek-tihaai level 1, ek-tihaai level 2, ek-tihaai level 3. "
+                . "Level 1 itna aasaan ki zyada log sahi karein, level 3 sach me mushkil (sirf jaankar sahi karein).";
+        }
         $items  = $this->parseQuiz($this->callAi($prompt));
 
         // Kabhi model galat format deta hai — ek baar dobara try karo
@@ -472,6 +479,7 @@ class ShayariStudioAiService
                 'caption'  => $this->asString($row['caption'] ?? $row['hook'] ?? ''),
                 // Card ke upar dikhne wali chhoti hook line ("99% log galat...")
                 'hook'     => $this->asString($row['hook'] ?? $row['screen_hook'] ?? ''),
+                'level'    => max(0, min(3, (int) ($row['level'] ?? $row['difficulty'] ?? 0))),
                 'hashtags' => $this->withQuizTags($this->asString($row['hashtags'] ?? $row['tags'] ?? '')),
             ];
         }

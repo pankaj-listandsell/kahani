@@ -462,6 +462,11 @@ class InstagramService
         }
         $disk->delete('reels/quiz-' . $card->id . '.mp4');
         $disk->delete('yt/card-' . $card->id . '.mp4');
+
+        // 5) 🔥 Level Quiz ka poora frames folder
+        if ($dir = QuizReelService::levelDir($card)) {
+            $disk->deleteDirectory($dir);
+        }
     }
 
     /**

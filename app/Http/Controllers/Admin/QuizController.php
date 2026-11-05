@@ -57,6 +57,8 @@ class QuizController extends Controller
             // wo yahan bhejta hai taaki AI unhe dobara na likhe.
             'exclude'   => ['nullable', 'array', 'max:60'],
             'exclude.*' => ['string', 'max:300'],
+            // 🔥 Level Quiz: har sawaal ke saath level 1/2/3 (aasaan → kathin)
+            'levels'    => ['nullable', 'boolean'],
         ]);
 
         $topic = trim((string) ($data['category'] ?? ''));
@@ -72,6 +74,7 @@ class QuizController extends Controller
                 $data['count'],
                 $data['language'] ?? 'gujarati',
                 $exclude,
+                (bool) ($data['levels'] ?? false),
             );
 
             // AI ko mana karne ke baad bhi wo repeat kar deta hai — isliye yahan
@@ -111,6 +114,9 @@ class QuizController extends Controller
             'cards.*.hashtags'     => ['nullable', 'string', 'max:1000'],
             'cards.*.image'        => ['required_with:cards', 'string'],
             'cards.*.answer_image' => ['nullable', 'string'],
+            // 🔥 Level Quiz: q1,a1,q2,a2,q3,a3,end
+            'cards.*.level_frames'   => ['nullable', 'array', 'size:7'],
+            'cards.*.level_frames.*' => ['string'],
 
             // Single card fallback
             'order'                => ['required_without:cards', 'integer', 'min:1'],
@@ -160,20 +166,29 @@ class QuizController extends Controller
         }
 
         foreach ($cardsInput as $cardItem) {
-            $decoded = $this->decodeDataUrl($cardItem['image']);
-            if ($decoded === null) {
-                continue;
-            }
+            if (! empty($cardItem['level_frames'])) {
+                // 🔥 Level Quiz — 7 frames ek folder me (QuizReelService::levelFrames)
+                $saved = $this->saveLevelFrames($cardItem['level_frames']);
+                if ($saved === null) {
+                    continue;
+                }
+                [$path, $answerPath] = $saved;
+            } else {
+                $decoded = $this->decodeDataUrl($cardItem['image']);
+                if ($decoded === null) {
+                    continue;
+                }
 
-            $path = 'cards/' . Str::uuid() . '.' . $decoded['ext'];
-            Storage::disk('public')->put($path, $decoded['binary']);
+                $path = 'cards/' . Str::uuid() . '.' . $decoded['ext'];
+                Storage::disk('public')->put($path, $decoded['binary']);
 
-            $answerPath = null;
-            if (filled($cardItem['answer_image'] ?? null)) {
-                $ansDecoded = $this->decodeDataUrl($cardItem['answer_image']);
-                if ($ansDecoded !== null) {
-                    $answerPath = 'cards/' . Str::uuid() . '-a.' . $ansDecoded['ext'];
-                    Storage::disk('public')->put($answerPath, $ansDecoded['binary']);
+                $answerPath = null;
+                if (filled($cardItem['answer_image'] ?? null)) {
+                    $ansDecoded = $this->decodeDataUrl($cardItem['answer_image']);
+                    if ($ansDecoded !== null) {
+                        $answerPath = 'cards/' . Str::uuid() . '-a.' . $ansDecoded['ext'];
+                        Storage::disk('public')->put($answerPath, $ansDecoded['binary']);
+                    }
                 }
             }
 
@@ -215,6 +230,30 @@ class QuizController extends Controller
             'collection' => $story->id,
             'redirect'   => route('admin.quiz.show', $story),
         ]);
+    }
+
+    /**
+     * Level Quiz ke 7 frames cards/level-{uuid}/ me save. [image_path (q1), answer_image_path (end)]
+     * ya null (koi frame kharab ho to poora folder hata do).
+     */
+    private function saveLevelFrames(array $frames): ?array
+    {
+        $disk  = Storage::disk('public');
+        $dir   = 'cards/level-' . Str::uuid();
+        $paths = [];
+
+        foreach (QuizReelService::LEVEL_FRAMES as $i => $name) {
+            $decoded = $this->decodeDataUrl((string) ($frames[$i] ?? ''));
+            if ($decoded === null) {
+                $disk->deleteDirectory($dir);
+
+                return null;
+            }
+            $paths[$name] = "{$dir}/{$name}.{$decoded['ext']}";
+            $disk->put($paths[$name], $decoded['binary']);
+        }
+
+        return [$paths['q1'], $paths['end']];
     }
 
     /** "Jawab comment me likho" — content ki bhasha me. */
