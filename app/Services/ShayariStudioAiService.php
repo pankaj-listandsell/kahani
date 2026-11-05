@@ -112,10 +112,14 @@ class ShayariStudioAiService
           di gayi hai. Social media par log ruk kar padhein aisi. 1 line, max 12 shabd, 1-2 emoji.
           Jaise: "90% લોકો આ સવાલમાં ખોટા પડે છે! 🤯" / "તમે GPSC ની તૈયારી કરો છો? આ સવાલ ટ્રાય કરો 🎯"
           BAHUT ZAROORI: caption me sawaal ya jawab BILKUL mat likhna — sirf hook.
+        - "hook" — card ke UPAR bade akshar me dikhne wali challenge line, usi bhasha me. 3 se 7 shabd,
+          max 1 emoji, caption se ALAG. Dekhne wala 1 second me ruk jaye aisi.
+          Jaise: "૯૯% લોકો આમાં ખોટા પડે છે 😱" / "ફક્ત જિનિયસ જ સાચું કહી શકે 🧠".
+          Isme bhi sawaal ya jawab mat likhna.
         - "hashtags" SIRF ANGREZI/Roman letters me — Gujarati/Hindi lipi me ek bhi hashtag nahi.
           6-10 safe, relevant tags (banned/sensitive nahi).
         SIRF ek valid JSON array return karo (koi markdown, koi backticks nahi), bilkul is format me:
-        [{"question":"prashn yahan? 🤔", "options":["pehla","dusra","teesra","chautha"], "answer":"B", "reason":"chhoti wajah ✅", "image_query":"himalaya mountains", "caption":"hook line yahan 🤯", "hashtags":"#gpsc #talati #gujaratgk"}]
+        [{"question":"prashn yahan? 🤔", "options":["pehla","dusra","teesra","chautha"], "answer":"B", "reason":"chhoti wajah ✅", "image_query":"himalaya mountains", "caption":"hook line yahan 🤯", "hook":"chhoti challenge line 😱", "hashtags":"#gpsc #talati #gujaratgk"}]
         TXT;
     }
 
@@ -466,6 +470,8 @@ class ShayariStudioAiService
                 'image_query' => $this->asString($row['image_query'] ?? $row['imageQuery'] ?? ''),
                 // Caption ki hook line (sawaal/jawab nahi — sirf dhyan kheenchne wali line)
                 'caption'  => $this->asString($row['caption'] ?? $row['hook'] ?? ''),
+                // Card ke upar dikhne wali chhoti hook line ("99% log galat...")
+                'hook'     => $this->asString($row['hook'] ?? $row['screen_hook'] ?? ''),
                 'hashtags' => $this->withQuizTags($this->asString($row['hashtags'] ?? $row['tags'] ?? '')),
             ];
         }

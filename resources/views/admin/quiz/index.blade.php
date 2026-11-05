@@ -82,6 +82,22 @@
                 <button id="genBtn" class="w-full bg-violet-600 hover:bg-violet-700 text-white font-medium rounded-lg px-5 py-2.5 text-sm">🎯 Generate Quiz</button>
             </div>
         </div>
+        {{-- 🚀 Reach boost — card ke upar hook patti, series number aur follow line --}}
+        <div class="rounded-lg border border-amber-200 bg-amber-50 p-3 space-y-2">
+            <div class="flex flex-wrap items-center gap-x-5 gap-y-2 text-sm">
+                <span class="font-semibold text-amber-900">🚀 Reach boost:</span>
+                <label class="flex items-center gap-1.5 cursor-pointer"><input type="checkbox" id="boostHook" class="accent-amber-600" checked> 🪝 Hook line</label>
+                <label class="flex items-center gap-1.5 cursor-pointer"><input type="checkbox" id="boostFollow" class="accent-amber-600" checked> 🔔 Follow line</label>
+                <label class="flex items-center gap-1.5 cursor-pointer"><input type="checkbox" id="boostSeries" class="accent-amber-600" checked> 🔢 Series</label>
+                <span class="flex items-center gap-1.5">
+                    <input type="text" id="seriesLabel" value="DAY" maxlength="14" autocomplete="off"
+                           class="w-24 rounded-lg border border-slate-300 px-2 py-1 text-sm" title="Series ka naam, jaise DAY / QUIZ NO.">
+                    <input type="number" id="seriesStart" value="{{ $seriesNext }}" min="1" autocomplete="off"
+                           class="w-24 rounded-lg border border-slate-300 px-2 py-1 text-sm" title="Pehle card ka number">
+                </span>
+            </div>
+            <p class="text-[11px] text-amber-800">Card ke upar ek patti aati hai: "DAY {{ $seriesNext }}", "🔔 Follow karo" aur AI ki hook line (jaise "99% log galat jawab dete hain"). Series number har save ke baad apne aap aage badhta hai. Q&amp;A List design par ye patti nahi lagti.</p>
+        </div>
         <p id="msg" class="text-sm text-slate-500"></p>
     </div>
 
@@ -1391,6 +1407,97 @@ function renderLogoPoster(canvas, item, handle, category, language, P) {
 let items = [];
 async function ensureFonts(){ for(const f of ['700 68px "Noto Serif Devanagari"','700 68px "Noto Sans Devanagari"','700 68px "Noto Serif Gujarati"','700 68px "Noto Sans Gujarati"']){ try{await document.fonts.load(f);}catch(e){} } await document.fonts.ready; }
 
+// ---------- 🚀 Reach boost patti (hook + series + follow) ----------
+// Har single-question card ke UPAR ek patti. Daayi taraf ~290px khaali — reel me
+// wahan countdown timer aata hai (QuizReelService: upar-daaye kone me).
+const BOOST_HOOKS = {
+    gujarati: ['૯૯% લોકો આમાં ખોટા પડે છે 😱', 'ફક્ત જિનિયસ જ સાચું કહી શકે 🧠', 'તમે સાચો જવાબ આપી શકશો? 🤔', 'આ સવાલે બધાને ગૂંચવી દીધા 🤯', '૧૦૦માંથી ૧ જ સાચું કહે છે 🎯'],
+    hindi:    ['99% लोग इसमें गलत होते हैं 😱', 'सिर्फ जीनियस ही सही बता सकते हैं 🧠', 'क्या आप सही जवाब दे पाएंगे? 🤔', 'इस सवाल ने सबको उलझा दिया 🤯', '100 में से 1 ही सही बताता है 🎯'],
+    hinglish: ['99% log isme galat hote hain 😱', 'Sirf genius hi sahi bata sakte hain 🧠', 'Kya aap sahi jawab de paoge? 🤔', 'Is sawaal ne sabko uljha diya 🤯', '100 me se 1 hi sahi batata hai 🎯'],
+};
+const BOOST_FOLLOW = {
+    gujarati: '🔔 ફોલો કરો — રોજ નવો ક્વિઝ',
+    hindi:    '🔔 फॉलो करें — रोज़ नया क्विज़',
+    hinglish: '🔔 Follow karo — roz naya quiz',
+};
+const BOOST_KEYS = ['boostHook', 'boostFollow', 'boostSeries', 'seriesLabel'];
+BOOST_KEYS.forEach(id => {
+    try {
+        const v = localStorage.getItem('quiz.' + id);
+        if (v === null) return;
+        if (el(id).type === 'checkbox') el(id).checked = v === '1'; else el(id).value = v;
+    } catch (e) {}
+});
+function boostOpts() {
+    return {
+        hook: el('boostHook').checked,
+        follow: el('boostFollow').checked,
+        series: el('boostSeries').checked,
+        label: (el('seriesLabel').value || 'DAY').trim().toUpperCase(),
+        start: Math.max(1, parseInt(el('seriesStart').value, 10) || 1),
+    };
+}
+function boostHookText(item, idx, language) {
+    const h = (item.hook || '').trim();
+    if (h) return h;
+    const list = BOOST_HOOKS[language] || BOOST_HOOKS.hindi;
+    return list[(boostOpts().start + idx) % list.length];
+}
+function drawBoost(canvas, item, idx, language) {
+    const o = boostOpts();
+    const row1 = o.series || o.follow;
+    if (!o.hook && !row1) return;
+    const ctx = canvas.getContext('2d');
+    // Design ka header patti ke neeche se na jhaanke — har design ki minimum height
+    const style = el('style').value;
+    const MIN_BH = { poster: 372, clean: 205, simple: 205, sahitya: 405 };
+    const BH = Math.max(o.hook ? (row1 ? 290 : 220) : 130, POSTERS[style] ? 398 : (MIN_BH[style] || 0));
+    const L = 48, R = W - 290;
+
+    ctx.save();
+    const g = ctx.createLinearGradient(0, 0, 0, BH);
+    g.addColorStop(0, '#0b1020'); g.addColorStop(1, '#1e1b4b');
+    ctx.shadowColor = 'rgba(0,0,0,0.45)'; ctx.shadowBlur = 26; ctx.shadowOffsetY = 6;
+    ctx.fillStyle = g; ctx.fillRect(0, 0, W, BH);
+    ctx.restore();
+    ctx.fillStyle = '#facc15'; ctx.fillRect(0, BH - 8, W, 8);
+
+    // Daayi taraf — photo post me 🧠, reel me iske upar countdown aa jaata hai
+    ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+    ctx.font = `${Math.min(130, BH - 60)}px ${EMOJI}`;
+    ctx.fillText('🧠', (R + W) / 2 + 10, BH / 2);
+
+    ctx.textAlign = 'left';
+    let y = 40;
+    if (row1) {
+        let x = L;
+        if (o.series) {
+            const txt = `${o.label} ${o.start + idx}`;
+            ctx.font = `900 36px ${sans}`;
+            const pw = ctx.measureText(txt).width + 48, ph = 60;
+            roundRect(ctx, x, y, pw, ph, ph / 2); ctx.fillStyle = '#facc15'; ctx.fill();
+            ctx.fillStyle = '#111827'; ctx.fillText(txt, x + 24, y + ph / 2 + 2);
+            x += pw + 20;
+        }
+        if (o.follow) {
+            const txt = BOOST_FOLLOW[language] || BOOST_FOLLOW.hindi;
+            const s = fitOne(ctx, txt, R - x, sans, '700', 36);
+            ctx.font = `700 ${s}px ${sans}`; ctx.fillStyle = '#e0e7ff';
+            ctx.fillText(txt, x, y + 32);
+        }
+        y += 84;
+    }
+    if (o.hook) {
+        const hook = boostHookText(item, idx, language);
+        const areaH = BH - y - 26;
+        const f = fitLines(ctx, hook, R - L, areaH, sans, '900', 60);
+        ctx.font = `900 ${f.size}px ${sans}`; ctx.fillStyle = '#ffffff'; ctx.textBaseline = 'top';
+        let hy = y + Math.max(0, (areaH - f.lines.length * f.lh) / 2);
+        f.lines.forEach(l => { ctx.fillText(l, L, hy); hy += f.lh; });
+    }
+    ctx.textBaseline = 'alphabetic';
+}
+
 function renderPreviews() {
     const grid = el('grid'); grid.innerHTML='';
     const theme = el('theme').value, handle = el('handle').value, category = el('category').value.trim(), style = el('style').value, language = el('language').value;
@@ -1428,6 +1535,7 @@ function renderPreviews() {
         else if (POSTERS[style]) renderLogoPoster(off, item, handle, category, language, POSTERS[style]);
         else if (style === 'poster') renderQuestionPoster(off, item, handle, category, language);
         else renderQuestion(off, item, theme, handle, category);
+        drawBoost(off, item, i, language);
         addCell('Q' + (i + 1));
     });
     el('itemCount').textContent = items.length;
@@ -1550,6 +1658,12 @@ el('style').addEventListener('change', syncStyleFields);
 syncStyleFields();
 
 ['theme','handle','style','category','language','headerText','listOptions'].forEach(id => el(id).addEventListener('change', () => { if(items.length) renderPreviews(); }));
+['boostHook','boostFollow','boostSeries','seriesLabel','seriesStart'].forEach(id => el(id).addEventListener('change', () => {
+    if (BOOST_KEYS.includes(id)) {
+        try { localStorage.setItem('quiz.' + id, el(id).type === 'checkbox' ? (el(id).checked ? '1' : '0') : el(id).value); } catch (e) {}
+    }
+    if (items.length) renderPreviews();
+}));
 
 function getCanvasData(c) {
     try {
@@ -1600,6 +1714,7 @@ el('saveBtn').addEventListener('click', async () => {
                 else if (POSTERS[style]) renderLogoPoster(off, item, handle, category, language, POSTERS[style]);
                 else if (style === 'poster') renderQuestionPoster(off, item, handle, category, language);
                 else renderQuestion(off, item, theme, handle, category);
+                drawBoost(off, item, i, language);
 
                 if (style === 'simple') renderSimpleAnswer(ansOff, item, theme, handle, category, language, headerText);
                 else if (style === 'sahitya') renderSahityaAnswer(ansOff, item, handle, category, language, headerText);
@@ -1632,6 +1747,8 @@ el('saveBtn').addEventListener('click', async () => {
                 category,
                 language,
                 cards: cardsToSave,
+                // 🔢 Series agla number isse aage se — List design par series nahi lagti
+                series_last: (style !== 'list' && el('boostSeries').checked) ? boostOpts().start + items.length - 1 : null,
             })
         });
 

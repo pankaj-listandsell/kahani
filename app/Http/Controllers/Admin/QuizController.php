@@ -39,7 +39,11 @@ class QuizController extends Controller
             $query->where('user_id', auth()->id());
         }
 
-        return view('admin.quiz.index', ['collections' => $query->get()]);
+        return view('admin.quiz.index', [
+            'collections' => $query->get(),
+            // 🔢 Series number ("DAY 12") — har save ke baad aage badhta hai
+            'seriesNext'  => max(1, (int) Setting::getFor(auth()->id(), 'quiz_series_next', 1)),
+        ]);
     }
 
     /** AI se quiz (question + options + answer + reason) generate. */
@@ -118,6 +122,9 @@ class QuizController extends Controller
             'hashtags'             => ['nullable', 'string', 'max:1000'],
             'image'                => ['required_without:cards', 'string'],
             'answer_image'         => ['nullable', 'string'],
+
+            // 🔢 Series: is batch ka aakhri number — agla batch isse aage se shuru ho
+            'series_last'          => ['nullable', 'integer', 'min:1', 'max:100000'],
         ]);
 
         $cardsInput = $data['cards'] ?? [
@@ -194,6 +201,13 @@ class QuizController extends Controller
                 'answer_text'       => $answer !== '' ? $answer : null,
                 'ig_caption'        => $caption !== '' ? $caption : null,
             ]);
+        }
+
+        if (! empty($data['series_last'])) {
+            $next = (int) $data['series_last'] + 1;
+            if ($next > (int) Setting::getFor(auth()->id(), 'quiz_series_next', 1)) {
+                Setting::putFor(auth()->id(), 'quiz_series_next', (string) $next);
+            }
         }
 
         return response()->json([
