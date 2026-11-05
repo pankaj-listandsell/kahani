@@ -92,6 +92,11 @@ class InstagramController extends Controller
             'ig_keyword_dm_rules'           => Setting::get('ig_keyword_dm_rules'),
             'ig_all_dm_enabled'             => Setting::get('ig_all_dm_enabled', '0'),
             'ig_all_dm_template'            => Setting::get('ig_all_dm_template'),
+            'ig_rashi_reply_enabled'        => Setting::get('ig_rashi_reply_enabled', '0'),
+            'ig_rashi_dm_enabled'           => Setting::get('ig_rashi_dm_enabled', '1'),
+            'ig_rashi_url'                  => Setting::get('ig_rashi_url', InstagramWebhookController::DEFAULT_RASHI_URL),
+            'ig_rashi_reply_template'       => Setting::get('ig_rashi_reply_template', InstagramWebhookController::DEFAULT_RASHI_REPLIES),
+            'ig_rashi_dm_template'          => Setting::get('ig_rashi_dm_template', InstagramWebhookController::DEFAULT_RASHI_DMS),
             'tts_audio_mode'         => Setting::get('tts_audio_mode', 'music'),
             'tts_voice'              => Setting::get('tts_voice', 'Kore'),
             'tts_configured'         => filled(config('services.gemini.key')),
@@ -132,6 +137,11 @@ class InstagramController extends Controller
             'ig_keyword_dm_rules'           => ['nullable', 'string', 'max:5000'],
             'ig_all_dm_enabled'             => ['nullable', 'boolean'],
             'ig_all_dm_template'            => ['nullable', 'string', 'max:3000'],
+            'ig_rashi_reply_enabled'        => ['nullable', 'boolean'],
+            'ig_rashi_dm_enabled'           => ['nullable', 'boolean'],
+            'ig_rashi_url'                  => ['nullable', 'url', 'max:500'],
+            'ig_rashi_reply_template'       => ['nullable', 'string', 'max:2000'],
+            'ig_rashi_dm_template'          => ['nullable', 'string', 'max:3000'],
         ]);
 
         // Copy-paste me aksar aage/peeche space ya newline aa jaate hain — hata do
@@ -158,6 +168,13 @@ class InstagramController extends Controller
         Setting::put('ig_keyword_dm_rules', $clean($data['ig_keyword_dm_rules'] ?? null));
         Setting::put('ig_all_dm_enabled', $request->boolean('ig_all_dm_enabled') ? '1' : '0');
         Setting::put('ig_all_dm_template', $clean($data['ig_all_dm_template'] ?? null));
+
+        // 🔮 Rashi comment → reply + DM me rashifal link
+        Setting::put('ig_rashi_reply_enabled', $request->boolean('ig_rashi_reply_enabled') ? '1' : '0');
+        Setting::put('ig_rashi_dm_enabled', $request->boolean('ig_rashi_dm_enabled') ? '1' : '0');
+        Setting::put('ig_rashi_url', $clean($data['ig_rashi_url'] ?? null));
+        Setting::put('ig_rashi_reply_template', $clean($data['ig_rashi_reply_template'] ?? null));
+        Setting::put('ig_rashi_dm_template', $clean($data['ig_rashi_dm_template'] ?? null));
 
         return back()->with('success', 'Instagram settings saved.');
     }

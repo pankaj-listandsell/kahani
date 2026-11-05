@@ -50,6 +50,38 @@ class InstagramWebhookController extends Controller
         . "🎯 Aapke liye special 🤫 {answer} Agle quiz ke liye ready raho! 🔥\n"
         . '🧠 Ye raha is reel ka jawab 👇 {answer} Dosto ko bhi challenge karo 😎';
 
+    /** 🔮 Rashi comment — default link (Settings me badal sakte hain). */
+    public const DEFAULT_RASHI_URL = 'https://viralpulse.in/hindi/aaj-ka-rashifal';
+
+    /** Rashi comment ka public reply. {rashi} = comment wali rashi (na mile to "Aapki"), {url} = link. Har line = ek message. */
+    public const DEFAULT_RASHI_REPLIES = "🔮 {rashi} rashi ka aaj ka pura rashifal yahan padhein 👉 {url}\n"
+        . "✨ {rashi} rashi ka aaj ka detail bhavishya 👉 {url} 📩 DM bhi check karein\n"
+        . '🙏 {rashi} rashi ka aaj ka rashifal DM me bhej diya hai 📩 Yahan bhi padh sakte ho 👉 {url}';
+
+    /** Rashi comment karne wale ko DM. Har line = ek message. */
+    public const DEFAULT_RASHI_DMS = "🙏 Namaste! {rashi} rashi ka aaj ka pura rashifal yahan padhein 👇 {url} Roz ke rashifal ke liye follow karein 🔔\n"
+        . "🔮 Aapke liye 👇 {rashi} rashi ka aaj ka bhavishya {url} Shubh din ho 🙏\n"
+        . '✨ {rashi} rashi ka aaj ka detail rashifal 👇 {url} Dosto ko bhi bhejein 💫';
+
+    /**
+     * Rashi ke naam — Gujarati, Hindi, Roman/English. Key = dikhane wala naam.
+     * Lambe naam pehle (jaise "vrushchik" se pehle "vrushabh" galti se match na ho).
+     */
+    public const RASHI_NAMES = [
+        'Mesh'      => ['મેષ', 'मेष', 'mesha', 'mesh', 'aries'],
+        'Vrushabh'  => ['વૃષભ', 'वृषभ', 'vrishabha', 'vrishabh', 'vrushabh', 'vrushab', 'taurus'],
+        'Mithun'    => ['મિથુન', 'मिथुन', 'mithuna', 'mithun', 'gemini'],
+        'Kark'      => ['કર્ક', 'कर्क', 'karka', 'kark', 'cancer'],
+        'Sinh'      => ['સિંહ', 'सिंह', 'simha', 'sinh', 'leo'],
+        'Kanya'     => ['કન્યા', 'कन्या', 'kanya', 'virgo'],
+        'Tula'      => ['તુલા', 'तुला', 'tula', 'libra'],
+        'Vrushchik' => ['વૃશ્ચિક', 'वृश्चिक', 'vrishchik', 'vrushchik', 'vruschik', 'scorpio'],
+        'Dhan'      => ['ધન', 'धनु', 'धन', 'dhanu', 'dhanus', 'sagittarius'],
+        'Makar'     => ['મકર', 'मकर', 'makar', 'makara', 'capricorn'],
+        'Kumbh'     => ['કુંભ', 'कुंभ', 'कुम्भ', 'kumbha', 'kumbh', 'aquarius'],
+        'Meen'      => ['મીન', 'मीन', 'meena', 'meen', 'pisces'],
+    ];
+
     /**
      * Webhook verification for Meta App (GET request).
      */
@@ -91,7 +123,8 @@ class InstagramWebhookController extends Controller
             $dmOn    = Setting::getFor($userId, 'ig_auto_dm_enabled', '0') === '1'
                 || Setting::getFor($userId, 'ig_keyword_dm_enabled', '0') === '1'
                 || Setting::getFor($userId, 'ig_all_dm_enabled', '0') === '1';
-            if (! $replyOn && ! $dmOn) {
+            $rashiOn = Setting::getFor($userId, 'ig_rashi_reply_enabled', '0') === '1';
+            if (! $replyOn && ! $dmOn && ! $rashiOn) {
                 continue;
             }
 
@@ -122,8 +155,15 @@ class InstagramWebhookController extends Controller
 
                 $instagram->forUser($userId);
 
-                // Is reel ka saved answer (quiz/puzzle) — reply (sahi/galat) aur DM dono me kaam aata hai
                 $mediaId = (string) ($value['media']['id'] ?? '');
+
+                // 🔮 Rashi comment → reply + DM me rashifal ka link (quiz wale reply ki jagah)
+                if ($rashiOn && ($rashi = $this->rashiFor($userId, $mediaId, $text)) !== null) {
+                    $this->rashiRespond($instagram, $userId, $commentId, $fromId, $mediaId, $rashi);
+                    continue;
+                }
+
+                // Is reel ka saved answer (quiz/puzzle) — reply (sahi/galat) aur DM dono me kaam aata hai
                 $answer  = $this->answerForMedia($userId, $mediaId);
 
                 if ($replyOn) {
@@ -169,7 +209,8 @@ class InstagramWebhookController extends Controller
             }
         }
 
-        $enabled = Setting::where('key', 'ig_auto_reply_enabled')->where('value', '1')->pluck('user_id');
+        $enabled = Setting::whereIn('key', ['ig_auto_reply_enabled', 'ig_rashi_reply_enabled'])
+            ->where('value', '1')->distinct()->pluck('user_id');
 
         return $enabled->count() === 1 ? (int) $enabled->first() : null;
     }
@@ -344,9 +385,9 @@ class InstagramWebhookController extends Controller
     }
 
     /** {answer} ko alag paragraph me daalo, taaki DM me saaf dikhe. */
-    protected function fillAnswer(string $message, string $answer): string
+    protected function fillAnswer(string $message, string $answer, string $placeholder = '{answer}'): string
     {
-        $text = str_replace('{answer}', "\n\n{$answer}\n\n", $message);
+        $text = str_replace($placeholder, "\n\n{$answer}\n\n", $message);
         $text = preg_replace('/[ \t]*\n[ \t]*/', "\n", $text); // line ke aage/peeche ke space
 
         return trim(preg_replace("/\n{3,}/", "\n\n", $text));
@@ -358,6 +399,113 @@ class InstagramWebhookController extends Controller
         $lines = array_values(array_filter(array_map('trim', preg_split('/\R/', (string) $text)), 'strlen'));
 
         return $lines ?: array_values(array_filter(array_map('trim', preg_split('/\R/', $default)), 'strlen'));
+    }
+
+    /**
+     * Comment me rashi ka naam → us rashi ka naam; Rashifal post par bina naam ke
+     * comment → '' ("Aapki"); warna null (rashi wala rule nahi lagta).
+     *
+     * Dusri posts par sirf tab jab comment lagbhag sirf rashi ho (max 3 shabd) —
+     * warna "dhan", "singh", "leo" jaise shabd har jagah match ho jaate.
+     */
+    protected function rashiFor(int $userId, string $mediaId, string $text): ?string
+    {
+        $found = $this->rashiInText($text);
+        $isRashifalPost = $this->isRashifalMedia($userId, $mediaId);
+
+        if ($isRashifalPost) {
+            return $found ?? '';
+        }
+
+        $words = preg_split('/\s+/u', trim(preg_replace('/[^\p{L}\p{M}\p{N}\s]/u', ' ', $text)), -1, PREG_SPLIT_NO_EMPTY);
+
+        return $found !== null && count($words) <= 3 ? $found : null;
+    }
+
+    /** Text me pehli rashi (comment me jis naam se likhi, wahi). */
+    public function rashiInText(string $text): ?string
+    {
+        foreach (self::RASHI_NAMES as $names) {
+            foreach ($names as $name) {
+                // \p{M} — Gujarati/Hindi matra bhi shabd ka hissa (ધન ≠ ધનવાન)
+                if (preg_match('/(?<![\p{L}\p{M}])' . preg_quote($name, '/') . '(?![\p{L}\p{M}])/iu', $text, $m)) {
+                    return preg_match('/^[a-z]+$/i', $m[0]) ? ucfirst(strtolower($m[0])) : $m[0];
+                }
+            }
+        }
+
+        return null;
+    }
+
+    /** Ye media id admin panel se post hua Rashifal card hai? */
+    protected function isRashifalMedia(int $userId, string $mediaId): bool
+    {
+        if (! ctype_digit($mediaId)) {
+            return false;
+        }
+
+        $card = PartCard::with('part.story')->where('ig_media_id', $mediaId)->first();
+
+        return $card !== null
+            && in_array($card->part?->story?->type, ['rashifal', 'rashifal_short'], true)
+            && (int) $card->part->story->user_id === $userId;
+    }
+
+    /** Rashi comment → public reply (link ke saath) + DM (link). */
+    protected function rashiRespond(InstagramService $instagram, int $userId, string $commentId, string $fromId, string $mediaId, string $rashi): void
+    {
+        $url  = trim((string) Setting::getFor($userId, 'ig_rashi_url')) ?: self::DEFAULT_RASHI_URL;
+        $name = $rashi !== '' ? $rashi : 'Aapki';
+        $fill = fn (string $line) => str_replace(['{rashi}', '{url}'], [$name, $url], $line);
+
+        // 1) Comment reply
+        $token = $instagram->token();
+        if ($token) {
+            $lines = $this->lines(Setting::getFor($userId, 'ig_rashi_reply_template'), self::DEFAULT_RASHI_REPLIES);
+            try {
+                $res = Http::asForm()->timeout(20)->post($instagram->apiBase() . "/{$commentId}/replies", [
+                    'message'      => $fill($lines[array_rand($lines)]),
+                    'access_token' => $token,
+                ]);
+                Log::info('Instagram rashi reply sent', ['comment_id' => $commentId, 'rashi' => $rashi, 'ok' => $res->successful(), 'error' => $res->json('error.message')]);
+            } catch (\Throwable $e) {
+                Log::error('Instagram rashi reply failed', ['comment_id' => $commentId, 'error' => $e->getMessage()]);
+            }
+        }
+
+        // 2) DM — ek user ko ek post par ek hi (7 din)
+        if (Setting::getFor($userId, 'ig_rashi_dm_enabled', '1') !== '1') {
+            return;
+        }
+        $key = 'ig_dm.' . ($mediaId !== '' ? $mediaId : 'x') . '.' . ($fromId !== '' ? $fromId : $commentId);
+        if (! Cache::add($key, true, now()->addDays(7))) {
+            Log::info('Instagram rashi DM skipped', ['comment_id' => $commentId, 'reason' => 'is user ko is post par pehle hi DM ja chuka']);
+
+            return;
+        }
+
+        $lines = $this->lines(Setting::getFor($userId, 'ig_rashi_dm_template'), self::DEFAULT_RASHI_DMS);
+        $line  = $lines[array_rand($lines)];
+        if (! str_contains($line, '{url}')) {
+            $line .= ' {url}';
+        }
+        // Link alag paragraph me — DM me saaf dikhe aur click ho
+        $message = $this->fillAnswer(str_replace('{rashi}', $name, $line), $url, '{url}');
+
+        try {
+            $res = Http::withToken((string) $token)->timeout(20)
+                ->post($instagram->apiBase() . '/' . $instagram->nodeId() . '/messages', [
+                    'recipient' => ['comment_id' => $commentId],
+                    'message'   => ['text' => Str::limit($message, 950)],
+                ]);
+            Log::info('Instagram rashi DM sent', ['comment_id' => $commentId, 'ok' => $res->successful(), 'error' => $res->json('error.message')]);
+            if (! $res->successful()) {
+                Cache::forget($key);
+            }
+        } catch (\Throwable $e) {
+            Cache::forget($key);
+            Log::error('Instagram rashi DM failed', ['comment_id' => $commentId, 'error' => $e->getMessage()]);
+        }
     }
 
     /**

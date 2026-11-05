@@ -155,6 +155,32 @@
                               placeholder="✅ Aapka jawab note ho gaya hai! Sahi jawab janne ke liye reel ko end tak dekhein 🎯">{{ old('ig_auto_reply_template', $settings['ig_auto_reply_template']) }}</textarea>
                     <p class="text-[11px] text-slate-400 mt-1">Koi textbox khaali chhoda to default message jayega.</p>
 
+                    {{-- 🔮 Rashi comment → reply + DM me rashifal link --}}
+                    <div class="mt-4 p-3 rounded-lg border border-amber-300 bg-amber-50/60">
+                        <label class="flex items-center gap-2 cursor-pointer mb-1">
+                            <input type="checkbox" name="ig_rashi_reply_enabled" value="1" class="accent-amber-600 w-4 h-4" @checked($settings['ig_rashi_reply_enabled'] === '1')>
+                            <span class="text-sm font-semibold text-slate-800">🔮 Rashi comment par reply + DM me rashifal ka link</span>
+                        </label>
+                        <p class="text-[11px] text-slate-500 mb-3">Rashifal post par koi bhi comment kare (jaise "મેષ", "मेष", "Mesh", "Leo") → comment ka reply aur DM me ye link. Baaki posts par sirf tab jab comment me sirf rashi ka naam ho. Quiz wale reply se pehle ye chalta hai.</p>
+
+                        <label class="block text-xs font-semibold text-slate-700 mb-1">🔗 Link</label>
+                        <input type="url" name="ig_rashi_url" value="{{ old('ig_rashi_url', $settings['ig_rashi_url']) }}"
+                               class="w-full rounded-lg border border-slate-300 px-3 py-2 text-xs mb-3 focus:ring-2 focus:ring-amber-400 focus:outline-none"
+                               placeholder="https://viralpulse.in/hindi/aaj-ka-rashifal">
+
+                        <label class="block text-xs font-semibold text-slate-700 mb-1">💬 Comment reply <span class="font-normal text-slate-500">— har line = ek message (random). <code>{rashi}</code> = comment wali rashi, <code>{url}</code> = link</span></label>
+                        <textarea name="ig_rashi_reply_template" rows="3"
+                                  class="w-full rounded-lg border border-slate-300 px-3 py-2 text-xs mb-3 focus:ring-2 focus:ring-amber-400 focus:outline-none">{{ old('ig_rashi_reply_template', $settings['ig_rashi_reply_template']) }}</textarea>
+
+                        <label class="flex items-center gap-2 cursor-pointer mb-1">
+                            <input type="checkbox" name="ig_rashi_dm_enabled" value="1" class="accent-amber-600 w-4 h-4" @checked($settings['ig_rashi_dm_enabled'] === '1')>
+                            <span class="text-xs font-semibold text-slate-700">📩 DM me bhi link bhejo</span>
+                        </label>
+                        <textarea name="ig_rashi_dm_template" rows="3"
+                                  class="w-full rounded-lg border border-slate-300 px-3 py-2 text-xs focus:ring-2 focus:ring-amber-400 focus:outline-none">{{ old('ig_rashi_dm_template', $settings['ig_rashi_dm_template']) }}</textarea>
+                        <p class="text-[11px] text-amber-700 mt-2">ℹ Instagram comment me link <b>click nahi hota</b> (sirf text dikhta hai) — DM wala link click hota hai. Har comment me link daalne se Instagram kabhi reply chhupa deta hai; isliye reply me "DM check karein" wali lines bhi rakhi hain.</p>
+                    </div>
+
                     {{-- DM to commenter (Instagram private reply) --}}
                     <div class="mt-4 p-3 rounded-lg border border-violet-200 bg-violet-50/40">
                         <p class="text-sm font-semibold text-slate-800 mb-1">📩 Comment karne wale ko DM</p>
