@@ -94,6 +94,8 @@ class InstagramController extends Controller
             'ig_all_dm_template'            => Setting::get('ig_all_dm_template'),
             'ig_rashi_reply_enabled'        => Setting::get('ig_rashi_reply_enabled', '0'),
             'ig_rashi_dm_enabled'           => Setting::get('ig_rashi_dm_enabled', '1'),
+            'ig_rashi_reply_link'           => Setting::get('ig_rashi_reply_link', '1'),
+            'ig_rashi_last'                 => \Illuminate\Support\Facades\Cache::get('ig_rashi_last_reply.' . auth()->id()),
             'ig_rashi_url'                  => Setting::get('ig_rashi_url', InstagramWebhookController::DEFAULT_RASHI_URL),
             'ig_rashi_reply_template'       => Setting::get('ig_rashi_reply_template', InstagramWebhookController::DEFAULT_RASHI_REPLIES),
             'ig_rashi_dm_template'          => Setting::get('ig_rashi_dm_template', InstagramWebhookController::DEFAULT_RASHI_DMS),
@@ -101,6 +103,16 @@ class InstagramController extends Controller
             'tts_voice'              => Setting::get('tts_voice', 'Kore'),
             'tts_configured'         => filled(config('services.gemini.key')),
         ];
+
+        // Link OFF hai aur saved reply ki saari lines me link hai → wo skip hongi; box me
+        // wahi dikhao jo asal me jaayega (bina link wale default)
+        if ($settings['ig_rashi_reply_link'] !== '1') {
+            $noLink = array_filter(preg_split('/\R/', (string) $settings['ig_rashi_reply_template']),
+                fn ($l) => trim($l) !== '' && ! str_contains($l, '{url}') && ! preg_match('#https?://#i', $l));
+            if (! $noLink) {
+                $settings['ig_rashi_reply_template'] = InstagramWebhookController::DEFAULT_RASHI_REPLIES_NO_LINK;
+            }
+        }
 
         $storiesQuery = Story::with(['parts.cards'])->latest();
 
@@ -139,6 +151,7 @@ class InstagramController extends Controller
             'ig_all_dm_template'            => ['nullable', 'string', 'max:3000'],
             'ig_rashi_reply_enabled'        => ['nullable', 'boolean'],
             'ig_rashi_dm_enabled'           => ['nullable', 'boolean'],
+            'ig_rashi_reply_link'           => ['nullable', 'boolean'],
             'ig_rashi_url'                  => ['nullable', 'url', 'max:500'],
             'ig_rashi_reply_template'       => ['nullable', 'string', 'max:2000'],
             'ig_rashi_dm_template'          => ['nullable', 'string', 'max:3000'],
@@ -172,6 +185,7 @@ class InstagramController extends Controller
         // 🔮 Rashi comment → reply + DM me rashifal link
         Setting::put('ig_rashi_reply_enabled', $request->boolean('ig_rashi_reply_enabled') ? '1' : '0');
         Setting::put('ig_rashi_dm_enabled', $request->boolean('ig_rashi_dm_enabled') ? '1' : '0');
+        Setting::put('ig_rashi_reply_link', $request->boolean('ig_rashi_reply_link') ? '1' : '0');
         Setting::put('ig_rashi_url', $clean($data['ig_rashi_url'] ?? null));
         Setting::put('ig_rashi_reply_template', $clean($data['ig_rashi_reply_template'] ?? null));
         Setting::put('ig_rashi_dm_template', $clean($data['ig_rashi_dm_template'] ?? null));

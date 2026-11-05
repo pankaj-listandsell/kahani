@@ -58,6 +58,14 @@ class InstagramWebhookController extends Controller
         . "✨ {rashi} rashi ka aaj ka detail bhavishya 👉 {url} 📩 DM bhi check karein\n"
         . '🙏 {rashi} rashi ka aaj ka rashifal DM me bhej diya hai 📩 Yahan bhi padh sakte ho 👉 {url}';
 
+    /** Bina link wale comment replies (default) — link DM me jaata hai. Har line = ek message. */
+    public const DEFAULT_RASHI_REPLIES_NO_LINK = "🔮 {rashi} rashi ka aaj ka pura rashifal aapke DM me bhej diya hai 📩 Check karein 🙏\n"
+        . "✨ {rashi} rashi walo, aaj ka detail rashifal DM me gaya hai 📩 Inbox dekhiye 🙏\n"
+        . '🙏 {rashi} rashi ka aaj ka bhavishya DM me bheja hai 📩 Shubh din ho ✨';
+
+    /** Link wala reply fail ho to ye (bina link) — Instagram link wale comment rok deta hai. */
+    public const RASHI_REPLY_NO_LINK = '🔮 {rashi} rashi ka aaj ka pura rashifal aapke DM me bhej diya hai 📩 Check karein 🙏';
+
     /** Rashi comment karne wale ko DM. Har line = ek message. */
     public const DEFAULT_RASHI_DMS = "🙏 Namaste! {rashi} rashi ka aaj ka pura rashifal yahan padhein 👇 {url} Roz ke rashifal ke liye follow karein 🔔\n"
         . "🔮 Aapke liye 👇 {rashi} rashi ka aaj ka bhavishya {url} Shubh din ho 🙏\n"
@@ -462,15 +470,31 @@ class InstagramWebhookController extends Controller
         $token = $instagram->token();
         if ($token) {
             $lines = $this->lines(Setting::getFor($userId, 'ig_rashi_reply_template'), self::DEFAULT_RASHI_REPLIES);
+            // Link wala comment Instagram chhupa deta hai (API "ok" bolti hai, par reply dikhta nahi).
+            // Isliye default: reply me link NAHI — sirf "DM check karo"; link DM me jaata hai.
+            if (Setting::getFor($userId, 'ig_rashi_reply_link', '1') !== '1') {
+                $lines = array_values(array_filter($lines, fn ($l) => ! str_contains($l, '{url}') && ! preg_match('#https?://#i', $l)))
+                    ?: $this->lines(null, self::DEFAULT_RASHI_REPLIES_NO_LINK);
+            }
+            $status = ['at' => now()->toIso8601String(), 'comment' => $rashi ?: '—', 'ok' => false, 'error' => null, 'fallback' => null];
             try {
-                $res = Http::asForm()->timeout(20)->post($instagram->apiBase() . "/{$commentId}/replies", [
-                    'message'      => $fill($lines[array_rand($lines)]),
-                    'access_token' => $token,
-                ]);
+                $res = $this->postReply($instagram, $token, $commentId, $fill($lines[array_rand($lines)]));
+                $status['ok']    = $res->successful();
+                $status['error'] = $res->successful() ? null : ($res->json('error.message') ?: 'HTTP ' . $res->status());
                 Log::info('Instagram rashi reply sent', ['comment_id' => $commentId, 'rashi' => $rashi, 'ok' => $res->successful(), 'error' => $res->json('error.message')]);
+
+                // Instagram aksar link wala comment reply rok deta hai (spam) — bina link ke dobara
+                if (! $res->successful()) {
+                    $retry = $this->postReply($instagram, $token, $commentId, str_replace('{rashi}', $name, self::RASHI_REPLY_NO_LINK));
+                    $status['fallback'] = $retry->successful() ? 'ok' : ($retry->json('error.message') ?: 'HTTP ' . $retry->status());
+                    Log::info('Instagram rashi reply (bina link) sent', ['comment_id' => $commentId, 'ok' => $retry->successful(), 'error' => $retry->json('error.message')]);
+                }
             } catch (\Throwable $e) {
+                $status['error'] = $e->getMessage();
                 Log::error('Instagram rashi reply failed', ['comment_id' => $commentId, 'error' => $e->getMessage()]);
             }
+            // Settings box me dikhane ke liye — log khole bina pata chale
+            Cache::forever("ig_rashi_last_reply.{$userId}", $status);
         }
 
         // 2) DM — ek user ko ek post par ek hi (7 din)
@@ -506,6 +530,15 @@ class InstagramWebhookController extends Controller
             Cache::forget($key);
             Log::error('Instagram rashi DM failed', ['comment_id' => $commentId, 'error' => $e->getMessage()]);
         }
+    }
+
+    /** Comment ka public reply (Graph API). */
+    protected function postReply(InstagramService $instagram, string $token, string $commentId, string $message): \Illuminate\Http\Client\Response
+    {
+        return Http::asForm()->timeout(20)->post($instagram->apiBase() . "/{$commentId}/replies", [
+            'message'      => $message,
+            'access_token' => $token,
+        ]);
     }
 
     /**

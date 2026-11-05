@@ -170,7 +170,18 @@
 
                         <label class="block text-xs font-semibold text-slate-700 mb-1">💬 Comment reply <span class="font-normal text-slate-500">— har line = ek message (random). <code>{rashi}</code> = comment wali rashi, <code>{url}</code> = link</span></label>
                         <textarea name="ig_rashi_reply_template" rows="3"
-                                  class="w-full rounded-lg border border-slate-300 px-3 py-2 text-xs mb-3 focus:ring-2 focus:ring-amber-400 focus:outline-none">{{ old('ig_rashi_reply_template', $settings['ig_rashi_reply_template']) }}</textarea>
+                                  class="w-full rounded-lg border border-slate-300 px-3 py-2 text-xs mb-1 focus:ring-2 focus:ring-amber-400 focus:outline-none">{{ old('ig_rashi_reply_template', $settings['ig_rashi_reply_template']) }}</textarea>
+                        <label class="flex items-center gap-2 cursor-pointer mb-3">
+                            <input type="checkbox" name="ig_rashi_reply_link" value="1" class="accent-amber-600 w-4 h-4" @checked($settings['ig_rashi_reply_link'] === '1')>
+                            <span class="text-[11px] text-slate-600">Comment reply me bhi link daalo <b class="text-amber-700">(kabhi-kabhi Instagram link wala reply der se dikhata ya chhupa deta hai)</b>. OFF ho to link wali lines skip hoti hain, link sirf DM me jaata hai.</span>
+                        </label>
+                        @if ($r = $settings['ig_rashi_last'])
+                            <p class="text-[11px] mb-3 {{ $r['ok'] ? 'text-emerald-700' : 'text-red-600' }}">
+                                Aakhri reply ({{ \Illuminate\Support\Carbon::parse($r['at'])->diffForHumans() }}, rashi: {{ $r['comment'] }}):
+                                {{ $r['ok'] ? '✅ Instagram ne accept kiya' : '❌ ' . $r['error'] }}
+                                @if ($r['fallback']) · bina link: {{ $r['fallback'] === 'ok' ? '✅' : '❌ ' . $r['fallback'] }} @endif
+                            </p>
+                        @endif
 
                         <label class="flex items-center gap-2 cursor-pointer mb-1">
                             <input type="checkbox" name="ig_rashi_dm_enabled" value="1" class="accent-amber-600 w-4 h-4" @checked($settings['ig_rashi_dm_enabled'] === '1')>
