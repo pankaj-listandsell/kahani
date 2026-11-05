@@ -60,11 +60,7 @@ class StoryController extends Controller
             'language' => ['nullable', 'in:hindi,gujarati,hinglish'],
         ]);
 
-        // Topic ya type — kam se kam ek zaroori
-        if (blank($data['topic'] ?? null) && blank($data['genre'] ?? null)) {
-            return response()->json(['ok' => false, 'error' => 'Topic likho ya type chuno (kam se kam ek).'], 422);
-        }
-
+        // Topic/type dono khaali → StoryAiService koi bhi real-life type khud chun leta hai
         try {
             $story = $ai->generate(
                 $data['topic'] ?? '',

@@ -17,12 +17,38 @@ class StoryAiService
      * @return array{title:string, description:string, body:string}
      * @throws \RuntimeException
      */
+    /**
+     * Kahani menu ke types — real-life rishte / parivaar ki "sachchi ghatna se prerit"
+     * kahaniyan (Dil ni vaat jaisa). Key = AI ko jaane wala genre, value = dropdown label.
+     */
+    public const GENRES = [
+        'Bewafai / Extra-marital affair aur uska guilt'          => '💔 Bewafai / Affair (બેવફાઈ)',
+        'Shaadi me akelapan, pati-patni me doori'               => '😔 Shaadi me akelapan (એકલતા)',
+        'Pati-patni ki takraar aur shaq'                        => '⚡ Pati-patni ni takraar / shaq',
+        'Saas-bahu ka jhagda'                                   => '👵 Saas-Vahu (સાસુ-વહુ)',
+        'Sanyukt parivaar ki mushkilein'                        => '🏠 Sanyukt parivaar (સંયુક્ત પરિવાર)',
+        'Love marriage vs parivaar ka virodh'                   => '💑 Prem lagn vs parivaar',
+        'Office romance aur shaadi-shuda zindagi'               => '🏢 Office romance',
+        'Purana pyaar (ex) wapas aaya'                          => '🔙 Purano prem pacho aavyo',
+        'Phone / social media se shaq aur raaz'                 => '📱 Phone / social media nu raaz',
+        'Talaak aur uske baad ki zindagi'                       => '📜 Chhutachheda pachhi ni zindagi',
+        'Doosri shaadi / step-family'                           => '💍 Bija lagn / sautela parivaar',
+        'Santaan na hona, samaj ke taane'                       => '👶 Santaan nu dukh',
+        'Dahej aur sasural ka trass'                            => '🪙 Dahej / sasara no trass',
+        'Bete-bahu ne maa-baap ko chhoda (vriddhashram)'        => '🧓 Maa-baap ane vriddhashram',
+        'Bhai-bhai me milkat ka jhagda'                         => '🏚️ Bhai-bhai milkat vivad',
+        'Paisa, karz aur parivaar me daraar'                    => '💸 Paisa / karz ane parivaar',
+        'Dost ne dhokha diya'                                   => '🗡️ Dost no dago',
+        'Dikri ka dard — sasural me dukh, maa-baap se chhupaya' => '👧 Dikri nu dard',
+    ];
+
     public function generate(string $topic, string $length = 'short', string $language = 'hindi', string $genre = ''): array
     {
         $topic = trim($topic);
         $genre = trim($genre);
+        // Kuch na chuna ho to koi bhi ek real-life type
         if ($topic === '' && $genre === '') {
-            throw new \RuntimeException('Topic ya type — kam se kam ek do.');
+            $genre = array_rand(self::GENRES);
         }
 
         $langRule = $this->langRule($language);
@@ -66,7 +92,17 @@ class StoryAiService
         - {$langRule}
         - {$lengthRule}
         {$genreRule}- Chhote paragraphs, saral bhasha, natural kahani-sunane wala andaaz.
-        - Ek strong hook se shuru karo, aur ek satisfying moral ya twist ending do.
+        - KAHANI KA ANDAAZ: real-life, "sachchi ghatna se prerit" rishton / parivaar ki kahani — jaise
+          akhbaar ke "dil ki baat" column me log apni zindagi likhte hain. Aam middle-class Gujarati/Indian
+          ghar, asli jaisi jagah (Surat, Ahmedabad, Rajkot, Vadodara…), aam naam (kaalpanik). Bhavna, ghutan,
+          galti, guilt, samvaad (dialogue) aur parivaar ka dabaav — sab asli lage.
+        - Pehli line hi hook ho (jaise ek kabool-naama / chaunkane wala pal), beech me tension badhe,
+          aur ant me ek saaf SEEKH ya faisla — galat kaam ko sahi ya glamorous mat dikhao.
+        - SAAF-SUTHRI BHASHA: shaaririk / romantic baat sirf ishaare me ("nazdeekiyan badh gayi", "ek
+          kamzor pal"). Koi vistaar, koi ashleel shabd, koi body description nahi — Instagram/YouTube
+          par chalne layak ho.
+        - "description" ke aakhir me usi bhasha me ek chhoti line: "(Kaalpanik kahani, sachchi ghatnaon
+          se prerit)".
         - EMOJI: title me 1-2 emoji do, description me 1-2, aur kahani ke andar bhaav ke hisab se
           emoji daalo (jaise pyaar ❤️, dard 💔😢, dar 😨, khushi 😊✨, raat 🌙, twist 😲) —
           har paragraph me zyada se zyada 1-2, natural jagah par. Emoji se kahani ka flow mat todo.
