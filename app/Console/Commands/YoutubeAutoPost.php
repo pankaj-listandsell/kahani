@@ -229,7 +229,7 @@ class YoutubeAutoPost extends Command
             if (! $story->targetsPlatform('youtube')) {
                 continue; // ye story YouTube ke liye target nahi
             }
-            if (in_array($story->type, ['rashifal', 'rashifal_short'], true)) {
+            if (in_array($story->type, ['rashifal', 'rashifal_short', 'panchang'], true)) {
                 continue; // upar nextRashifalShortPart() / nextRashifalCard() sambhalte hain — doosre din ka kabhi nahi
             }
             $isCollection = $story->isCollection();

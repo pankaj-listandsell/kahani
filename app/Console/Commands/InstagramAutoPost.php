@@ -201,7 +201,7 @@ class InstagramAutoPost extends Command
             if (! $story->targetsPlatform('instagram')) {
                 continue; // ye story Instagram ke liye target nahi
             }
-            if ($story->type === 'rashifal') {
+            if (in_array($story->type, ['rashifal', 'panchang'], true)) {
                 continue; // upar nextRashifalCard() sambhalta hai — doosre din ka rashifal kabhi nahi
             }
             $isCollection = $story->isCollection();

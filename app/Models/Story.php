@@ -81,9 +81,11 @@ class Story extends Model
     {
         $stories = static::where('status', 'published')
             ->where('user_id', $userId)
-            ->where('type', 'rashifal')
+            // 📅 Panchang bhi isi tarah sirf usi din — rashifal se pehle
+            ->whereIn('type', ['panchang', 'rashifal'])
             ->where('category', now()->toDateString())
             ->with(['parts' => fn ($q) => $q->orderBy('sort_order'), 'parts.cards' => fn ($q) => $q->orderBy('sort_order')])
+            ->orderByRaw("CASE WHEN type = 'panchang' THEN 0 ELSE 1 END")
             ->orderBy('id')
             ->get();
 

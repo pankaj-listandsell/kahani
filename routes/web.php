@@ -9,6 +9,7 @@ use App\Http\Controllers\Admin\InstagramController;
 use App\Http\Controllers\Admin\NuskhaController;
 use App\Http\Controllers\Admin\PremPatraController;
 use App\Http\Controllers\Admin\PartController;
+use App\Http\Controllers\Admin\PanchangController;
 use App\Http\Controllers\Admin\RashifalController;
 use App\Http\Controllers\Admin\SalahController;
 use App\Http\Controllers\Admin\SettingsController;
@@ -125,6 +126,13 @@ Route::middleware('auth')->prefix('admin')->name('admin.')->group(function () {
     Route::delete('salah/{story}', [SalahController::class, 'destroy'])->name('salah.destroy');
 
     // 🔯 Aaj nu Rashifal — 12 rashi cards, sirf apne din auto-post
+    // 📅 Aaj nu Panchang
+    Route::get('panchang', [PanchangController::class, 'index'])->name('panchang.index');
+    Route::post('panchang/compute', [PanchangController::class, 'compute'])->name('panchang.compute');
+    Route::post('panchang/save', [PanchangController::class, 'save'])->name('panchang.save');
+    Route::get('panchang/{story}', [PanchangController::class, 'show'])->name('panchang.show');
+    Route::delete('panchang/{story}', [PanchangController::class, 'destroy'])->name('panchang.destroy');
+
     Route::get('rashifal', [RashifalController::class, 'index'])->name('rashifal.index');
     Route::post('rashifal/generate', [RashifalController::class, 'generate'])->name('rashifal.generate');
     Route::post('rashifal/save', [RashifalController::class, 'save'])->name('rashifal.save');

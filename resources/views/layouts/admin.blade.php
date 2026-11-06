@@ -26,6 +26,7 @@
         ['route' => 'admin.quiz.index',        'active' => 'admin.quiz.*',         'icon' => '🎯', 'label' => 'Quiz'],
         ['route' => 'admin.salah.index',       'active' => 'admin.salah.*',        'icon' => '💬', 'label' => 'Salah (Q&A)'],
         ['route' => 'admin.rashifal.index',    'active' => 'admin.rashifal.*',     'icon' => '🔯', 'label' => 'Aaj nu Rashifal'],
+        ['route' => 'admin.panchang.index',    'active' => 'admin.panchang.*',     'icon' => '📅', 'label' => 'Aaj nu Panchang'],
         ['route' => 'admin.nuskha.index',      'active' => 'admin.nuskha.*',       'icon' => '🌿', 'label' => 'Nuskhe & Recipe'],
         ['route' => 'admin.patra.index',       'active' => 'admin.patra.*',        'icon' => '💌', 'label' => 'Prem Patra'],
         ['route' => 'admin.instagram.index','active' => 'admin.instagram.*', 'icon' => '📸', 'label' => 'Instagram'],
