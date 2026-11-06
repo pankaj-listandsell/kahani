@@ -190,6 +190,37 @@ class PanchangService
         ];
     }
 
+    /**
+     * 🪔 Is din kaunsa tyohar (Rashifal festival key) — tithi + maas se, Gujarat ke hisaab se.
+     * Dhanteras / Kali Chaudas / Diwali / Dev Diwali: jo tithi SAANJH (pradosh) ko ho.
+     * Bestu Varas / Bhai Beej / Labh Pancham: jo tithi SURYODAY par ho. Kuch nahi to ''.
+     */
+    public function festival(string $date, string $city = 'ahmedabad'): string
+    {
+        [, , $lat, $lon] = self::CITIES[$city] ?? self::CITIES['ahmedabad'];
+        $day  = Carbon::parse($date, self::TZ)->startOfDay();
+        $rise = $this->sun($day, $lat, $lon, 'sunrise');
+        $set  = $this->sun($day, $lat, $lon, 'sunset');
+
+        $tiRise = (int) floor($this->elongation($rise) / 12); // 0 = sud ekam … 29 = amas
+        $tiSet  = (int) floor($this->elongation($set) / 12);
+
+        // Amanta maas (0 = Chaitra … 6 = Aso, 7 = Kartak) — saanjh ke samay ka
+        $nextNm = $this->newMoon($set, +1);
+        $mi     = (int) floor($this->sidereal($this->sunLon($nextNm), $nextNm) / 30);
+
+        return match (true) {
+            $mi === 6 && $tiSet === 29  => 'diwali',
+            $mi === 6 && $tiSet === 28  => 'kali_chaudas',
+            $mi === 6 && $tiSet === 27  => 'dhanteras',
+            $mi === 7 && $tiRise === 0  => 'navu_varsh',
+            $mi === 7 && $tiRise === 1  => 'bhai_beej',
+            $mi === 7 && $tiRise === 4  => 'labh_pancham',
+            $mi === 7 && $tiSet === 14  => 'dev_diwali',
+            default                     => '',
+        };
+    }
+
     /** "ચૌદસ — બપોરે ૧:૦૫ સુધી, પછી અમાસ" */
     private function withEnd(string $name, ?float $end, string $next, Carbon $day, string $lang): string
     {

@@ -135,6 +135,7 @@ Route::middleware('auth')->prefix('admin')->name('admin.')->group(function () {
 
     Route::get('rashifal', [RashifalController::class, 'index'])->name('rashifal.index');
     Route::post('rashifal/generate', [RashifalController::class, 'generate'])->name('rashifal.generate');
+    Route::post('rashifal/festival', [RashifalController::class, 'festival'])->name('rashifal.festival');
     Route::post('rashifal/save', [RashifalController::class, 'save'])->name('rashifal.save');
     Route::post('rashifal/short', [RashifalController::class, 'saveShort'])->name('rashifal.short.save');
     Route::post('rashifal/short/{part}/preview', [RashifalController::class, 'previewShort'])->name('rashifal.short.preview');

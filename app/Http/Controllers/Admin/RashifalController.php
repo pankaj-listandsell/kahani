@@ -69,7 +69,8 @@ class RashifalController extends Controller
             'language'      => ['required', 'in:gujarati,hindi,hinglish'],
             'skip_existing' => ['nullable', 'boolean'],
             // 🪔 Festival theme (khaali = roz wala)
-            'festival'      => ['nullable', 'in:' . implode(',', array_keys(ViralStudioAiService::RASHIFAL_FESTIVALS))],
+            // auto = tarikh se tyohar khud pehchano (panchang ke ganit se)
+            'festival'      => ['nullable', 'in:auto,' . implode(',', array_keys(ViralStudioAiService::RASHIFAL_FESTIVALS))],
         ]);
 
         try {
@@ -83,12 +84,25 @@ class RashifalController extends Controller
                 return response()->json(['ok' => true, 'skipped' => true, 'items' => [], 'exists' => true]);
             }
 
-            $items = $ai->generateRashifal($data['date'], $data['language'], (string) ($data['festival'] ?? ''));
+            $festival = (string) ($data['festival'] ?? '');
+            if ($festival === 'auto') {
+                $festival = app(\App\Services\PanchangService::class)->festival($data['date']);
+            }
 
-            return response()->json(['ok' => true, 'items' => $items, 'exists' => $exists]);
+            $items = $ai->generateRashifal($data['date'], $data['language'], $festival);
+
+            return response()->json(['ok' => true, 'items' => $items, 'exists' => $exists, 'festival' => $festival]);
         } catch (\Throwable $e) {
             return response()->json(['ok' => false, 'error' => $e->getMessage()], 422);
         }
+    }
+
+    /** Is tarikh ka tyohar (dropdown me dikhane ke liye). */
+    public function festival(Request $request)
+    {
+        $data = $request->validate(['date' => ['required', 'date_format:Y-m-d']]);
+
+        return response()->json(['ok' => true, 'festival' => app(\App\Services\PanchangService::class)->festival($data['date'])]);
     }
 
     public function save(Request $request)

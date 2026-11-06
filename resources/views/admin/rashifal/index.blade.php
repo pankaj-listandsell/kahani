@@ -23,6 +23,7 @@
             <div>
                 <label class="block text-xs font-bold text-slate-700 uppercase tracking-wide mb-1.5">🪔 Festival</label>
                 <select id="festival" class="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:ring-2 focus:ring-indigo-500 focus:outline-none font-medium">
+                    <option value="auto" selected>🔮 Auto (tarikh se khud)</option>
                     <option value="">Normal (roz wala)</option>
                     <option value="dhanteras">🪙 Dhanteras</option>
                     <option value="kali_chaudas">🌑 Kali Chaudas</option>
@@ -32,6 +33,7 @@
                     <option value="labh_pancham">💰 Labh Pancham</option>
                     <option value="dev_diwali">✨ Dev Diwali</option>
                 </select>
+                <p id="festHint" class="text-[11px] text-orange-700 font-semibold mt-1"></p>
             </div>
             <div>
                 <label class="block text-xs font-bold text-slate-700 uppercase tracking-wide mb-1.5">📅 Date</label>
@@ -148,6 +150,7 @@
     const GEN_URL = @json(route('admin.rashifal.generate'));
     const SAVE_URL = @json(route('admin.rashifal.save'));
     const SHORT_URL = @json(route('admin.rashifal.short.save'));
+    const FEST_URL = @json(route('admin.rashifal.festival'));
 
     const K = window.CanvasKit;
     const W = 1080, H = 1920;
@@ -219,6 +222,19 @@
         dev_diwali:   { sky: ['#06123a', '#1d3a8a', '#5a2a7a'], deco: '✨', head: { gujarati: 'દેવ દિવાળી સ્પેશિયલ રાશિફળ', hindi: 'देव दिवाली स्पेशल राशिफल', hinglish: 'Dev Diwali Special Rashifal' } },
     };
     const fest = () => FESTIVALS[itemsFestival] || null;
+
+    // Date chunte hi batao ki us din kaunsa tyohar hai (Auto chuna ho to wahi theme lagegi)
+    async function showFestHint() {
+        const opt = [...el('festival').options];
+        try {
+            const r = await fetch(FEST_URL, { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-CSRF-TOKEN': CSRF, 'Accept': 'application/json' }, body: JSON.stringify({ date: el('date').value }) });
+            const d = await r.json();
+            const o = opt.find(x => x.value === d.festival);
+            el('festHint').textContent = o ? '🔮 Is din: ' + o.textContent : '🔮 Is din koi tyohar nahi — roz wala rashifal';
+        } catch (e) { el('festHint').textContent = ''; }
+    }
+    el('date').addEventListener('change', showFestHint);
+    showFestHint();
     const headText = () => { const f = fest(); return f ? (f.head[itemsLang] || f.head.gujarati) : tr().head; };
 
     /** Festival card ki sajavat — upar genda-phool ka toran, neeche diyon ki line. */
@@ -290,7 +306,7 @@
             if (!items.length) throw new Error('AI ne koi rashi nahi di — dobara try karo.');
             itemsLang = el('language').value;
             itemsDate = el('date').value;
-            itemsFestival = el('festival').value;
+            itemsFestival = d.festival ?? (el('festival').value === 'auto' ? '' : el('festival').value);
             dateExists = !!d.exists;
             el('progressBar').style.width = '80%';
             await K.ensureFonts();
@@ -905,14 +921,14 @@
             el('progressText').textContent = `Din ${i + 1}/7 (${day}) — AI likh raha hai…`;
             el('progressBar').style.width = Math.round((i / 7) * 100) + '%';
             try {
-                const d = await postJson(GEN_URL, { date: day, language: lang, skip_existing: true });
+                const d = await postJson(GEN_URL, { date: day, language: lang, skip_existing: true, festival: 'auto' });
                 if (d.skipped) { skipped.push(day); continue; }
 
                 items = orderItems(Array.isArray(d.items) ? d.items : []);
                 if (items.length < 12) throw new Error(`AI ne sirf ${items.length} rashi di`);
                 itemsLang = lang;
                 itemsDate = day;
-                itemsFestival = ''; // 7 din wala hamesha roz ka rashifal
+                itemsFestival = d.festival || ''; // tyohar wala din apne aap festival theme me
                 el('progressText').textContent = `Din ${i + 1}/7 (${day}) — save ho raha hai…`;
                 await saveCurrent();
                 done.push(day);
