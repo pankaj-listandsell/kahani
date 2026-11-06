@@ -19,19 +19,13 @@
 
     {{-- Form --}}
     <div class="bg-white rounded-xl border border-slate-200 p-5 shadow-sm space-y-4">
-        <div class="grid sm:grid-cols-4 gap-4">
+        <div class="grid sm:grid-cols-3 gap-4">
             <div>
                 <label class="block text-xs font-bold text-slate-700 uppercase tracking-wide mb-1.5">📅 Date</label>
                 <input id="date" type="date" value="{{ now()->addDay()->toDateString() }}" class="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm">
             </div>
-            <div>
-                <label class="block text-xs font-bold text-slate-700 uppercase tracking-wide mb-1.5">📍 Sheher (samay)</label>
-                <select id="city" class="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm">
-                    @foreach ($cities as $key => $c)
-                        <option value="{{ $key }}">{{ $c[0] }} ({{ ucfirst($key) }})</option>
-                    @endforeach
-                </select>
-            </div>
+            {{-- Poore Gujarat ke liye ek hi panchang — samay Ahmedabad (madhya Gujarat) ke hisaab se --}}
+            <input type="hidden" id="city" value="ahmedabad">
             <div>
                 <label class="block text-xs font-bold text-slate-700 uppercase tracking-wide mb-1.5">🌐 Language</label>
                 <select id="language" class="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm">
@@ -128,7 +122,7 @@
             sunrise: 'સૂર્યોદય', sunset: 'સૂર્યાસ્ત', rahu: 'રાહુ કાળ', abhijit: 'અભિજિત મુહૂર્ત', muhurat: 'શુભ મુહૂર્ત',
             day: '☀️ દિવસના ચોઘડિયા', night: '🌙 રાત્રિના ચોઘડિયા', to: 'થી', cta: 'પરિવાર સાથે શેર કરો 🙏',
             rahuNote: 'શુભ કાર્ય ટાળો', abhijitNote: 'શુભ કાર્ય માટે ઉત્તમ', abhijitWed: 'બુધવારે ટાળવું',
-            paksha: { sud: 'સુદ', vad: 'વદ' }, cityNote: (c) => `સમય: ${c} પ્રમાણે`,
+            paksha: { sud: 'સુદ', vad: 'વદ' }, cityNote: () => 'સમય: ગુજરાત (અમદાવાદ) પ્રમાણે',
             tag: { 1: 'શુભ', 0: 'સામાન્ય', '-1': 'અશુભ' },
             names: { amrit: 'અમૃત', shubh: 'શુભ', labh: 'લાભ', chal: 'ચલ', udveg: 'ઉદ્વેગ', rog: 'રોગ', kaal: 'કાળ' },
             locale: 'gu-IN', digits: '૦૧૨૩૪૫૬૭૮૯', ci: 0,
@@ -138,7 +132,7 @@
             sunrise: 'सूर्योदय', sunset: 'सूर्यास्त', rahu: 'राहु काल', abhijit: 'अभिजीत मुहूर्त', muhurat: 'शुभ मुहूर्त',
             day: '☀️ दिन के चौघड़िया', night: '🌙 रात के चौघड़िया', to: 'से', cta: 'परिवार के साथ शेयर करें 🙏',
             rahuNote: 'शुभ कार्य टालें', abhijitNote: 'शुभ कार्य के लिए उत्तम', abhijitWed: 'बुधवार को टालें',
-            paksha: { sud: 'शुक्ल', vad: 'कृष्ण' }, cityNote: (c) => `समय: ${c} के अनुसार`,
+            paksha: { sud: 'शुक्ल', vad: 'कृष्ण' }, cityNote: () => 'समय: गुजरात (अहमदाबाद) के अनुसार',
             tag: { 1: 'शुभ', 0: 'सामान्य', '-1': 'अशुभ' },
             names: { amrit: 'अमृत', shubh: 'शुभ', labh: 'लाभ', chal: 'चर', udveg: 'उद्वेग', rog: 'रोग', kaal: 'काल' },
             locale: 'hi-IN', digits: '०१२३४५६७८९', ci: 1,
