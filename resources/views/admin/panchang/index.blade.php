@@ -50,9 +50,10 @@
             </div>
         </div>
 
-        <div class="rounded-lg bg-amber-50 border border-amber-200 p-3 text-xs text-amber-900">
-            📖 Neeche ke khaane <b>Gujarati calendar / panchang</b> dekh kar bharo (jo khaali chhodoge wo card par nahi aayega).
-            <b>Sunrise, sunset, choghadiya, rahu kaal aur abhijit</b> panel khud ganit se nikalta hai — chune hue sheher ke hisaab se.
+        <div class="rounded-lg bg-amber-50 border border-amber-200 p-3 text-xs text-amber-900 flex flex-col sm:flex-row sm:items-center gap-3">
+            <button type="button" id="autoBtn" class="shrink-0 bg-amber-600 hover:bg-amber-700 text-white font-bold py-2 px-4 rounded-lg shadow">🔮 Ganit se bharo</button>
+            <p><b>Samvat, maas, paksha, tithi, nakshatra, yog, karan, chandra rashi</b> — Surya-Chandra ki sthiti se apne aap (suryoday ke samay ka, kab tak chalega wo bhi).
+                <b>Sunrise, choghadiya, rahu kaal, abhijit</b> bhi ganit se. Chaho to badal sakte ho. <b>Shubh muhurat</b> (jaise Lakshmi pujan) calendar se khud likho.</p>
         </div>
 
         <div class="grid sm:grid-cols-4 gap-4">
@@ -248,12 +249,22 @@
         const info = [[L.tithi, form.tithi ? tithiVal : ''], [L.nakshatra, form.nakshatra], [L.yog, form.yog], [L.karan, form.karan], [L.chandra, form.chandra]]
             .filter(([, v]) => v && v.trim());
         const bw = (W - 160 - 30) / 2, bh = 135;
+        // Lambi value ("ચૌદસ — સવારે ૧૧:૨૮ સુધી, પછી અમાસ") poori line leti hai, chhoti do-do
+        let col = 0;
         info.forEach(([lab, val], i) => {
-            const full = info.length % 2 === 1 && i === info.length - 1;
-            const x = full ? 80 : 80 + (i % 2) * (bw + 30);
-            box(ctx, x, y + Math.floor(i / 2) * (bh + 22), full ? W - 160 : bw, bh, lab, num(val));
+            const long = val.length > 16;
+            const nextLong = info[i + 1] ? info[i + 1][1].length > 16 : true;
+            if (long || (col === 0 && nextLong)) {
+                if (col === 1) { y += bh + 22; col = 0; }
+                box(ctx, 80, y, W - 160, bh, lab, num(val), { size: long ? 44 : 50 });
+                y += bh + 22;
+            } else {
+                box(ctx, 80 + col * (bw + 30), y, bw, bh, lab, num(val));
+                if (col === 1) { y += bh + 22; col = 0; } else col = 1;
+            }
         });
-        if (info.length) y += Math.ceil(info.length / 2) * (bh + 22) + 8;
+        if (col === 1) y += bh + 22;
+        if (info.length) y += 8;
 
         // Sunrise / sunset
         box(ctx, 80, y, bw, bh, '🌅 ' + L.sunrise, tm(data.sunrise));
@@ -363,12 +374,38 @@
         return d;
     }
 
+    /** Ganit wale khaane bharo. overwrite=false → sirf khaali khaane. */
+    function fillAstro(a, overwrite) {
+        if (!a) return;
+        ['samvat', 'maas', 'paksha', 'tithi', 'nakshatra', 'yog', 'karan', 'chandra'].forEach(k => {
+            if (a[k] !== undefined && (overwrite || !el(k).value.trim())) el(k).value = a[k];
+        });
+    }
+    // Date / sheher / bhasha badli → purane ganit wale khaane khaali (naye din ka bharega)
+    ['date', 'city', 'language'].forEach(id => el(id).addEventListener('change', () => {
+        ['maas', 'paksha', 'tithi', 'nakshatra', 'yog', 'karan', 'chandra'].forEach(k => el(k).value = '');
+        el('samvat').value = '';
+    }));
+
+    el('autoBtn').addEventListener('click', async () => {
+        readForm();
+        if (!form.date) { alert('Date chuno'); return; }
+        el('msg').textContent = '⏳ Ganit ho raha hai…';
+        try {
+            const d = await postJson(COMPUTE_URL, { date: form.date, city: form.city, language: el('language').value });
+            fillAstro(d.astro, true);
+            el('msg').textContent = '✓ Khaane bhar gaye — "Card banao" dabao (Shubh muhurat khud likho).';
+        } catch (e) { el('msg').textContent = '⚠ ' + e.message; }
+    });
+
     el('genBtn').addEventListener('click', async () => {
         readForm();
         if (!form.date) { alert('Date chuno'); return; }
         el('msg').textContent = '⏳ Ganit ho raha hai…';
         try {
-            data = await postJson(COMPUTE_URL, { date: form.date, city: form.city });
+            data = await postJson(COMPUTE_URL, { date: form.date, city: form.city, language: el('language').value });
+            fillAstro(data.astro, false);
+            readForm();
             await K.ensureFonts();
             render();
             el('saveBtn').disabled = false;

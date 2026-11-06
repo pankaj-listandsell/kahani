@@ -37,10 +37,15 @@ class PanchangController extends Controller
     {
         $data = $request->validate([
             'date' => ['required', 'date_format:Y-m-d'],
-            'city' => ['nullable', 'in:' . implode(',', array_keys(PanchangService::CITIES))],
+            'city'     => ['nullable', 'in:' . implode(',', array_keys(PanchangService::CITIES))],
+            'language' => ['nullable', 'in:gujarati,hindi'],
         ]);
+        $city = $data['city'] ?? 'ahmedabad';
 
-        return response()->json(['ok' => true] + $panchang->compute($data['date'], $data['city'] ?? 'ahmedabad'));
+        return response()->json(['ok' => true] + $panchang->compute($data['date'], $city) + [
+            // 🔮 Tithi, nakshatra, yog, karan, chandra rashi, maas, samvat — ganit se
+            'astro' => $panchang->astro($data['date'], $city, $data['language'] ?? 'gujarati'),
+        ]);
     }
 
     public function save(Request $request)
