@@ -92,14 +92,32 @@ PROMPT;
     /**
      * 🔯 RASHIFAL: Ek din ka 12 rashi ka bhavishya (Mesh → Meen, isi kram me).
      */
-    public function generateRashifal(string $date, string $language = 'gujarati'): array
+    /**
+     * 🪔 Festival rashifal — key => [English naam (AI ke liye), extra rule].
+     * 'navu_varsh' = poore Gujarati naye saal (Vikram Samvat) ka varshik rashifal.
+     */
+    public const RASHIFAL_FESTIVALS = [
+        'dhanteras'    => ['Dhanteras', 'Weave Dhanteras naturally into each sign (what is auspicious to buy — gold, silver, utensils, a new item — Lakshmi-Kuber blessings, money matters).'],
+        'kali_chaudas' => ['Kali Chaudas (Narak Chaturdashi)', 'Weave Kali Chaudas naturally (removing negativity, cleaning the home, self-care, protection prayers). Keep it positive, no fear.'],
+        'diwali'       => ['Diwali (Lakshmi Puja)', 'Weave Diwali naturally into each sign (Lakshmi puja, diyas, family, sweets, money and new beginnings). Festive, joyful tone; start the prediction with a short Diwali wish.'],
+        'navu_varsh'   => ['Gujarati New Year (Bestu Varas, Vikram Samvat 2083)', 'This is a YEARLY horoscope for the whole new Vikram Samvat year, not one day: describe how the full year will go (best months, money, family, career). Start with a short "Saal Mubarak / Nutan Varshabhinandan" style wish. lucky_number and lucky_color are for the whole year.'],
+        'bhai_beej'    => ['Bhai Beej', 'Weave Bhai Beej naturally (brother-sister bond, gifts, family love) into each sign.'],
+        'labh_pancham' => ['Labh Pancham', 'Weave Labh Pancham naturally (starting business/shop again after Diwali, new account books, profit, Saraswati and Lakshmi blessings).'],
+        'dev_diwali'   => ['Dev Diwali (Kartik Purnima)', 'Weave Dev Diwali / Kartik Purnima naturally (diyas, holy dip, charity, devotion) into each sign.'],
+    ];
+
+    public function generateRashifal(string $date, string $language = 'gujarati', string $festival = ''): array
     {
         $langPrompt = $this->langPrompt($language);
         $day = \Illuminate\Support\Carbon::parse($date)->locale('en')->isoFormat('dddd, D MMMM YYYY');
 
+        [$festName, $festRule] = self::RASHIFAL_FESTIVALS[$festival] ?? [null, null];
+        $festLine = $festName ? "\nFESTIVAL SPECIAL: {$day} is {$festName}. {$festRule}\n" : '';
+
         $prompt = <<<PROMPT
 You are a popular, positive daily horoscope (rashifal) writer for Gujarati/Hindi Instagram audiences.
 Write the horoscope for {$day} for all 12 Vedic moon signs, in {$langPrompt}.
+{$festLine}
 
 Rules:
 - Exactly 12 objects, in this exact order: Mesh, Vrishabh, Mithun, Kark, Simha, Kanya, Tula, Vrishchik, Dhanu, Makar, Kumbh, Meen.

@@ -19,7 +19,20 @@
 
     {{-- Controls --}}
     <div class="bg-white rounded-xl border border-slate-200 p-5 shadow-sm space-y-4">
-        <div class="grid sm:grid-cols-3 gap-4">
+        <div class="grid sm:grid-cols-4 gap-4">
+            <div>
+                <label class="block text-xs font-bold text-slate-700 uppercase tracking-wide mb-1.5">🪔 Festival</label>
+                <select id="festival" class="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:ring-2 focus:ring-indigo-500 focus:outline-none font-medium">
+                    <option value="">Normal (roz wala)</option>
+                    <option value="dhanteras">🪙 Dhanteras</option>
+                    <option value="kali_chaudas">🌑 Kali Chaudas</option>
+                    <option value="diwali">🪔 Diwali</option>
+                    <option value="navu_varsh">🎉 Navu Varsh 2083 (varshik rashifal)</option>
+                    <option value="bhai_beej">👫 Bhai Beej</option>
+                    <option value="labh_pancham">💰 Labh Pancham</option>
+                    <option value="dev_diwali">✨ Dev Diwali</option>
+                </select>
+            </div>
             <div>
                 <label class="block text-xs font-bold text-slate-700 uppercase tracking-wide mb-1.5">📅 Date</label>
                 <input id="date" type="date" value="{{ now()->addDay()->toDateString() }}"
@@ -193,6 +206,55 @@
     };
 
 
+    // ---------- 🪔 Festival theme ----------
+    // head: card ki upar wali line (bhasha anusaar); sky: background; deco: festival emoji
+    let itemsFestival = '';
+    const FESTIVALS = {
+        dhanteras:    { sky: ['#1a0f00', '#5c3a00', '#7a4a00'], deco: '🪙', head: { gujarati: 'ધનતેરસ સ્પેશિયલ રાશિફળ', hindi: 'धनतेरस स्पेशल राशिफल', hinglish: 'Dhanteras Special Rashifal' } },
+        kali_chaudas: { sky: ['#05030f', '#1e1035', '#3b0d2e'], deco: '🪔', head: { gujarati: 'કાળી ચૌદસનું રાશિફળ', hindi: 'काली चौदस का राशिफल', hinglish: 'Kali Chaudas Rashifal' } },
+        diwali:       { sky: ['#2b0a00', '#7c1d06', '#4a0d3a'], deco: '🪔', head: { gujarati: 'દિવાળી સ્પેશિયલ રાશિફળ', hindi: 'दिवाली स्पेशल राशिफल', hinglish: 'Diwali Special Rashifal' } },
+        navu_varsh:   { sky: ['#3b0018', '#8a1538', '#3d0a5c'], deco: '🎉', head: { gujarati: 'નૂતન વર્ષ ૨૦૮૩ નું રાશિફળ', hindi: 'नव वर्ष 2083 का राशिफल', hinglish: 'Navu Varsh 2083 Rashifal' } },
+        bhai_beej:    { sky: ['#2a0530', '#6d1a5e', '#8a2348'], deco: '👫', head: { gujarati: 'ભાઈબીજ સ્પેશિયલ રાશિફળ', hindi: 'भाई दूज स्पेशल राशिफल', hinglish: 'Bhai Beej Special Rashifal' } },
+        labh_pancham: { sky: ['#032013', '#0b5132', '#5c4300'], deco: '💰', head: { gujarati: 'લાભ પાંચમનું રાશિફળ', hindi: 'लाभ पंचमी का राशिफल', hinglish: 'Labh Pancham Rashifal' } },
+        dev_diwali:   { sky: ['#06123a', '#1d3a8a', '#5a2a7a'], deco: '✨', head: { gujarati: 'દેવ દિવાળી સ્પેશિયલ રાશિફળ', hindi: 'देव दिवाली स्पेशल राशिफल', hinglish: 'Dev Diwali Special Rashifal' } },
+    };
+    const fest = () => FESTIVALS[itemsFestival] || null;
+    const headText = () => { const f = fest(); return f ? (f.head[itemsLang] || f.head.gujarati) : tr().head; };
+
+    /** Festival card ki sajavat — upar genda-phool ka toran, neeche diyon ki line. */
+    function drawFestDeco(ctx) {
+        const f = fest();
+        if (!f) return;
+        // Toran: dori + genda (naarangi/peela) + hare patte
+        ctx.save();
+        ctx.strokeStyle = 'rgba(250, 204, 21, 0.7)'; ctx.lineWidth = 3;
+        ctx.beginPath(); ctx.moveTo(0, 18);
+        for (let x = 0; x <= W; x += 90) ctx.quadraticCurveTo(x + 45, 46, x + 90, 18);
+        ctx.stroke();
+        for (let x = 45, i = 0; x < W; x += 90, i++) {
+            ctx.fillStyle = '#16a34a';
+            ctx.beginPath(); ctx.ellipse(x - 14, 40, 9, 16, -0.6, 0, Math.PI * 2); ctx.fill();
+            ctx.beginPath(); ctx.ellipse(x + 14, 40, 9, 16, 0.6, 0, Math.PI * 2); ctx.fill();
+            ctx.fillStyle = i % 2 ? '#facc15' : '#f97316';
+            ctx.beginPath(); ctx.arc(x, 44, 17, 0, Math.PI * 2); ctx.fill();
+            ctx.fillStyle = 'rgba(0,0,0,0.18)';
+            ctx.beginPath(); ctx.arc(x, 44, 7, 0, Math.PI * 2); ctx.fill();
+        }
+        // Neeche diyon / festival emoji ki line
+        ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+        ctx.font = `64px ${K.STACK}`;
+        ctx.globalAlpha = 1; ctx.shadowBlur = 0; ctx.shadowColor = 'transparent';
+        for (let k = 0; k < 7; k++) {
+            const x = 120 + k * 140;
+            const glow = ctx.createRadialGradient(x, 1815, 4, x, 1815, 70);
+            glow.addColorStop(0, 'rgba(253, 224, 71, 0.55)'); glow.addColorStop(1, 'rgba(253, 224, 71, 0)');
+            ctx.fillStyle = glow; ctx.beginPath(); ctx.arc(x, 1815, 70, 0, Math.PI * 2); ctx.fill();
+            ctx.fillStyle = '#ffffff';
+            ctx.fillText(k === 3 ? f.deco : '🪔', x, 1830);
+        }
+        ctx.restore();
+    }
+
     /** AI ke items ko Mesh→Meen kram me lagao (rashi key se, warna jis kram me aaye). */
     function orderItems(raw) {
         const out = new Array(12).fill(null);
@@ -219,7 +281,7 @@
             const r = await fetch(GEN_URL, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json', 'X-CSRF-TOKEN': CSRF, 'Accept': 'application/json' },
-                body: JSON.stringify({ date: el('date').value, language: el('language').value })
+                body: JSON.stringify({ date: el('date').value, language: el('language').value, festival: el('festival').value || null })
             });
             const d = await r.json();
             if (!d.ok) throw new Error(K.saveError(d));
@@ -228,6 +290,7 @@
             if (!items.length) throw new Error('AI ne koi rashi nahi di — dobara try karo.');
             itemsLang = el('language').value;
             itemsDate = el('date').value;
+            itemsFestival = el('festival').value;
             dateExists = !!d.exists;
             el('progressBar').style.width = '80%';
             await K.ensureFonts();
@@ -327,9 +390,10 @@
 
     function drawSky(ctx, idx) {
         const g = ctx.createLinearGradient(0, 0, 0, H);
-        g.addColorStop(0, '#0b1033');
-        g.addColorStop(0.55, '#2a1260');
-        g.addColorStop(1, '#4a1450');
+        const sky = fest()?.sky || ['#0b1033', '#2a1260', '#4a1450'];
+        g.addColorStop(0, sky[0]);
+        g.addColorStop(0.55, sky[1]);
+        g.addColorStop(1, sky[2]);
         ctx.fillStyle = g;
         ctx.fillRect(0, 0, W, H);
 
@@ -363,11 +427,12 @@
         K.reset(ctx);
         drawSky(ctx, i);
 
-        // Upar: heading + date
+        // Upar: heading + date (festival ho to uski line, toran ke neeche)
         ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
         ctx.fillStyle = '#facc15';
-        K.fitOneLine(ctx, '✨ ' + L.head + ' ✨', W - 120, 64, 40);
-        ctx.fillText('✨ ' + L.head + ' ✨', W / 2, 90);
+        const hd = (fest() ? fest().deco + ' ' : '✨ ') + headText() + (fest() ? ' ' + fest().deco : ' ✨');
+        K.fitOneLine(ctx, hd, W - 120, 64, 40);
+        ctx.fillText(hd, W / 2, fest() ? 100 : 90);
 
         drawDatePill(ctx, 175);
         drawSymbol(ctx, SYMBOLS[i] + '︎');
@@ -406,6 +471,8 @@
         ctx.fillStyle = '#ffffff';
         K.fitOneLine(ctx, L.cta, W - 120, 46, 30);
         ctx.fillText(L.cta, W / 2, 1700);
+
+        drawFestDeco(ctx); // sabse upar ki layer — diye fike na dikhen
     }
 
     /** Vaar + taarikh — gold border wali pill me, vaar gold, taarikh safed. */
@@ -780,7 +847,7 @@
             return {
                 order: item._idx + 1,
                 text: voiceText(item),
-                caption: K.str(item.caption) || (tr().head + ' — ' + tr().names[item._idx] + ' ' + SYMBOLS[item._idx]),
+                caption: K.str(item.caption) || (headText() + ' — ' + tr().names[item._idx] + ' ' + SYMBOLS[item._idx]),
                 hashtags: K.str(item.hashtags),
                 image: off.toDataURL('image/webp', 0.92),
             };
@@ -845,6 +912,7 @@
                 if (items.length < 12) throw new Error(`AI ne sirf ${items.length} rashi di`);
                 itemsLang = lang;
                 itemsDate = day;
+                itemsFestival = ''; // 7 din wala hamesha roz ka rashifal
                 el('progressText').textContent = `Din ${i + 1}/7 (${day}) — save ho raha hai…`;
                 await saveCurrent();
                 done.push(day);

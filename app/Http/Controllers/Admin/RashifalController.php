@@ -68,6 +68,8 @@ class RashifalController extends Controller
             'date'          => ['required', 'date_format:Y-m-d'],
             'language'      => ['required', 'in:gujarati,hindi,hinglish'],
             'skip_existing' => ['nullable', 'boolean'],
+            // 🪔 Festival theme (khaali = roz wala)
+            'festival'      => ['nullable', 'in:' . implode(',', array_keys(ViralStudioAiService::RASHIFAL_FESTIVALS))],
         ]);
 
         try {
@@ -81,7 +83,7 @@ class RashifalController extends Controller
                 return response()->json(['ok' => true, 'skipped' => true, 'items' => [], 'exists' => true]);
             }
 
-            $items = $ai->generateRashifal($data['date'], $data['language']);
+            $items = $ai->generateRashifal($data['date'], $data['language'], (string) ($data['festival'] ?? ''));
 
             return response()->json(['ok' => true, 'items' => $items, 'exists' => $exists]);
         } catch (\Throwable $e) {
