@@ -3,15 +3,20 @@
 
 @section('content')
 <div class="max-w-5xl">
-    <a href="{{ route('admin.salah.index') }}" class="text-sm text-slate-500 hover:text-sky-700">← 💬 Salah Studio</a>
+    @php
+        $routeBase = $routeBase ?? 'admin.salah';
+        $isRomance = $routeBase === 'admin.romance';
+        $icon = $isRomance ? '🔞' : '💬';
+    @endphp
+    <a href="{{ route($routeBase . '.index') }}" class="text-sm text-slate-500 hover:text-sky-700">← {{ $icon }} {{ $isRomance ? 'Adult Kahani' : 'Salah Studio' }}</a>
 
     <div class="flex items-start justify-between gap-4 mt-2 mb-6 flex-wrap">
         <div>
-            <h2 class="text-xl font-bold">💬 {{ $story->title }}</h2>
-            <p class="text-slate-500 mt-1 text-sm">{{ $cards->count() }} advice cards · {{ ucfirst($story->status) }}</p>
+            <h2 class="text-xl font-bold">{{ $icon }} {{ $story->title }}</h2>
+            <p class="text-slate-500 mt-1 text-sm">{{ $cards->count() }} {{ $isRomance ? 'kahani' : 'advice' }} cards · {{ ucfirst($story->status) }}</p>
         </div>
-        <form method="POST" action="{{ route('admin.salah.destroy', $story) }}"
-              onsubmit="return confirm('Poori salah collection delete karein?')">
+        <form method="POST" action="{{ route($routeBase . '.destroy', $story) }}"
+              onsubmit="return confirm('Poori collection delete karein?')">
             @csrf @method('DELETE')
             <button class="px-4 py-2 border border-red-300 text-red-600 rounded-lg hover:bg-red-50 text-sm">🗑 Delete</button>
         </form>
@@ -44,7 +49,7 @@
                         <div class="flex items-center justify-between mb-1">
                             <label class="flex items-center gap-1 cursor-pointer">
                                 <input type="checkbox" name="ids[]" value="{{ $card->id }}" class="bulk-card rounded border-slate-300 accent-amber-600 w-4 h-4 cursor-pointer">
-                                <span class="text-[11px] font-bold text-amber-600">💬 Card {{ $i + 1 }}</span>
+                                <span class="text-[11px] font-bold text-amber-600">{{ $icon }} Card {{ $i + 1 }}</span>
                             </label>
                         </div>
                         <div class="media-slot">
@@ -78,7 +83,7 @@
             </form>
         @endforeach
 
-        <p class="text-xs text-slate-400 mt-4">Har card ek reader ka sawaal + salah hai. Auto-post inhe drip post karta hai.</p>
+        <p class="text-xs text-slate-400 mt-4">{{ $isRomance ? 'Har card ek poori kahani hai.' : 'Har card ek reader ka sawaal + salah hai.' }} Auto-post inhe drip post karta hai.</p>
     @endif
 </div>
 

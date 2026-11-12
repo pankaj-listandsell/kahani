@@ -31,6 +31,7 @@
             <div>
                 <label class="block text-xs font-bold text-slate-700 uppercase tracking-wide mb-1.5">🏷️ Category</label>
                 <select id="category" class="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:ring-2 focus:ring-amber-500 focus:outline-none font-medium">
+                    <option value="">✍️ Koi category nahi — fakt Topic par</option>
                     <option value="Mix of relationship secrets: affairs, attraction, loneliness, secret crush, online chatting, trust and betrayal between adults" selected>🔥 Mix — Sambandh / Affair / Akarshan (badhu)</option>
                     <option value="Parenting">👩‍👧 Parenting / Bachche</option>
                     <option value="Teenagers & Puberty">🧒 Teenagers &amp; Puberty</option>
@@ -232,6 +233,10 @@
         ['answer', 'Jawab', 4], ['solutions', 'Samadhan (har line: heading | text)', 5],
         ['takeaway', 'Takeaway', 2], ['cta_question', 'Comment question', 2],
     ];
+    const KAHANI_FIELDS = [
+        ['title', 'Title', 2], ['story', 'Kahani (paragraph ke beech khaali line)', 10], ['asker', 'Signature', 1],
+        ['takeaway', 'Ant / Takeaway', 2], ['cta_question', 'Comment question', 2],
+    ];
 
     function renderAllPreviews() {
         el('emptyState').classList.add('hidden');
@@ -260,7 +265,7 @@
             drawSalah(canvas, item);
 
             const fields = box.querySelector('.fields');
-            FIELDS.forEach(([key, label, rows]) => {
+            (item.style === 'kahani' ? KAHANI_FIELDS : FIELDS).forEach(([key, label, rows]) => {
                 const value = key === 'solutions'
                     ? solutionsOf(item).map(s => s.heading + ' | ' + s.text).join('\n')
                     : K.str(item[key]);
@@ -361,7 +366,12 @@
             solSegs.push({ t: s.text, b: false });
         });
 
-        const paras = [
+        const paras = item.style === 'kahani' ? [
+            ...K.str(item.story).split(/\n\s*\n|\n/).map(p => p.trim()).filter(Boolean).map(p => [{ t: p, b: false }]),
+            item.asker ? [{ t: K.str(item.asker), b: true }] : null,
+            item.takeaway ? [{ t: '💕 ' + K.str(item.takeaway), b: true }] : null,
+            item.cta_question ? [{ t: '(' + K.str(item.cta_question) + ')', b: true }] : null,
+        ].filter(Boolean) : [
             [{ t: L.q, b: true }, { t: '"' + K.str(item.question).trim() + '"', b: false }, ...(item.asker ? [{ t: '— ' + K.str(item.asker), b: true }] : [])],
             [{ t: L.a, b: true }, { t: K.str(item.answer), b: false }],
             sol.length ? solSegs : null,
@@ -378,7 +388,7 @@
 
     /** Reel ki voiceover ke liye — poora card nahi, sirf mukhya baatein (reel chhoti rahe). */
     function voiceText(item) {
-        return [item.title, item.question, item.answer, item.takeaway, item.cta_question]
+        return [item.title, item.question, item.story, item.answer, item.takeaway, item.cta_question]
             .map(K.str).map(s => s.trim()).filter(Boolean).join('. ');
     }
 

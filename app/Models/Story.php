@@ -37,7 +37,7 @@ class Story extends Model
      */
     public const COLLECTION_TYPES = [
         'shayari', 'joke', 'quote', 'quiz', 'status', 'fact', 'yoga', 'ukhana',
-        'puzzle', 'mind_reader', 'this_or_that', 'name_secret', 'salah', 'nuskha', 'prem_patra',
+        'puzzle', 'mind_reader', 'this_or_that', 'name_secret', 'salah', 'nuskha', 'prem_patra', 'romance',
     ];
 
     public function isCollection(): bool

@@ -16,31 +16,40 @@ use Illuminate\Support\Str;
  */
 class SalahController extends Controller
 {
+    /** Story type, route-name prefix, view folder aur label — subclass (jaise RomanceController) inhe badalti hai. */
+    protected string $type = 'salah';
+    protected string $route = 'admin.salah';
+    protected string $view = 'admin.salah';
+    protected string $label = 'Salah';
+    /** Set ho to request ka style ignore karke hamesha yahi style (e.g. 'kahani'). */
+    protected ?string $forcedStyle = null;
+
     public function index()
     {
-        $query = Story::withCount('parts')->where('type', 'salah')->latest();
+        $query = Story::withCount('parts')->where('type', $this->type)->latest();
 
         if (! auth()->user()->isAdmin()) {
             $query->where('user_id', auth()->id());
         }
 
-        return view('admin.salah.index', ['collections' => $query->get()]);
+        return view($this->view . '.index', ['collections' => $query->get()]);
     }
 
     public function show(Story $story)
     {
-        abort_unless($story->type === 'salah', 404);
+        abort_unless($story->type === $this->type, 404);
         $this->authorize('view', $story);
 
         $story->load(['parts.cards']);
         $cards = $story->parts->flatMap->cards->values();
 
-        return view('admin.salah.show', compact('story', 'cards'));
+        // Show page sab subclasses ke liye ek hi (routeBase se links badalte hain)
+        return view('admin.salah.show', compact('story', 'cards') + ['routeBase' => $this->route]);
     }
 
     public function destroy(Story $story, InstagramService $instagram)
     {
-        abort_unless($story->type === 'salah', 404);
+        abort_unless($story->type === $this->type, 404);
         $this->authorize('delete', $story);
 
         $story->load('parts.cards');
@@ -59,7 +68,7 @@ class SalahController extends Controller
 
         $story->delete();
 
-        return redirect()->route('admin.salah.index')->with('success', 'Salah collection delete ho gayi.');
+        return redirect()->route($this->route . '.index')->with('success', $this->label . ' collection delete ho gayi.');
     }
 
     public function generate(Request $request, ViralStudioAiService $ai)
@@ -67,18 +76,23 @@ class SalahController extends Controller
         $data = $request->validate([
             'count'    => ['required', 'integer', 'min:1', 'max:10'],
             'language' => ['required', 'in:gujarati,hindi,hinglish'],
-            'category' => ['nullable', 'string', 'max:150'],
+            'category' => ['nullable', 'string', 'max:300'],
             'topic'    => ['nullable', 'string', 'max:200'],
-            'style'    => ['nullable', 'in:normal,confession'],
+            'style'    => ['nullable', 'in:normal,confession,kahani'],
         ]);
+
+        // Category khaali ho to topic zaroori — warna AI ko pata hi nahi kis par likhna hai
+        if (blank($data['category'] ?? null) && blank($data['topic'] ?? null)) {
+            return response()->json(['ok' => false, 'error' => 'Category khaali hai — to Topic lakho (jem ke: "college ma pehlo prem").'], 422);
+        }
 
         try {
             $items = $ai->generateSalah(
                 (int) $data['count'],
                 $data['language'],
-                $data['category'] ?? 'Parenting',
+                trim((string) ($data['category'] ?? '')),
                 trim((string) ($data['topic'] ?? '')),
-                $data['style'] ?? 'normal'
+                $this->forcedStyle ?? ($data['style'] ?? 'normal')
             );
 
             return response()->json(['ok' => true, 'items' => $items]);
@@ -91,7 +105,7 @@ class SalahController extends Controller
     {
         $data = $request->validate([
             'language'        => ['nullable', 'in:hindi,gujarati,hinglish'],
-            'category'        => ['nullable', 'string', 'max:150'],
+            'category'        => ['nullable', 'string', 'max:300'],
             'cards'           => ['required', 'array', 'min:1', 'max:30'],
             'cards.*.order'   => ['required', 'integer', 'min:1'],
             'cards.*.text'    => ['required', 'string'],
@@ -105,8 +119,8 @@ class SalahController extends Controller
 
             $story = Story::create([
                 'user_id'  => auth()->id(),
-                'title'    => 'Salah — ' . ($data['category'] ?? 'Advice') . ' — ' . now()->format('d M'),
-                'type'     => 'salah',
+                'title'    => $this->label . ' — ' . Str::limit($data['category'] ?? 'Mix', 40) . ' — ' . now()->format('d M'),
+                'type'     => $this->type,
                 'category' => $data['category'] ?? null,
                 'language' => $data['language'] ?? 'gujarati',
                 'status'   => 'published',
@@ -135,7 +149,7 @@ class SalahController extends Controller
             return response()->json([
                 'ok'         => true,
                 'collection' => $story->id,
-                'redirect'   => route('admin.salah.show', $story),
+                'redirect'   => route($this->route . '.show', $story),
             ]);
         } catch (\Throwable $e) {
             return response()->json(['ok' => false, 'error' => $e->getMessage()], 500);

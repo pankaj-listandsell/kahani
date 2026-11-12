@@ -25,6 +25,7 @@
         ['route' => 'admin.stories.index',  'active' => 'admin.stories.*',   'icon' => '📚', 'label' => 'Stories'],
         ['route' => 'admin.quiz.index',        'active' => 'admin.quiz.*',         'icon' => '🎯', 'label' => 'Quiz'],
         ['route' => 'admin.salah.index',       'active' => 'admin.salah.*',        'icon' => '💬', 'label' => 'Salah (Q&A)'],
+        ['route' => 'admin.romance.index',     'active' => 'admin.romance.*',      'icon' => '🔞', 'label' => 'Adult Kahani (1 Card)'],
         ['route' => 'admin.rashifal.index',    'active' => 'admin.rashifal.*',     'icon' => '🔯', 'label' => 'Aaj nu Rashifal'],
         ['route' => 'admin.panchang.index',    'active' => 'admin.panchang.*',     'icon' => '📅', 'label' => 'Aaj nu Panchang'],
         ['route' => 'admin.nuskha.index',      'active' => 'admin.nuskha.*',       'icon' => '🌿', 'label' => 'Nuskhe & Recipe'],

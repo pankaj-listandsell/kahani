@@ -12,6 +12,7 @@ use App\Http\Controllers\Admin\PartController;
 use App\Http\Controllers\Admin\PanchangController;
 use App\Http\Controllers\Admin\RashifalController;
 use App\Http\Controllers\Admin\SalahController;
+use App\Http\Controllers\Admin\RomanceController;
 use App\Http\Controllers\Admin\SettingsController;
 use App\Http\Controllers\Admin\StoryController;
 use App\Http\Controllers\Admin\QuizController;
@@ -124,6 +125,13 @@ Route::middleware('auth')->prefix('admin')->name('admin.')->group(function () {
     Route::post('salah/save', [SalahController::class, 'save'])->name('salah.save');
     Route::get('salah/{story}', [SalahController::class, 'show'])->name('salah.show');
     Route::delete('salah/{story}', [SalahController::class, 'destroy'])->name('salah.destroy');
+
+    // 🔞 Adult Kahani — 1 card me poori romantic kahani (Salah jaisa pipeline, alag menu)
+    Route::get('romance', [RomanceController::class, 'index'])->name('romance.index');
+    Route::post('romance/generate', [RomanceController::class, 'generate'])->name('romance.generate');
+    Route::post('romance/save', [RomanceController::class, 'save'])->name('romance.save');
+    Route::get('romance/{story}', [RomanceController::class, 'show'])->name('romance.show');
+    Route::delete('romance/{story}', [RomanceController::class, 'destroy'])->name('romance.destroy');
 
     // 🔯 Aaj nu Rashifal — 12 rashi cards, sirf apne din auto-post
     // 📅 Aaj nu Panchang

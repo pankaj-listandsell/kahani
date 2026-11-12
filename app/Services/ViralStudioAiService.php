@@ -30,9 +30,18 @@ class ViralStudioAiService
     public function generateSalah(int $count = 3, string $language = 'gujarati', string $category = 'Parenting', string $topic = '', string $style = 'normal'): array
     {
         $langPrompt = $this->langPrompt($language);
+        $category = trim($category);
+        // Category khaali = sirf topic par (topic hi poora vishay hai)
+        if ($category === '') {
+            $category = $topic !== '' ? "Whatever fits the topic \"{$topic}\" — stay strictly on this topic" : 'Parenting';
+        }
         $topicLine = $topic !== '' ? "Specific topic: {$topic}. Every card must be about this topic (different angles)." : 'Pick a different, common real-life problem for each card.';
 
         // confession = lambi, dil kholkar likhi kahani (age, sheher, kya hua, kya mehsoos hua) + chhota jawab
+        if ($style === 'kahani') {
+            return $this->generateKahaniCards($count, $langPrompt, $category, $topic);
+        }
+
         [$questionRule, $askerRule, $answerRule, $solutionsRule, $limit] = $style === 'confession'
             ? [
                 '150-200 words, a heartfelt first-person confession told like a story: age, city, living situation, how it started, what happened step by step, how they felt (loneliness, attraction, guilt, confusion), what they tried, ends asking "what should I do?". Bold, gossip-worthy, emotionally honest, but never explicit.',
@@ -87,6 +96,59 @@ Return ONLY a raw JSON array of objects with keys: `title`, `question`, `asker`,
 PROMPT;
 
         return $this->callGeminiJson($prompt, 90);
+    }
+
+    /**
+     * 💕 1-CARD KAHANI: ek hi 9:16 card me poori romantic / affair / pehli-raat wali kahani.
+     * Intimacy sirf ishaare me (kiss/aalingan tak, phir fade-to-black) — IG/FB par chalne layak.
+     */
+    protected function generateKahaniCards(int $count, string $langPrompt, string $category, string $topic): array
+    {
+        $topicLine = $topic !== '' ? "Specific topic: {$topic}. Every card must be a different story on this topic." : 'Each card must be a completely different situation and couple.';
+
+        $cities   = collect(self::GUJARAT_CITIES)->shuffle()->take(max(1, $count))->values();
+        $cityLine = 'Cities (one per card, in this order, written in the output language/script): '
+            . $cities->map(fn ($c, $i) => 'card ' . ($i + 1) . ' = ' . $c)->implode(', ') . '.';
+
+        $prompt = <<<PROMPT
+You write viral one-card romantic short stories ("sachchi ghatna se prerit") for a Gujarati Instagram/Facebook page.
+Each story must be COMPLETE on a single 9:16 text card. Generate {$count} cards in {$langPrompt}.
+Theme / category: {$category}.
+{$topicLine}
+{$cityLine}
+
+How to make it feel REAL:
+- Ordinary middle-class Gujarati life: real places (society, office, college canteen, bus stand, garba ground, monsoon evening), common first names, ages 22-40, small concrete details (chai, rain, phone notification, saree, scooter).
+- Show feelings through small moments and dialogue: nervous hands, a long glance, heartbeat, hesitation, a whispered line.
+- Clear arc: hook in the first line → build-up of attraction/tension → the key moment → an ending (sweet, painful or a twist) that stays with the reader.
+
+Make it BOLD and SENSUAL (the most daring version that is still non-explicit):
+- Build strong desire and tension: lingering eye contact, quickened breath, racing heartbeat, the closeness of two bodies in a small space, a hand that stays a moment too long, a whisper near the ear, the silence before the first move.
+- The kiss / embrace is THE moment — write it slowly with emotion and atmosphere (rain, dim light, empty office, locked door, breath, hesitation then surrender).
+- Title and first line must be a daring, curiosity-driven hook (forbidden, secret, "that night…").
+- End right at the peak with a strong cut-away ("darwajo bandh thayo…", "light bujhai gai…", "e raate badhi maryadao tooti gai — baaki fakt e banne jaane chhe") and then the next-morning aftermath (a secret smile, guilt, a changed relationship).
+
+Hard limits (strict — posted on Instagram/Facebook):
+- All characters are adults (22+). Consent is clear and mutual.
+- Never describe sexual acts, nudity or private body parts — not directly, not with euphemisms, slang or coded words. The intimacy itself always happens off-page.
+- No vulgar words. Affairs can be daring but show honest feelings (temptation, guilt, consequence).
+
+Fields (all text in {$langPrompt}):
+- `title`: 6-14 word curiosity hook headline (no quotes).
+- `story`: the full story, 200-260 words, 4-6 short paragraphs separated by \\n\\n, with 1-3 lines of dialogue.
+- `asker`: "— first name, city" style signature of the narrator or the couple.
+- `takeaway`: one closing line (12-22 words) — a feeling, lesson or twist.
+- `cta_question`: question for comments, 10-20 words.
+- `caption`: 2-4 short lines with a few emojis, ends with "(Kaalpanik kahani)" in the output language.
+- `hashtags`: 8-12 relevant hashtags in one string.
+
+Return ONLY a raw JSON array of objects with keys: `title`, `story`, `asker`, `takeaway`, `cta_question`, `caption`, `hashtags`.
+PROMPT;
+
+        return array_map(
+            fn ($item) => is_array($item) ? $item + ['style' => 'kahani'] : $item,
+            $this->callGeminiJson($prompt, 90)
+        );
     }
 
     /**
