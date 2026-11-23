@@ -122,7 +122,9 @@ class StoryController extends Controller
     public function store(Request $request)
     {
         $data = $this->validated($request);
-        $body = $data['body'];
+        // 🚫 Paste ki hui kahani — list + AI se ashleel shabd badlo
+        [$data['title'], $body] = \App\Support\WordFilter::cleanArray([(string) $data['title'], (string) $data['body']]);
+        $data['title'] = mb_substr($data['title'], 0, 255);
         unset($data['body']);
 
         $story = Story::create($data);
@@ -135,7 +137,37 @@ class StoryController extends Controller
 
         return redirect()
             ->route('admin.parts.cards', $part)
-            ->with('success', 'Story ban gayi! Ab neeche cards banao. 🖼️');
+            ->with('success', 'Story ban gayi! Ab neeche cards banao. 🖼️ ' . \App\Support\WordFilter::lastSummary());
+    }
+
+    /**
+     * 🚫 Pehle se saved kahani (title + saare parts) me ashleel shabd badlo — list + AI.
+     * Bane hue card images purane text se hain — unhe dobara banana padega.
+     */
+    public function cleanWords(Story $story)
+    {
+        $this->authorize('update', $story);
+        @set_time_limit(180);
+
+        $story->load('parts');
+        $parts = $story->parts->values();
+        $before = array_merge([(string) $story->title], $parts->map(fn ($p) => (string) $p->body)->all());
+        $after = \App\Support\WordFilter::cleanArray($before);
+
+        $story->update(['title' => mb_substr($after[0], 0, 255)]);
+        foreach ($parts as $k => $part) {
+            $part->update(['body' => $after[$k + 1]]);
+        }
+
+        $changed = count(array_diff_assoc($after, $before));
+        $summary = \App\Support\WordFilter::lastSummary();
+
+        return back()->with(
+            $changed ? 'success' : 'error',
+            $changed
+                ? "{$summary} Ab cards dobara banao — purane card images me abhi bhi purana text hai."
+                : "Koi ashleel shabd nahi mila. {$summary}"
+        );
     }
 
     /**
@@ -162,7 +194,8 @@ class StoryController extends Controller
         $this->authorize('update', $story);
 
         $data = $this->validated($request);
-        $body = $data['body'];
+        [$data['title'], $body] = \App\Support\WordFilter::cleanArray([(string) $data['title'], (string) $data['body']]);
+        $data['title'] = mb_substr($data['title'], 0, 255);
         unset($data['body']);
 
         $story->update($data);
@@ -177,7 +210,7 @@ class StoryController extends Controller
 
         return redirect()
             ->route('admin.stories.show', $story)
-            ->with('success', 'Story updated.');
+            ->with('success', 'Story updated. ' . \App\Support\WordFilter::lastSummary());
     }
 
     /**

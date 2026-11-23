@@ -158,6 +158,7 @@
 
 @push('scripts')
 @include('admin.partials._canvas_kit')
+@include('admin.partials._category_multi')
 <script>
 (function() {
     const CSRF = document.querySelector('meta[name=csrf-token]').content;
@@ -170,6 +171,8 @@
     let itemsLang = 'gujarati'; // jis language me items generate hue — labels bhi usi me
     let itemsCategory = '';
     const el = id => document.getElementById(id);
+    // 🏷️ Kai category ek saath (checkbox dropdown)
+    const cat = window.MultiCategory(el('category'));
 
     const I18N = {
         gujarati: { q: 'પ્રશ્ન:', a: 'જવાબ:', s: 'સમાધાન:', brand: 'દિલની વાત', digits: '૦૧૨૩૪૫૬૭૮૯' },
@@ -202,7 +205,7 @@
             const r = await fetch(GEN_URL, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json', 'X-CSRF-TOKEN': CSRF, 'Accept': 'application/json' },
-                body: JSON.stringify({ count: el('count').value, language: el('language').value, category: el('category').value, topic: el('topic').value, style: el('style').value })
+                body: JSON.stringify({ count: el('count').value, language: el('language').value, categories: cat.values(), topic: el('topic').value, style: el('style').value })
             });
             const d = await r.json();
             if (!d.ok) throw new Error(K.saveError(d));
@@ -210,7 +213,8 @@
             items = Array.isArray(d.items) ? d.items : [];
             if (!items.length) throw new Error('AI ne koi card nahi diya — dobara try karo.');
             itemsLang = el('language').value;
-            itemsCategory = el('category').value;
+            // Story ka naam / category: pasand kari category na naam (emoji vagar), " + " thi jodi
+            itemsCategory = cat.labels().map(l => l.replace(/^\S+\s/, '')).join(' + ').slice(0, 250);
             el('progressBar').style.width = '80%';
             await K.ensureFonts();
             renderAllPreviews();

@@ -9,7 +9,7 @@
             <div>
                 <span class="inline-block px-2.5 py-1 bg-white/20 rounded-full text-xs font-semibold uppercase tracking-wider mb-2">🔞 18+ Romantic · 1 Card = 1 Poori Kahani</span>
                 <h1 class="text-2xl font-bold">Adult Kahani — Ek Card ma Aakhi Story</h1>
-                <p class="text-rose-100 text-sm mt-1">Title → kahani (170–230 shabd) → naam, shaher → ant ni line → comment question. Intimacy fakt ishaara ma (fade-to-black) — IG/FB par safe.</p>
+                <p class="text-rose-100 text-sm mt-1">Title → romantic kahani (~150–200 shabd, mota font ma aakhu card bharay): dekhav/figure, hoth-gardan par kiss, aalingan → pachhi fade-to-black. Sharirik drashya ishaara ma j — IG/FB par safe.</p>
             </div>
             <button id="saveBtn" disabled class="bg-white text-amber-800 font-bold px-5 py-2.5 rounded-xl shadow hover:bg-amber-50 disabled:opacity-50 disabled:cursor-not-allowed transition flex items-center gap-2">
                 <span>💾</span> Save All Cards
@@ -162,6 +162,7 @@
 
 @push('scripts')
 @include('admin.partials._canvas_kit')
+@include('admin.partials._category_multi')
 <script>
 (function() {
     const CSRF = document.querySelector('meta[name=csrf-token]').content;
@@ -174,6 +175,8 @@
     let itemsLang = 'gujarati'; // jis language me items generate hue — labels bhi usi me
     let itemsCategory = '';
     const el = id => document.getElementById(id);
+    // 🏷️ Kai category ek saath (checkbox dropdown)
+    const cat = window.MultiCategory(el('category'));
 
     const I18N = {
         gujarati: { q: 'પ્રશ્ન:', a: 'જવાબ:', s: 'સમાધાન:', brand: 'દિલની વાત', digits: '૦૧૨૩૪૫૬૭૮૯' },
@@ -206,7 +209,7 @@
             const r = await fetch(GEN_URL, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json', 'X-CSRF-TOKEN': CSRF, 'Accept': 'application/json' },
-                body: JSON.stringify({ count: el('count').value, language: el('language').value, category: el('category').value, topic: el('topic').value, style: 'kahani' })
+                body: JSON.stringify({ count: el('count').value, language: el('language').value, categories: cat.values(), topic: el('topic').value, style: 'kahani' })
             });
             const d = await r.json();
             if (!d.ok) throw new Error(K.saveError(d));
@@ -214,7 +217,8 @@
             items = (Array.isArray(d.items) ? d.items : []).map(it => ({ ...it, style: 'kahani' }));
             if (!items.length) throw new Error('AI ne koi card nahi diya — dobara try karo.');
             itemsLang = el('language').value;
-            itemsCategory = el('category').value;
+            // Story ka naam / category: pasand kari category na naam (emoji vagar), " + " thi jodi
+            itemsCategory = cat.labels().map(l => l.replace(/^\S+\s/, '')).join(' + ').slice(0, 250);
             el('progressBar').style.width = '80%';
             await K.ensureFonts();
             renderAllPreviews();
@@ -381,11 +385,41 @@
             item.cta_question ? [{ t: '(' + K.str(item.cta_question) + ')', b: true }] : null,
         ].filter(Boolean);
 
-        // Body box me fit hone tak font chhota karo
         const x = 70, maxW = W - 140;
         const top = titleBottom + 30, bottom = H - 120;
         ctx.fillStyle = '#21180e';
-        K.drawRich(ctx, K.fitRich(ctx, paras, maxW, bottom - top, 44), x, top);
+        // Kahani: sabse bada font jo fit ho + bachi jagah line/para ke beech — card neeche tak bhara dikhe
+        const layout = item.style === 'kahani'
+            ? fillRich(ctx, paras, maxW, bottom - top)
+            : K.fitRich(ctx, paras, maxW, bottom - top, 44);
+        K.drawRich(ctx, layout, x, top);
+    }
+
+    /**
+     * Kahani ke liye: 52px se neeche tak — pehla font jisme poori kahani aa jaaye.
+     * Phir bachi jagah: pehle line-height (thoda), phir paragraph ke beech — taaki neeche khaali na rahe.
+     */
+    function fillRich(ctx, paras, maxW, maxH, maxSize = 52) {
+        let layout;
+        for (let s = maxSize; s >= 26; s--) {
+            layout = K.layoutRich(ctx, paras, maxW, s);
+            if (layout.height <= maxH) break;
+        }
+        let extra = maxH - layout.height;
+        if (extra > 0 && layout.lines.length) {
+            const n = layout.lines.length;
+            const lhAdd = Math.min(extra / n, layout.size * 0.22); // line-height 1.38 → ~1.6 tak
+            layout.lh += lhAdd;
+            extra -= lhAdd * n;
+            const gapLines = layout.lines.filter(l => l.gapBefore > 0);
+            if (extra > 0 && gapLines.length) {
+                const g = Math.min(extra / gapLines.length, layout.size * 1.2);
+                gapLines.forEach(l => { l.gapBefore += g; });
+                extra -= g * gapLines.length;
+            }
+            layout.height = maxH - Math.max(0, extra);
+        }
+        return layout;
     }
 
     /** Reel ki voiceover ke liye — poora card nahi, sirf mukhya baatein (reel chhoti rahe). */

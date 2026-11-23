@@ -183,7 +183,16 @@ Route::middleware('auth')->prefix('admin')->name('admin.')->group(function () {
     Route::post('stories/bulk-delete', [StoryController::class, 'bulkDestroy'])->name('stories.bulk_destroy');
 
     // Story CRUD
+    // 🚫 Shabd List (resource se PEHLE — warna 'word-filter' ko {story} samjha jaata)
+    Route::get('stories/word-filter', [\App\Http\Controllers\Admin\WordFilterController::class, 'index'])->name('stories.words');
+    Route::post('stories/word-filter', [\App\Http\Controllers\Admin\WordFilterController::class, 'save'])->name('stories.words.save');
+    Route::post('stories/word-filter/defaults', [\App\Http\Controllers\Admin\WordFilterController::class, 'importDefaults'])->name('stories.words.defaults');
+    Route::post('stories/word-filter/promote',[\App\Http\Controllers\Admin\WordFilterController::class, 'promote'])->name('stories.words.promote');
+    Route::post('stories/word-filter/test', [\App\Http\Controllers\Admin\WordFilterController::class, 'test'])->name('stories.words.test');
+
     Route::resource('stories', StoryController::class);
+    // 🚫 Pehle se saved kahani ke ashleel shabd badlo (list + AI)
+    Route::post('stories/{story}/clean-words', [StoryController::class, 'cleanWords'])->name('stories.clean_words');
 
     // Cover image khud se upload karo (9:16)
     Route::post('stories/{story}/cover/upload', [StoryController::class, 'uploadCover'])->name('stories.cover.upload');

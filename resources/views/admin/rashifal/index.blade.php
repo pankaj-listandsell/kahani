@@ -54,6 +54,11 @@
                 </button>
             </div>
         </div>
+        <label class="flex items-center gap-2 pt-1 text-sm cursor-pointer select-none w-fit">
+            <input id="makeShorts" type="checkbox" checked class="rounded border-slate-300 accent-red-600 w-4 h-4">
+            <span class="font-semibold text-slate-700">📺 YouTube Shorts pan banavo</span>
+            <span class="text-xs text-slate-500">(12 Rashi + Top 3 — tick nahi hoy to sirf 12 cards, Instagram + Facebook mate)</span>
+        </label>
         <div class="flex flex-col sm:flex-row sm:items-center gap-3 pt-1 border-t border-slate-100">
             <button id="weekBtn" class="shrink-0 bg-gradient-to-r from-fuchsia-600 to-purple-700 hover:from-fuchsia-700 hover:to-purple-800 text-white font-bold py-2 px-4 rounded-lg shadow transition disabled:opacity-50">
                 📅 Agle 7 din banao
@@ -80,7 +85,7 @@
     {{-- 📺 YouTube Shorts (sirf YouTube) — Save ke saath apne aap bante hain --}}
     <div id="shortPreview" class="hidden bg-white rounded-xl border border-red-200 p-4 shadow-sm">
         <h3 class="font-bold text-slate-800 mb-1">📺 YouTube Shorts <span class="text-xs font-normal text-slate-500">— sirf YouTube ke liye, "Save" ke saath apne aap save honge</span></h3>
-        <p class="text-xs text-slate-500 mb-3">Upar ke 12 cards ab sirf Instagram + Facebook par jaate hain. YouTube par us din ye 2 Shorts jaate hain (pehle 12 Rashi, fir Top 3).</p>
+        <p class="text-xs text-slate-500 mb-3">Upar ke 12 cards ab sirf Instagram + Facebook par jaate hain. YouTube par us din ye 2 Shorts jaate hain (pehle 12 Rashi, fir Top 3). Na joie to upar "📺 YouTube Shorts pan banavo" no tick kaadho.</p>
         <div class="rows space-y-3"></div>
     </div>
 
@@ -158,7 +163,19 @@
     let itemsLang = 'gujarati';
     let itemsDate = '';
     let dateExists = false;
+    let itemsPanchang = null; // server ka ganit: {chandra, tithi, shubh:{name,from,to}, rahu:{from,to}}
     const el = id => document.getElementById(id);
+
+    // 📺 YouTube Shorts banane hain? — pasand browser me yaad (khaali / blocked storage par default: haan)
+    const wantShorts = () => !el('makeShorts') || el('makeShorts').checked;
+    try {
+        const saved = localStorage.getItem('rashifal.makeShorts');
+        if (saved !== null && el('makeShorts')) el('makeShorts').checked = saved === '1';
+    } catch (e) {}
+    el('makeShorts')?.addEventListener('change', () => {
+        try { localStorage.setItem('rashifal.makeShorts', el('makeShorts').checked ? '1' : '0'); } catch (e) {}
+        if (items.length) renderShortPreviews(); // jhalak turant dikhao / chhupao
+    });
 
     const KEYS = ['mesh', 'vrishabh', 'mithun', 'kark', 'simha', 'kanya', 'tula', 'vrishchik', 'dhanu', 'makar', 'kumbh', 'meen'];
     const SYMBOLS = ['♈', '♉', '♊', '♋', '♌', '♍', '♎', '♏', '♐', '♑', '♒', '♓'];
@@ -191,6 +208,57 @@
         },
     };
     const tr = () => I18N[itemsLang] || I18N.gujarati;
+
+    // ---------- Card ke naye hisse: tatva ka rang, disha, mantra, chandra, shubh samay ----------
+    // Tatva (rashi index % 4): 0 Agni (Mesh/Simha/Dhanu), 1 Prithvi, 2 Vayu, 3 Jal
+    const ELEMENT_SKY = [
+        ['#2a0505', '#7a1a0a', '#b4410f'], // 🔥 Agni — laal/naarangi
+        ['#03140b', '#0f3d24', '#4d3b10'], // 🌿 Prithvi — hara/bhoora
+        ['#061833', '#1d4e7d', '#56658a'], // 🌬 Vayu — aasmani/chaandi
+        ['#020a24', '#0a3a5c', '#0b5b5d'], // 💧 Jal — neela/firozi
+    ];
+    // Rashi swami: 0 Mangal, 1 Shukra, 2 Budh, 3 Chandra, 4 Surya, 5 Guru, 6 Shani
+    const LORD = [0, 1, 2, 3, 4, 2, 1, 0, 5, 6, 6, 5];
+    const CARD_I18N = {
+        gujarati: {
+            day: 'આજનો દિવસ', dir: 'શુભ દિશા', dirs: ['પૂર્વ', 'દક્ષિણ', 'પશ્ચિમ', 'ઉત્તર'],
+            doL: '✅ આ કરો:', dontL: '❌ આ ન કરો:', upay: '🙏 ઉપાય:', mantra: '🕉 મંત્ર:',
+            samay: 'શુભ સમય', rahu: 'રાહુ કાળ',
+            moonIn: '🌙 આજે ચંદ્ર તમારી રાશિમાં', moon8: '🌙 આઠમો ચંદ્ર — આજે ધીરજ રાખો',
+            dmTop: 'આખું રાશિફળ જોઈએ છે?', dmBottom: '💬 કોમેન્ટમાં લખો “RASHI” 👉 DM માં મોકલીશું 📩',
+            chog: { amrit: 'અમૃત', labh: 'લાભ', shubh: 'શુભ' },
+            mantras: ['ૐ અં અંગારકાય નમઃ', 'ૐ શું શુક્રાય નમઃ', 'ૐ બું બુધાય નમઃ', 'ૐ સોં સોમાય નમઃ', 'ૐ ઘૃણિ સૂર્યાય નમઃ', 'ૐ બૃં બૃહસ્પતયે નમઃ', 'ૐ શં શનૈશ્ચરાય નમઃ'],
+        },
+        hindi: {
+            day: 'आज का दिन', dir: 'शुभ दिशा', dirs: ['पूर्व', 'दक्षिण', 'पश्चिम', 'उत्तर'],
+            doL: '✅ यह करें:', dontL: '❌ यह न करें:', upay: '🙏 उपाय:', mantra: '🕉 मंत्र:',
+            samay: 'शुभ समय', rahu: 'राहु काल',
+            moonIn: '🌙 आज चंद्र आपकी राशि में', moon8: '🌙 आठवाँ चंद्र — आज धैर्य रखें',
+            dmTop: 'पूरा राशिफल चाहिए?', dmBottom: '💬 कमेंट में लिखें “RASHI” 👉 DM में भेजेंगे 📩',
+            chog: { amrit: 'अमृत', labh: 'लाभ', shubh: 'शुभ' },
+            mantras: ['ॐ अं अंगारकाय नमः', 'ॐ शुं शुक्राय नमः', 'ॐ बुं बुधाय नमः', 'ॐ सों सोमाय नमः', 'ॐ घृणि सूर्याय नमः', 'ॐ बृं बृहस्पतये नमः', 'ॐ शं शनैश्चराय नमः'],
+        },
+        hinglish: {
+            day: 'Aaj ka din', dir: 'Lucky Disha', dirs: ['East', 'South', 'West', 'North'],
+            doL: '✅ Karo:', dontL: '❌ Na karo:', upay: '🙏 Upay:', mantra: '🕉 Mantra:',
+            samay: 'Shubh Samay', rahu: 'Rahu Kaal',
+            moonIn: '🌙 Aaj Chandra aapki rashi me', moon8: '🌙 8th Chandra — aaj dhairya rakho',
+            dmTop: 'Pura rashifal chahiye?', dmBottom: '💬 Comment karo “RASHI” 👉 DM me bhejenge 📩',
+            chog: { amrit: 'Amrit', labh: 'Labh', shubh: 'Shubh' },
+            mantras: ['Om Angarakaya Namah', 'Om Shukraya Namah', 'Om Budhaya Namah', 'Om Somaya Namah', 'Om Ghrini Suryaya Namah', 'Om Brihaspataye Namah', 'Om Shanaishcharaya Namah'],
+        },
+    };
+    const ct = () => CARD_I18N[itemsLang] || CARD_I18N.gujarati;
+    // Navu Varsh ka rashifal poore saal ka hai — us din ka chandra / choghadiya mat dikhao
+    const pj = () => (itemsFestival === 'navu_varsh' ? null : itemsPanchang);
+    /** 'in' = Chandra isi rashi me, '8' = Chandra is rashi se 8va (chandrashtam), warna null. */
+    function moonState(i) {
+        const p = pj();
+        if (!p || p.chandra === null || p.chandra === undefined) return null;
+        if (p.chandra === i) return 'in';
+        if ((i + 7) % 12 === p.chandra) return '8';
+        return null;
+    }
     const num = n => String(n ?? '').replace(/\d/g, d => tr().digits[d]);
     const dateLabel = () => {
         try {
@@ -238,7 +306,7 @@
     const headText = () => { const f = fest(); return f ? (f.head[itemsLang] || f.head.gujarati) : tr().head; };
 
     /** Festival card ki sajavat — upar genda-phool ka toran, neeche diyon ki line. */
-    function drawFestDeco(ctx) {
+    function drawFestDeco(ctx, bottomRow = true) {
         const f = fest();
         if (!f) return;
         // Toran: dori + genda (naarangi/peela) + hare patte
@@ -256,17 +324,20 @@
             ctx.fillStyle = 'rgba(0,0,0,0.18)';
             ctx.beginPath(); ctx.arc(x, 44, 7, 0, Math.PI * 2); ctx.fill();
         }
+        if (!bottomRow) { ctx.restore(); return; } // neeche banner hai
         // Neeche diyon / festival emoji ki line
         ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
         ctx.font = `64px ${K.STACK}`;
         ctx.globalAlpha = 1; ctx.shadowBlur = 0; ctx.shadowColor = 'transparent';
+        // Card ke neeche tak content hai — diye chhote aur bilkul neeche (1805 se neeche)
+        ctx.font = `54px ${K.STACK}`;
         for (let k = 0; k < 7; k++) {
             const x = 120 + k * 140;
-            const glow = ctx.createRadialGradient(x, 1815, 4, x, 1815, 70);
+            const glow = ctx.createRadialGradient(x, 1862, 4, x, 1862, 55);
             glow.addColorStop(0, 'rgba(253, 224, 71, 0.55)'); glow.addColorStop(1, 'rgba(253, 224, 71, 0)');
-            ctx.fillStyle = glow; ctx.beginPath(); ctx.arc(x, 1815, 70, 0, Math.PI * 2); ctx.fill();
+            ctx.fillStyle = glow; ctx.beginPath(); ctx.arc(x, 1862, 55, 0, Math.PI * 2); ctx.fill();
             ctx.fillStyle = '#ffffff';
-            ctx.fillText(k === 3 ? f.deco : '🪔', x, 1830);
+            ctx.fillText(k === 3 ? f.deco : '🪔', x, 1872);
         }
         ctx.restore();
     }
@@ -307,6 +378,7 @@
             itemsLang = el('language').value;
             itemsDate = el('date').value;
             itemsFestival = d.festival ?? (el('festival').value === 'auto' ? '' : el('festival').value);
+            itemsPanchang = d.panchang || null;
             dateExists = !!d.exists;
             el('progressBar').style.width = '80%';
             await K.ensureFonts();
@@ -327,7 +399,11 @@
 
     // ---------- Previews + edit ----------
     const FIELDS = [
-        ['prediction', 'Bhavishya', 4], ['love', 'Prem', 2], ['career', 'Kaam', 2], ['health', 'Swasthya', 2],
+        ['prediction', 'Bhavishya', 4], ['rating', 'Aaj ka din ★ (1-5)', 1],
+        ['love', 'Prem', 2], ['love_score', 'Prem meter (1-10)', 1],
+        ['career', 'Kaam', 2], ['career_score', 'Kaam meter (1-10)', 1],
+        ['health', 'Swasthya', 2], ['health_score', 'Swasthya meter (1-10)', 1],
+        ['do', '✅ Karo', 1], ['dont', '❌ Na karo', 1], ['upay', '🙏 Upay', 2],
         ['lucky_number', 'Shubh ank', 1], ['lucky_color', 'Shubh rang', 1],
     ];
 
@@ -404,9 +480,11 @@
         return () => (seed = (seed * 16807) % 2147483647) / 2147483647;
     }
 
-    function drawSky(ctx, idx) {
+    /** cy / rings: chakra ka centre aur do rings ki radius (card par chhota, Shorts me bada). */
+    function drawSky(ctx, idx, cy = CY, rings = [200, 245]) {
         const g = ctx.createLinearGradient(0, 0, 0, H);
-        const sky = fest()?.sky || ['#0b1033', '#2a1260', '#4a1450'];
+        // Tyohar ho to uska rang; warna rashi ke tatva ka rang (intro/end frames par purana jaamuni)
+        const sky = fest()?.sky || (idx < 12 ? ELEMENT_SKY[idx % 4] : ['#0b1033', '#2a1260', '#4a1450']);
         g.addColorStop(0, sky[0]);
         g.addColorStop(0.55, sky[1]);
         g.addColorStop(1, sky[2]);
@@ -425,80 +503,266 @@
         ctx.save();
         ctx.strokeStyle = 'rgba(250, 204, 21, 0.18)';
         ctx.lineWidth = 3;
-        [200, 245].forEach(rad => { ctx.beginPath(); ctx.arc(W / 2, CY, rad, 0, Math.PI * 2); ctx.stroke(); });
-        ctx.font = K.font(30, '400');
+        rings.forEach(rad => { ctx.beginPath(); ctx.arc(W / 2, cy, rad, 0, Math.PI * 2); ctx.stroke(); });
+        const mid = (rings[0] + rings[1]) / 2;
+        ctx.font = K.font(Math.round(mid / 7.4), '400');
         ctx.fillStyle = 'rgba(250, 204, 21, 0.35)';
         ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
         SYMBOLS.forEach((sym, i) => {
             const a = (i / 12) * Math.PI * 2 - Math.PI / 2;
-            ctx.fillText(sym + '︎', W / 2 + Math.cos(a) * 223, CY + Math.sin(a) * 223);
+            ctx.fillText(sym + '︎', W / 2 + Math.cos(a) * mid, cy + Math.sin(a) * mid);
         });
         ctx.restore();
     }
 
-    function drawRashi(c, item) {
-        const ctx = c.getContext('2d');
-        const L = tr();
-        const i = item._idx;
-        K.reset(ctx);
-        drawSky(ctx, i);
+    const CARD_CY = 385; // card par chakra ka centre (Shorts me CY)
 
-        // Upar: heading + date (festival ho to uski line, toran ke neeche)
-        ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-        ctx.fillStyle = '#facc15';
-        const hd = (fest() ? fest().deco + ' ' : '✨ ') + headText() + (fest() ? ' ' + fest().deco : ' ✨');
-        K.fitOneLine(ctx, hd, W - 120, 64, 40);
-        ctx.fillText(hd, W / 2, fest() ? 100 : 90);
-
-        drawDatePill(ctx, 175);
-        drawSymbol(ctx, SYMBOLS[i] + '︎');
-
-        // Rashi naam + akshar
-        ctx.fillStyle = '#ffffff';
-        ctx.font = K.font(88);
-        ctx.fillText(L.names[i], W / 2, 680);
-        if (L.letters) {
-            ctx.fillStyle = '#fcd34d';
-            K.fitOneLine(ctx, '(' + L.letters[i] + ')', W - 200, 40, 28, '400');
-            ctx.fillText('(' + L.letters[i] + ')', W / 2, 750);
-        }
-
-        // Bhavishya — kaanch jaisa panel
-        const px = 60, pw = W - 120, py = 800, ph = 690;
+    /** Kaanch jaisa panel. */
+    function glass(ctx, x, y, w, h) {
+        ctx.save();
         ctx.fillStyle = 'rgba(255,255,255,0.10)';
         ctx.strokeStyle = 'rgba(250, 204, 21, 0.45)';
         ctx.lineWidth = 3;
-        ctx.beginPath(); ctx.roundRect(px, py, pw, ph, 36); ctx.fill(); ctx.stroke();
+        ctx.beginPath(); ctx.roundRect(x, y, w, h, 30); ctx.fill(); ctx.stroke();
+        ctx.restore();
+    }
 
+    /** Meter ka score 1-10 → % (AI na de to din ki rating se). */
+    function scorePct(item, key) {
+        let v = parseInt(item[key], 10);
+        if (!v) v = ratingOf(item) * 2;
+        return Math.max(1, Math.min(10, v)) * 10;
+    }
+
+    /** "13:30" → "1:30" (bhasha ke ank me). */
+    const t12 = s => {
+        const [h, m] = String(s || '').split(':').map(Number);
+        return isNaN(h) || isNaN(m) ? '' : num(((h + 11) % 12 + 1) + ':' + String(m).padStart(2, '0'));
+    };
+
+    /** Tithi line — "કારતક સુદ ત્રીજ • રોહિણી નક્ષત્ર" (Hinglish me nahi). */
+    const tithiLine = () => K.str(pj()?.tithi);
+
+    /** ⏰ Shubh samay (din ka shubh choghadiya) • ⚠️ Rahu kaal */
+    function timeLine() {
+        const p = pj(), C = ct();
+        if (!p) return '';
+        const out = [];
+        if (p.shubh?.from) out.push('⏰ ' + C.samay + ' ' + t12(p.shubh.from) + '–' + t12(p.shubh.to) + (C.chog[p.shubh.name] ? ' (' + C.chog[p.shubh.name] + ')' : ''));
+        if (p.rahu?.from) out.push('⚠️ ' + C.rahu + ' ' + t12(p.rahu.from) + '–' + t12(p.rahu.to));
+        return out.join('   •   ');
+    }
+
+    function drawRashi(c, item) {
+        const ctx = c.getContext('2d');
+        const L = tr(), C = ct();
+        const i = item._idx;
+        const f = !!fest();
+        const cy = CARD_CY + (f ? 25 : 0); // tyohar par upar toran — sab thoda neeche
         const gold = '#fcd34d';
+        K.reset(ctx);
+        drawSky(ctx, i, cy, [128, 158]);
+
+        // Upar: heading + date + tithi
+        ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+        ctx.fillStyle = '#facc15';
+        const hd = (f ? fest().deco + ' ' : '✨ ') + headText() + (f ? ' ' + fest().deco : ' ✨');
+        K.fitOneLine(ctx, hd, W - 120, 58, 38);
+        ctx.fillText(hd, W / 2, f ? 100 : 68);
+        drawDatePill(ctx, f ? 165 : 138, 40, 70);
+
+        const tl = tithiLine();
+        if (tl) {
+            ctx.fillStyle = 'rgba(253, 230, 138, 0.92)';
+            K.fitOneLine(ctx, tl, W - 160, 32, 22, '400');
+            ctx.fillText(tl, W / 2, f ? 222 : 198);
+        }
+
+        drawSymbol(ctx, SYMBOLS[i] + '︎', 110, null, cy, 100);
+
+        // Rashi naam + akshar + ★ aaj ka din
+        ctx.fillStyle = '#ffffff';
+        ctx.font = K.font(76);
+        ctx.fillText(L.names[i], W / 2, cy + 208);
+        if (L.letters) {
+            ctx.fillStyle = gold;
+            K.fitOneLine(ctx, '(' + L.letters[i] + ')', W - 200, 32, 22, '400');
+            ctx.fillText('(' + L.letters[i] + ')', W / 2, cy + 262);
+        }
+        drawStars(ctx, ratingOf(item), cy + 322, 58, 68);
+        let y = cy + 362;
+
+        // 🌙 Chandra badge — ganit se (isi rashi me / 8va chandra)
+        const ms = moonState(i);
+        if (ms) {
+            const txt = ms === 'in' ? C.moonIn : C.moon8;
+            ctx.save();
+            const s = K.fitOneLine(ctx, txt, W - 260, 34, 24);
+            const bw = ctx.measureText(txt).width + 70, bh = 62;
+            ctx.fillStyle = ms === 'in' ? '#fde68a' : '#fdba74';
+            ctx.shadowColor = 'rgba(0,0,0,0.35)'; ctx.shadowBlur = 16;
+            ctx.beginPath(); ctx.roundRect(W / 2 - bw / 2, y + 6, bw, bh, bh / 2); ctx.fill();
+            ctx.shadowBlur = 0;
+            ctx.fillStyle = '#3b0764';
+            ctx.font = K.font(s);
+            ctx.textAlign = 'center';
+            ctx.fillText(txt, W / 2, y + 6 + bh / 2 + 2);
+            ctx.restore();
+            y += 82;
+        }
+
+        const px = 60, pw = W - 120;
+
+        // (A) Bhavishya
+        const pa = 210;
+        glass(ctx, px, y, pw, pa);
+        ctx.fillStyle = '#ffffff';
+        const la = K.fitRich(ctx, [[{ t: K.str(item.prediction), b: false }]], pw - 70, pa - 40, 44, 24);
+        K.drawRich(ctx, la, px + 35, y + (pa - la.height) / 2);
+        y += pa + 16;
+
+        // (B) Meters — ❤️ Prem / 💼 Kaam / 🩺 Swasthya: patti + % + ek line
+        const meters = [
+            ['❤️ ', L.love, 'love', '#f472b6'],
+            ['💼 ', L.career, 'career', '#facc15'],
+            ['🩺 ', L.health, 'health', '#4ade80'],
+        ];
+        const rowH = 86, pb = 30 + rowH * meters.length;
+        glass(ctx, px, y, pw, pb);
+        meters.forEach(([ico, label, key, color], k) => {
+            const ry = y + 22 + k * rowH;
+            const pct = scorePct(item, key + '_score');
+            const lbl = ico + String(label).replace(/[:：]\s*$/, '');
+            ctx.textAlign = 'left'; ctx.textBaseline = 'middle';
+            ctx.fillStyle = gold;
+            K.fitOneLine(ctx, lbl, 230, 34, 22);
+            ctx.fillText(lbl, px + 35, ry + 20);
+
+            const bx = 330, bw = 540, bh = 22;
+            ctx.fillStyle = 'rgba(255,255,255,0.18)';
+            ctx.beginPath(); ctx.roundRect(bx, ry + 20 - bh / 2, bw, bh, bh / 2); ctx.fill();
+            const grad = ctx.createLinearGradient(bx, 0, bx + bw, 0);
+            grad.addColorStop(0, color + '99'); grad.addColorStop(1, color);
+            ctx.fillStyle = grad;
+            ctx.beginPath(); ctx.roundRect(bx, ry + 20 - bh / 2, Math.max(bh, bw * pct / 100), bh, bh / 2); ctx.fill();
+
+            ctx.textAlign = 'right';
+            ctx.fillStyle = '#ffffff';
+            ctx.font = K.font(34);
+            ctx.fillText(num(pct) + '%', px + pw - 30, ry + 22);
+
+            const hint = K.str(item[key]).trim();
+            if (hint) {
+                ctx.textAlign = 'left';
+                ctx.fillStyle = 'rgba(255,255,255,0.88)';
+                K.fitOneLine(ctx, hint, pw - 70, 30, 18, '400');
+                ctx.fillText(hint, px + 35, ry + 60);
+            }
+        });
+        ctx.textAlign = 'center';
+        y += pb + 16;
+
+        // (C) Karo / Na karo / Upay / Mantra
+        const pc = 230;
+        glass(ctx, px, y, pw, pc);
         const paras = [
-            [{ t: K.str(item.prediction), b: false }],
-            [{ t: '❤️ ' + L.love, b: true, c: gold }, { t: K.str(item.love), b: false }],
-            [{ t: '💼 ' + L.career, b: true, c: gold }, { t: K.str(item.career), b: false }],
-            [{ t: '🩺 ' + L.health, b: true, c: gold }, { t: K.str(item.health), b: false }],
-        ].filter(p => p.some(s => !s.b && s.t.trim()));
+            [{ t: C.doL, b: true, c: '#86efac' }, { t: K.str(item.do), b: false }],
+            [{ t: C.dontL, b: true, c: '#fca5a5' }, { t: K.str(item.dont), b: false }],
+            [{ t: C.upay, b: true, c: gold }, { t: K.str(item.upay), b: false }],
+            [{ t: C.mantra, b: true, c: gold }, { t: C.mantras[LORD[i]], b: true }],
+        ].filter(p => p.some(s => !s.c && String(s.t).trim()));
         ctx.fillStyle = '#ffffff';
-        const layout = K.fitRich(ctx, paras, pw - 80, ph - 70, 54, 28, { paraGap: 0.55 });
-        K.drawRich(ctx, layout, px + 40, py + (ph - layout.height) / 2);
+        const lc = K.fitRich(ctx, paras, pw - 70, pc - 40, 36, 20, { paraGap: 0.3 });
+        K.drawRich(ctx, lc, px + 35, y + (pc - lc.height) / 2);
+        y += pc + 18;
 
-        drawLuckyPills(ctx, item, 1580);
+        // Shubh ank / rang / disha
+        drawLuckyChips(ctx, item, y + 38);
+        y += 94;
 
-        // CTA
-        ctx.fillStyle = '#ffffff';
-        K.fitOneLine(ctx, L.cta, W - 120, 46, 30);
-        ctx.fillText(L.cta, W / 2, 1700);
+        // ⏰ Shubh samay • ⚠️ Rahu kaal
+        const tline = timeLine();
+        if (tline) {
+            ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+            ctx.fillStyle = '#ffffff';
+            K.fitOneLine(ctx, tline, W - 100, 32, 20);
+            ctx.fillText(tline, W / 2, y + 22);
+            y += 50;
+        }
 
-        drawFestDeco(ctx); // sabse upar ki layer — diye fike na dikhen
+        // 📩 Neeche banner: "comment me RASHI likho → DM" (Instagram rashi auto-reply + DM isi se chalta hai)
+        drawDmBanner(ctx, f);
+
+        drawFestDeco(ctx, false); // toran upar; neeche diyon ki jagah banner (banner ke kono par diye)
+    }
+
+    /** Card ke bilkul neeche sunehra banner — 2 line: sawaal + "comment RASHI → DM". */
+    function drawDmBanner(ctx, festive) {
+        const C = ct();
+        const bw = W - 100, bh = 104, bx = 50, by = H - 30 - bh;
+        ctx.save();
+        ctx.shadowColor = 'rgba(0,0,0,0.45)'; ctx.shadowBlur = 22;
+        const g = ctx.createLinearGradient(bx, 0, bx + bw, 0);
+        g.addColorStop(0, '#fbbf24'); g.addColorStop(0.5, '#fde68a'); g.addColorStop(1, '#fbbf24');
+        ctx.fillStyle = g;
+        ctx.beginPath(); ctx.roundRect(bx, by, bw, bh, 26); ctx.fill();
+        ctx.shadowBlur = 0;
+        ctx.strokeStyle = '#ffffff'; ctx.lineWidth = 3; ctx.stroke();
+
+        const side = festive ? 70 : 0; // tyohar par kono par diye
+        if (festive) {
+            ctx.font = `46px ${EMOJI}`;
+            ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+            ctx.fillText('🪔', bx + 42, by + bh / 2 + 2);
+            ctx.fillText('🪔', bx + bw - 42, by + bh / 2 + 2);
+        }
+        ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+        ctx.fillStyle = '#7c2d12';
+        K.fitOneLine(ctx, C.dmTop, bw - 60 - side * 2, 28, 18, '400');
+        ctx.fillText(C.dmTop, W / 2, by + 30);
+        ctx.fillStyle = '#3b0764';
+        K.fitOneLine(ctx, C.dmBottom, bw - 50 - side * 2, 36, 20);
+        ctx.fillText(C.dmBottom, W / 2, by + 70);
+        ctx.restore();
+    }
+
+    /** Shubh ank • Shubh rang (rang ke gole ke saath) • Shubh disha (tatva se) — 3 chhoti pills. */
+    function drawLuckyChips(ctx, item, cy) {
+        const L = tr(), C = ct();
+        const chips = [
+            [L.num + ': ' + num(item.lucky_number), null],
+            [L.color + ': ' + K.str(item.lucky_color), colorHex(item.lucky_color)],
+            [C.dir + ': ' + C.dirs[item._idx % 4], null],
+        ];
+        const w = 310, h = 76, gap = 15, x0 = W / 2 - (w * 3 + gap * 2) / 2;
+        chips.forEach(([t, swatch], k) => {
+            const cx = x0 + k * (w + gap) + w / 2;
+            ctx.fillStyle = 'rgba(250, 204, 21, 0.95)';
+            ctx.beginPath(); ctx.roundRect(cx - w / 2, cy - h / 2, w, h, h / 2); ctx.fill();
+            ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+            const dot = swatch ? 18 : 0, dg = swatch ? 10 : 0;
+            const size = K.fitOneLine(ctx, t, w - 36 - dot * 2 - dg, 30, 18);
+            const tw = ctx.measureText(t).width;
+            const left = cx - (dot * 2 + dg + tw) / 2;
+            if (swatch) {
+                ctx.fillStyle = swatch;
+                ctx.strokeStyle = '#ffffff'; ctx.lineWidth = 4;
+                ctx.beginPath(); ctx.arc(left + dot, cy, dot, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
+            }
+            ctx.fillStyle = '#3b0764';
+            ctx.font = K.font(size);
+            ctx.fillText(t, left + dot * 2 + dg + tw / 2, cy + 2);
+        });
     }
 
     /** Vaar + taarikh — gold border wali pill me, vaar gold, taarikh safed. */
-    function drawDatePill(ctx, py2) {
+    function drawDatePill(ctx, py2, size = 46, ph2 = 82) {
         const [day, date] = dateParts();
         const sep = '  •  ';
         ctx.textBaseline = 'middle';
-        const ds = K.fitOneLine(ctx, day + sep + date, W - 220, 46, 30);
+        const ds = K.fitOneLine(ctx, day + sep + date, W - 220, size, 26);
         const dw = ctx.measureText(day).width, sw = ctx.measureText(sep).width, tw = ctx.measureText(date).width;
-        const pw2 = dw + sw + tw + 90, ph2 = 82;
+        const pw2 = dw + sw + tw + 90;
         ctx.fillStyle = 'rgba(11, 16, 51, 0.85)';
         ctx.strokeStyle = '#facc15';
         ctx.lineWidth = 3;
@@ -513,20 +777,20 @@
     }
 
     /** Beech ka sunehra gola, andar chinh (rashi symbol / 🍀 / 12). */
-    function drawSymbol(ctx, glyph, size = 160, font = null) {
+    function drawSymbol(ctx, glyph, size = 160, font = null, cy = CY, r = 150) {
         ctx.save();
         ctx.shadowColor = 'rgba(250, 204, 21, 0.7)';
-        ctx.shadowBlur = 50;
-        const cg = ctx.createRadialGradient(W / 2, CY, 20, W / 2, CY, 160);
+        ctx.shadowBlur = r / 3;
+        const cg = ctx.createRadialGradient(W / 2, cy, r / 7, W / 2, cy, r + 10);
         cg.addColorStop(0, '#fde68a');
         cg.addColorStop(1, '#d97706');
         ctx.fillStyle = cg;
-        ctx.beginPath(); ctx.arc(W / 2, CY, 150, 0, Math.PI * 2); ctx.fill();
+        ctx.beginPath(); ctx.arc(W / 2, cy, r, 0, Math.PI * 2); ctx.fill();
         ctx.restore();
         ctx.fillStyle = '#3b0764';
         ctx.font = font || `${size}px "Segoe UI Symbol", "Noto Sans Symbols 2", ${K.STACK}`;
         ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-        ctx.fillText(glyph, W / 2, CY + 8);
+        ctx.fillText(glyph, W / 2, cy + r / 19);
     }
 
     /** Shubh ank + shubh rang (rang ke gole ke saath) — do pills, cy par. */
@@ -618,11 +882,11 @@
         ctx.restore();
     }
 
-    function drawStars(ctx, n, cy) {
+    function drawStars(ctx, n, cy, size = 86, step = 96) {
         ctx.save();
-        ctx.font = `86px "Segoe UI Symbol", ${K.STACK}`;
+        ctx.font = `${size}px "Segoe UI Symbol", ${K.STACK}`;
         ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-        const step = 96, x0 = W / 2 - step * 2;
+        const x0 = W / 2 - step * 2;
         for (let k = 0; k < 5; k++) {
             ctx.fillStyle = k < n ? '#facc15' : 'rgba(255,255,255,0.22)';
             ctx.fillText('★', x0 + k * step, cy);
@@ -812,6 +1076,7 @@
     function renderShortPreviews() {
         const wrap = el('shortPreview');
         if (!wrap) return;
+        if (!wantShorts()) { wrap.classList.add('hidden'); return; }
         wrap.classList.remove('hidden');
         const rows = wrap.querySelector('.rows');
         rows.innerHTML = '';
@@ -839,6 +1104,8 @@
             L.love + ' ' + K.str(item.love),
             L.career + ' ' + K.str(item.career),
             L.health + ' ' + K.str(item.health),
+            K.str(item.do) ? ct().doL.replace(/^\S+\s/, '') + ' ' + K.str(item.do) : '',
+            K.str(item.upay) ? ct().upay.replace(/^\S+\s/, '') + ' ' + K.str(item.upay) : '',
         ].map(s => s.trim()).filter(Boolean).join('. ');
     }
 
@@ -863,14 +1130,17 @@
             return {
                 order: item._idx + 1,
                 text: voiceText(item),
-                caption: K.str(item.caption) || (headText() + ' — ' + tr().names[item._idx] + ' ' + SYMBOLS[item._idx]),
+                // Caption ke ant me bhi "comment RASHI → DM" (card wala banner)
+                caption: (K.str(item.caption) || (headText() + ' — ' + tr().names[item._idx] + ' ' + SYMBOLS[item._idx]))
+                    + '\n\n' + ct().dmTop + ' ' + ct().dmBottom,
                 hashtags: K.str(item.hashtags),
                 image: off.toDataURL('image/webp', 0.92),
             };
         });
         const saved = await postJson(SAVE_URL, { date: itemsDate, language: itemsLang, cards: cardsToSave });
 
-        // YouTube ke 2 Shorts — cards save ho chuke, Shorts fail ho to saaf batao
+        // YouTube ke 2 Shorts (checkbox tick ho to) — cards save ho chuke, Shorts fail ho to saaf batao
+        if (!wantShorts()) return saved;
         try {
             await saveShorts();
         } catch (e) {
@@ -929,6 +1199,7 @@
                 itemsLang = lang;
                 itemsDate = day;
                 itemsFestival = d.festival || ''; // tyohar wala din apne aap festival theme me
+                itemsPanchang = d.panchang || null;
                 el('progressText').textContent = `Din ${i + 1}/7 (${day}) — save ho raha hai…`;
                 await saveCurrent();
                 done.push(day);

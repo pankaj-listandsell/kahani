@@ -4,7 +4,13 @@
 @section('content')
 <div class="flex items-center justify-between mb-6 gap-3 flex-wrap">
     <h2 class="text-xl font-bold">My Stories</h2>
-    <div class="flex gap-2">
+    <div class="flex gap-2 flex-wrap">
+        @if (Route::has('admin.stories.words'))
+            <a href="{{ route('admin.stories.words') }}"
+               class="border border-amber-300 hover:bg-amber-50 text-amber-700 text-sm font-medium rounded-lg px-4 py-2">
+                🚫 Shabd List
+            </a>
+        @endif
         <button type="button" id="importToggle"
                 class="border border-slate-300 hover:bg-slate-50 text-slate-700 text-sm font-medium rounded-lg px-4 py-2">
             🔗 Import from URL

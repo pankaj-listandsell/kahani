@@ -195,13 +195,14 @@ class StoryAiService
     {
         if (filled(config('services.gemini.key'))) {
             try {
-                return $this->callGemini($prompt);
+                return \App\Support\WordFilter::clean($this->callGemini($prompt));
             } catch (\Throwable $e) {
                 Log::warning('Story AI: Gemini fail, Pollinations par fallback', ['error' => $e->getMessage()]);
             }
         }
 
-        return $this->callPollinations($prompt);
+        // 🚫 config/word_filter.php ke shabd badlo
+        return \App\Support\WordFilter::clean($this->callPollinations($prompt));
     }
 
     protected function callGemini(string $prompt): string

@@ -183,6 +183,9 @@ class PanchangService
             'yog'       => self::YOGA[$lang][$yi],
             'karan'     => self::KARANA[$lang][$ki],
             'chandra'   => self::RASHI[$lang][$ri],
+            'chandra_idx'    => $ri, // 0 = Mesh … 11 = Meen (Rashifal card ka Chandra badge)
+            'tithi_name'     => $tName($ti),
+            'nakshatra_name' => self::NAKSHATRA[$lang][$ni],
             'maas'      => $maas,
             'samvat'    => ($lang === 'hindi' ? 'विक्रम संवत ' : 'વિક્રમ સંવત ') . $this->digits((string) $samvat, $lang),
             'is_amas'   => $ti === 29,

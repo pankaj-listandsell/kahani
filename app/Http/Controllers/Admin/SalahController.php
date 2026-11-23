@@ -76,13 +76,21 @@ class SalahController extends Controller
         $data = $request->validate([
             'count'    => ['required', 'integer', 'min:1', 'max:10'],
             'language' => ['required', 'in:gujarati,hindi,hinglish'],
-            'category' => ['nullable', 'string', 'max:300'],
-            'topic'    => ['nullable', 'string', 'max:200'],
-            'style'    => ['nullable', 'in:normal,confession,kahani'],
+            'category'     => ['nullable', 'string', 'max:300'],
+            // 🏷️ Kai category ek saath (checkbox dropdown)
+            'categories'   => ['nullable', 'array', 'max:40'],
+            'categories.*' => ['nullable', 'string', 'max:300'],
+            'topic'        => ['nullable', 'string', 'max:200'],
+            'style'        => ['nullable', 'in:normal,confession,kahani'],
         ]);
 
+        $cats = array_values(array_filter(array_map('trim', (array) ($data['categories'] ?? []))));
+        if (! $cats && filled($data['category'] ?? null)) {
+            $cats = [trim($data['category'])];
+        }
+
         // Category khaali ho to topic zaroori — warna AI ko pata hi nahi kis par likhna hai
-        if (blank($data['category'] ?? null) && blank($data['topic'] ?? null)) {
+        if (! $cats && blank($data['topic'] ?? null)) {
             return response()->json(['ok' => false, 'error' => 'Category khaali hai — to Topic lakho (jem ke: "college ma pehlo prem").'], 422);
         }
 
@@ -90,7 +98,7 @@ class SalahController extends Controller
             $items = $ai->generateSalah(
                 (int) $data['count'],
                 $data['language'],
-                trim((string) ($data['category'] ?? '')),
+                $this->categoryPlan($cats, (int) $data['count']),
                 trim((string) ($data['topic'] ?? '')),
                 $this->forcedStyle ?? ($data['style'] ?? 'normal')
             );
@@ -154,6 +162,25 @@ class SalahController extends Controller
         } catch (\Throwable $e) {
             return response()->json(['ok' => false, 'error' => $e->getMessage()], 500);
         }
+    }
+
+    /**
+     * Ek category → wahi. Kai category → har card ko alag category (random kram me, card zyada hon
+     * to dobara ghoomti hai): "Card 1: X; Card 2: Y …" — AI prompt ki "Category:" line me jaata hai.
+     */
+    protected function categoryPlan(array $cats, int $count): string
+    {
+        if (count($cats) <= 1) {
+            return $cats[0] ?? '';
+        }
+
+        shuffle($cats);
+        $plan = [];
+        for ($i = 0; $i < max(1, $count); $i++) {
+            $plan[] = 'Card ' . ($i + 1) . ': ' . $cats[$i % count($cats)];
+        }
+
+        return 'Different category for each card — use exactly this one per card, in this order: ' . implode('; ', $plan) . '.';
     }
 
     protected function decodeDataUrl(string $dataUrl): ?array

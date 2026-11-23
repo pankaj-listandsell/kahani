@@ -10,6 +10,14 @@
     </div>
     <div class="flex flex-col gap-2 text-sm shrink-0">
         <a href="{{ route('admin.stories.edit', $story) }}" class="text-center px-4 py-2 border border-slate-300 rounded-lg hover:bg-slate-50">Edit Story</a>
+        {{-- Route na mile (routes/web.php upload na hui / route cache) to page crash na ho — button bas na dikhe --}}
+        @if (Route::has('admin.stories.clean_words'))
+            <form method="POST" action="{{ route('admin.stories.clean_words', $story) }}"
+                  onsubmit="this.querySelector('button').disabled=true; this.querySelector('button').textContent='⏳ AI shabd tapasi rahyu che…'">
+                @csrf
+                <button class="w-full px-4 py-2 border border-amber-300 text-amber-700 rounded-lg hover:bg-amber-50">🚫 Ashleel shabd badlo</button>
+            </form>
+        @endif
         <form method="POST" action="{{ route('admin.stories.destroy', $story) }}" onsubmit="return confirm('This will delete the whole story and all its parts. Are you sure?')">
             @csrf @method('DELETE')
             <button class="w-full px-4 py-2 border border-red-300 text-red-600 rounded-lg hover:bg-red-50">Delete Story</button>

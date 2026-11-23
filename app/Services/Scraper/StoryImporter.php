@@ -92,9 +92,12 @@ class StoryImporter
     /** ScrapedStory → Story + Part (draft). */
     private function save(ScrapedStory $data, int $userId): Story
     {
+        // 🚫 Doosri website ki kahani — list + AI se ashleel shabd badlo
+        [$title, $body] = \App\Support\WordFilter::cleanArray([(string) $data->title, (string) $data->body]);
+
         $story = Story::create([
             'user_id'    => $userId,
-            'title'      => $data->title,
+            'title'      => mb_substr($title, 0, 255),
             'source_url' => $data->sourceUrl,
             'type'       => 'story',
             'language'   => $data->language,
@@ -103,7 +106,7 @@ class StoryImporter
 
         $story->parts()->create([
             'sort_order' => 1,
-            'body'       => $data->body,
+            'body'       => $body,
         ]);
 
         return $story;

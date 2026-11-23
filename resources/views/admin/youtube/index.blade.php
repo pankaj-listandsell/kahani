@@ -276,10 +276,36 @@
                             <p class="font-medium">{{ $story->title }} <span class="text-xs text-slate-400">({{ ucfirst($story->status) }})</span></p>
                             @foreach ($story->parts as $part)
                                 @if ($part->cards->isNotEmpty())
-                                    <div class="mt-2 border border-slate-200 rounded-lg p-3">
+                                    @php
+                                        // 📺 Rashifal Short: poora part (intro + rashi + end frames) = EK video
+                                        $isRashiShort = $story->type === 'rashifal_short' && Route::has('admin.rashifal.short.upload');
+                                        $firstCard = $part->cards->sortBy('sort_order')->first();
+                                    @endphp
+                                    <div class="mt-2 border {{ $isRashiShort ? 'border-red-200 bg-red-50/30' : 'border-slate-200' }} rounded-lg p-3">
                                         <div class="flex items-center justify-between mb-2 gap-2 flex-wrap">
-                                            <span class="text-sm font-medium">Part {{ $part->sort_order }} · {{ $part->cards->count() }} cards</span>
+                                            <span class="text-sm font-medium">
+                                                @if ($isRashiShort)
+                                                    {{ str_contains((string) $part->body, 'top3') ? '🍀 Top 3 Lucky Rashi' : '🔯 12 Rashi' }} — 1 Short · {{ $part->cards->count() }} frames
+                                                    @if ($firstCard?->yt_status === 'posted')
+                                                        <a href="https://youtube.com/watch?v={{ $firstCard->yt_video_id }}" target="_blank" class="ml-1 text-xs text-green-700 font-semibold hover:underline">✅ YouTube par che ↗</a>
+                                                    @elseif ($firstCard?->yt_status === 'failed')
+                                                        <span class="ml-1 text-xs text-red-600 font-semibold" title="{{ $firstCard->yt_error }}">❌ Fail: {{ Str::limit($firstCard->yt_error, 60) }}</span>
+                                                    @endif
+                                                @else
+                                                    Part {{ $part->sort_order }} · {{ $part->cards->count() }} cards
+                                                @endif
+                                            </span>
                                             <div class="flex gap-2">
+                                                @if ($isRashiShort)
+                                                    <a href="{{ route('admin.rashifal.show', $story) }}" class="text-xs border border-slate-300 bg-white hover:bg-slate-50 rounded-lg px-3 py-1.5" title="Upload pehla video jovo">▶ Video jovo</a>
+                                                    @if ($firstCard?->yt_status !== 'posted')
+                                                        <form method="POST" action="{{ route('admin.rashifal.short.upload', $part) }}" class="yt-form"
+                                                              onsubmit="return confirm('Aa aakhu Short ({{ $part->cards->count() }} frames) hamna YouTube par upload karie? Video banta 1-3 minute lagse.')">
+                                                            @csrf
+                                                            <button @disabled(!$configured) class="text-xs font-semibold bg-red-600 hover:bg-red-700 text-white rounded-lg px-3 py-1.5 disabled:opacity-40">⬆ Aakhu Short upload karo</button>
+                                                        </form>
+                                                    @endif
+                                                @endif
                                                 <form method="POST" action="{{ route('admin.youtube.part.captions', $part) }}" class="yt-form" onsubmit="return confirm('Is part ke sabhi cards ke liye AI caption banayein?')">
                                                     @csrf
                                                     <button class="text-xs bg-sky-600 hover:bg-sky-700 text-white rounded-lg px-3 py-1.5">✨ All Captions</button>
@@ -301,10 +327,12 @@
                                                         @endif
                                                     @else
                                                         <img src="{{ asset('storage/' . $card->image_path) }}" class="h-28 w-28 object-cover rounded-lg border border-slate-200" alt="">
-                                                        <form method="POST" action="{{ route('admin.youtube.card.short', $card) }}" class="yt-form mt-1">
-                                                            @csrf
-                                                            <button @disabled(!$configured) class="w-full text-[11px] bg-red-50 text-red-700 border border-red-200 rounded px-2 py-0.5 hover:bg-red-100 disabled:opacity-40">▶ Short</button>
-                                                        </form>
+                                                        @unless ($isRashiShort) {{-- Rashifal Short me ek card = video ka ek frame; upload upar wale button se --}}
+                                                            <form method="POST" action="{{ route('admin.youtube.card.short', $card) }}" class="yt-form mt-1">
+                                                                @csrf
+                                                                <button @disabled(!$configured) class="w-full text-[11px] bg-red-50 text-red-700 border border-red-200 rounded px-2 py-0.5 hover:bg-red-100 disabled:opacity-40">▶ Short</button>
+                                                            </form>
+                                                        @endunless
                                                         <button type="button"
                                                             class="yt-caption-btn mt-1 w-full text-[11px] border rounded px-2 py-0.5 hover:bg-slate-50 {{ filled($card->yt_caption) ? 'bg-amber-50 text-amber-700 border-amber-200' : 'text-slate-500 border-slate-200' }}"
                                                             data-get="{{ route('admin.youtube.card.caption.get', $card) }}"

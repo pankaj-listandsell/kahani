@@ -122,20 +122,24 @@ How to make it feel REAL:
 - Show feelings through small moments and dialogue: nervous hands, a long glance, heartbeat, hesitation, a whispered line.
 - Clear arc: hook in the first line → build-up of attraction/tension → the key moment → an ending (sweet, painful or a twist) that stays with the reader.
 
-Make it BOLD and SENSUAL (the most daring version that is still non-explicit):
-- Build strong desire and tension: lingering eye contact, quickened breath, racing heartbeat, the closeness of two bodies in a small space, a hand that stays a moment too long, a whisper near the ear, the silence before the first move.
-- The kiss / embrace is THE moment — write it slowly with emotion and atmosphere (rain, dim light, empty office, locked door, breath, hesitation then surrender).
+Make it BOLD, ROMANTIC and full of MOOD (the most sensual version that is still non-explicit):
+- Describe how she looks, sensually but tastefully: her figure (curves, slim waist, the way the saree / kurti / wet dupatta drapes her body), long open hair, kajal eyes, soft lips, glowing skin, her perfume, her walk, the bangles and anklets. One or two lines about him too (broad shoulders, his cologne, strong hands).
+- Build desire slowly: lingering eye contact, quickened breath, racing heartbeat, fingers brushing, a hand resting on her waist a moment too long, a whisper near the ear, goosebumps, the silence before the first move.
+- The intimate scene is THE moment — write it slowly, step by step, with sensory detail (breath, warmth, touch, scent, sound of rain, dim light):
+  first a soft kiss on the forehead or cheek → a long, deep kiss on the lips → kisses on her neck, behind the ear, on the shoulder → his hands on her waist, back and hair, her fingers in his hair, bodies pressed close in an embrace → her shy smile, closed eyes, trembling voice.
+- Use warm, mood-setting words in the output language (e.g. Gujarati: "ધબકારા", "શ્વાસ", "સ્પર્શ", "ગરમાવો", "ધ્રુજારી", "નજીક", "આલિંગન", "હોઠ", "ગરદન" …).
 - Title and first line must be a daring, curiosity-driven hook (forbidden, secret, "that night…").
 - End right at the peak with a strong cut-away ("darwajo bandh thayo…", "light bujhai gai…", "e raate badhi maryadao tooti gai — baaki fakt e banne jaane chhe") and then the next-morning aftermath (a secret smile, guilt, a changed relationship).
 
 Hard limits (strict — posted on Instagram/Facebook):
 - All characters are adults (22+). Consent is clear and mutual.
-- Never describe sexual acts, nudity or private body parts — not directly, not with euphemisms, slang or coded words. The intimacy itself always happens off-page.
+- Kisses on lips / neck / shoulder and touching the waist, back, hair and hands are fine. Never describe sexual acts, nudity, undressing, breasts/nipples or private body parts — not directly, not with euphemisms, slang or coded words. Everything beyond the kiss and embrace happens off-page (cut-away).
 - No vulgar words. Affairs can be daring but show honest feelings (temptation, guilt, consequence).
 
 Fields (all text in {$langPrompt}):
-- `title`: 6-14 word curiosity hook headline (no quotes).
-- `story`: the full story, 200-260 words, 4-6 short paragraphs separated by \\n\\n, with 1-3 lines of dialogue.
+- `title`: 6-10 word curiosity hook headline (no quotes) — short, it must fit in 2 lines.
+- `story`: the full story, 185-205 words (count them — it must fill exactly one card at a large font; never more than 210), 5-6 short paragraphs separated by \\n\\n, with 2-3 lines of dialogue (whispered, teasing, shy). Keep every sentence rich — fewer words, more mood.
+- Write every word only in the output language's own script — never mix letters from another script inside a word.
 - `asker`: "— first name, city" style signature of the narrator or the couple.
 - `takeaway`: one closing line (12-22 words) — a feeling, lesson or twist.
 - `cta_question`: question for comments, 10-20 words.
@@ -145,10 +149,19 @@ Fields (all text in {$langPrompt}):
 Return ONLY a raw JSON array of objects with keys: `title`, `story`, `asker`, `takeaway`, `cta_question`, `caption`, `hashtags`.
 PROMPT;
 
-        return array_map(
-            fn ($item) => is_array($item) ? $item + ['style' => 'kahani'] : $item,
-            $this->callGeminiJson($prompt, 90)
-        );
+        $items = $this->callGeminiJson($prompt, 90);
+
+        // AI kabhi Gujarati shabd ke beech doosri lipi ke akshar daal deta hai ("દુ७७ો", "ક॔ઁઈ") — card par
+        // ajeeb dikhte hain. Gujarati kahani me Devanagari / Hebrew / Arabic wagairah ke akshar hatao.
+        if (str_contains($langPrompt, 'Gujarati')) {
+            array_walk_recursive($items, function (&$v) {
+                if (is_string($v)) {
+                    $v = preg_replace('/[\p{Devanagari}\p{Hebrew}\p{Arabic}\p{Bengali}\p{Gurmukhi}\p{Tamil}\p{Telugu}]+/u', '', $v) ?? $v;
+                }
+            });
+        }
+
+        return array_map(fn ($item) => is_array($item) ? $item + ['style' => 'kahani'] : $item, $items);
     }
 
     /**
@@ -168,13 +181,22 @@ PROMPT;
         'dev_diwali'   => ['Dev Diwali (Kartik Purnima)', 'Weave Dev Diwali / Kartik Purnima naturally (diyas, holy dip, charity, devotion) into each sign.'],
     ];
 
-    public function generateRashifal(string $date, string $language = 'gujarati', string $festival = ''): array
+    public function generateRashifal(string $date, string $language = 'gujarati', string $festival = '', ?int $moonIdx = null): array
     {
         $langPrompt = $this->langPrompt($language);
         $day = \Illuminate\Support\Carbon::parse($date)->locale('en')->isoFormat('dddd, D MMMM YYYY');
 
         [$festName, $festRule] = self::RASHIFAL_FESTIVALS[$festival] ?? [null, null];
         $festLine = $festName ? "\nFESTIVAL SPECIAL: {$day} is {$festName}. {$festRule}\n" : '';
+
+        // 🌙 Chandra gochar (ganit se) — card par badge bhi isi se lagta hai, bhavishya usse mel khaye
+        $signs = ['Mesh', 'Vrishabh', 'Mithun', 'Kark', 'Simha', 'Kanya', 'Tula', 'Vrishchik', 'Dhanu', 'Makar', 'Kumbh', 'Meen'];
+        if ($moonIdx !== null && $festival !== 'navu_varsh' && isset($signs[$moonIdx])) {
+            $moon  = $signs[$moonIdx];
+            $eighth = $signs[($moonIdx + 5) % 12]; // jiske liye Chandra 8th bhaav me hai
+            $festLine .= "\nASTRO FACT: Today the Moon transits {$moon}. For {$moon}: Moon in their own sign — emotions and intuition are strong, mention it gently. "
+                . "For {$eighth}: Chandrashtama (Moon in 8th) — advise patience and avoiding big decisions today, in a calm, non-scary way; its rating is at most 3.\n";
+        }
 
         $prompt = <<<PROMPT
 You are a popular, positive daily horoscope (rashifal) writer for Gujarati/Hindi Instagram audiences.
@@ -193,8 +215,11 @@ Rules:
 - `hashtags`: 6-10 hashtags (include the rashi name and #rashifal).
 - `short`: ONE punchy line for a YouTube Short, 8-14 words, the day's main message (no emoji).
 - `rating`: how good the day is, integer 1-5. Vary it honestly across signs: exactly 3 signs get 5, the rest 2-4 (never 1).
+- `love_score`, `career_score`, `health_score`: integers 3-10, matching the tone of `love`/`career`/`health` and the rating (shown as % meters).
+- `do`: one thing to DO today, 4-9 words. `dont`: one thing to AVOID today, 4-9 words.
+- `upay`: one FREE, simple remedy, 5-12 words (a short prayer, feeding animals/birds, small charity, wearing a colour). Never anything to buy, gemstones or paid puja.
 
-Return ONLY a raw JSON array of 12 objects with keys: `rashi`, `prediction`, `love`, `career`, `health`, `lucky_number`, `lucky_color`, `caption`, `hashtags`, `short`, `rating`.
+Return ONLY a raw JSON array of 12 objects with keys: `rashi`, `prediction`, `love`, `career`, `health`, `lucky_number`, `lucky_color`, `caption`, `hashtags`, `short`, `rating`, `love_score`, `career_score`, `health_score`, `do`, `dont`, `upay`.
 PROMPT;
 
         return $this->callGeminiJson($prompt, 120);
@@ -560,6 +585,7 @@ PROMPT;
             throw new \RuntimeException('Invalid JSON response from AI.');
         }
 
-        return $data;
+        // 🚫 Ashleel shabd har text field me badlo (list + AI, poore jawab ke liye ek AI call)
+        return \App\Support\WordFilter::cleanArray($data);
     }
 }

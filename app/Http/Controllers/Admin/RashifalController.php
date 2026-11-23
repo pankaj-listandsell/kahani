@@ -89,12 +89,42 @@ class RashifalController extends Controller
                 $festival = app(\App\Services\PanchangService::class)->festival($data['date']);
             }
 
-            $items = $ai->generateRashifal($data['date'], $data['language'], $festival);
+            $panchang = $this->panchangFor($data['date'], $data['language']);
+            $items = $ai->generateRashifal($data['date'], $data['language'], $festival, $panchang['chandra']);
 
-            return response()->json(['ok' => true, 'items' => $items, 'exists' => $exists, 'festival' => $festival]);
+            return response()->json(['ok' => true, 'items' => $items, 'exists' => $exists, 'festival' => $festival, 'panchang' => $panchang]);
         } catch (\Throwable $e) {
             return response()->json(['ok' => false, 'error' => $e->getMessage()], 422);
         }
+    }
+
+    /**
+     * Card ke liye ganit wala data (Gujarat / Ahmedabad): Chandra kis rashi me (suryoday par),
+     * tithi + nakshatra ki line, din ka shubh choghadiya aur Rahu kaal.
+     */
+    protected function panchangFor(string $date, string $language): array
+    {
+        $p     = app(\App\Services\PanchangService::class);
+        $hindi = $language === 'hindi';
+        $astro = $p->astro($date, 'ahmedabad', $hindi ? 'hindi' : 'gujarati');
+        $times = $p->compute($date);
+
+        $good  = collect($times['day'])->where('good', 1);
+        $shubh = $good->first(fn ($s) => $s['from'] >= '08:00') ?? $good->first();
+
+        // Hinglish card Latin me hai — tithi/nakshatra ke naam Gujarati/Hindi lipi me hi milte hain, isliye line nahi
+        $tithi = '';
+        if ($language !== 'hinglish') {
+            $paksha = $astro['paksha'] === 'sud' ? ($hindi ? 'शुक्ल' : 'સુદ') : ($hindi ? 'कृष्ण' : 'વદ');
+            $tithi  = "{$astro['maas']} {$paksha} {$astro['tithi_name']} • {$astro['nakshatra_name']} " . ($hindi ? 'नक्षत्र' : 'નક્ષત્ર');
+        }
+
+        return [
+            'chandra' => $astro['chandra_idx'],
+            'tithi'   => $tithi,
+            'shubh'   => $shubh,
+            'rahu'    => $times['rahu'],
+        ];
     }
 
     /** Is tarikh ka tyohar (dropdown me dikhane ke liye). */

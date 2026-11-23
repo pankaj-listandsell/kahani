@@ -17,6 +17,21 @@ class Part extends Model
         'image_prompt',
     ];
 
+    /**
+     * 🚫 Text kahin se bhi aaye (paste / import / studio) — save se pehle list wale
+     * ashleel shabd badlo (config/word_filter.php + AI ki seekhi list, bina AI call).
+     */
+    protected static function booted(): void
+    {
+        static::saving(function (Part $part) {
+            foreach (['body', 'title'] as $field) {
+                if ($part->isDirty($field) && is_string($part->{$field}) && $part->{$field} !== '') {
+                    $part->{$field} = \App\Support\WordFilter::cleanLocal($part->{$field});
+                }
+            }
+        });
+    }
+
     public function story(): BelongsTo
     {
         return $this->belongsTo(Story::class);

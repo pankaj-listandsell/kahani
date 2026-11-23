@@ -215,13 +215,14 @@ EXTRA: Har item me \"level\" bhi do — 1 (aasaan), 2 (madhyam) ya 3 (kathin). "
     {
         if (filled(config('services.gemini.key'))) {
             try {
-                return $this->callGemini($prompt);
+                return \App\Support\WordFilter::clean($this->callGemini($prompt));
             } catch (\Throwable $e) {
                 Log::warning('Studio AI: Gemini fail, Pollinations fallback', ['error' => $e->getMessage()]);
             }
         }
 
-        return $this->callPollinations($prompt);
+        // 🚫 config/word_filter.php ke shabd badlo
+        return \App\Support\WordFilter::clean($this->callPollinations($prompt));
     }
 
     protected function callGemini(string $prompt): string
