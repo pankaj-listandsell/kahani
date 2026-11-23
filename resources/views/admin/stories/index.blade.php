@@ -16,6 +16,37 @@
     </div>
 </div>
 
+{{-- Hataye gaye studios ka bacha hua data --}}
+@if ($removed->isNotEmpty())
+    @php
+        $typeLabels = ['mind_reader' => 'Mind Reader', 'yoga' => 'Kids Yoga', 'name_secret' => 'Name Secrets',
+                       'puzzle' => 'Puzzle Challenge', 'this_or_that' => 'This or That'];
+    @endphp
+    <div class="bg-amber-50 border border-amber-200 rounded-xl p-5 mb-6">
+        <h3 class="font-semibold text-amber-900 mb-1">🗑️ Hataye gaye studios ka purana data</h3>
+        <p class="text-sm text-amber-800 mb-3">
+            Ye studios menu se hata diye gaye hain, lekin inki {{ $removed->count() }} collections
+            ({{ $removed->sum('cards_count') }} cards/reels) abhi bhi app me hain.
+            Delete karne se sirf app ka data + files jaenge — Facebook/Instagram/YouTube par jo post ho chuka hai wo rahega.
+        </p>
+        <ul class="text-sm text-amber-900 mb-4 list-disc pl-5">
+            @foreach ($removed->groupBy('type') as $type => $items)
+                <li>{{ $typeLabels[$type] ?? $type }} — {{ $items->count() }} collection, {{ $items->sum('cards_count') }} cards</li>
+            @endforeach
+        </ul>
+        <form method="POST" action="{{ route('admin.stories.bulk_destroy') }}"
+              onsubmit="return confirm('In hataye gaye studios ka saara data app se delete karein? (Social posts rahenge)')">
+            @csrf
+            @foreach ($removed as $r)
+                <input type="hidden" name="ids[]" value="{{ $r->id }}">
+            @endforeach
+            <button class="bg-red-600 hover:bg-red-700 text-white text-sm font-medium rounded-lg px-4 py-2">
+                Sab delete karo
+            </button>
+        </form>
+    </div>
+@endif
+
 {{-- Import from another website (URL) --}}
 <div id="importBox" class="hidden bg-white rounded-xl border border-slate-200 p-5 mb-6">
     <form method="POST" action="{{ route('admin.stories.import') }}" class="space-y-4">

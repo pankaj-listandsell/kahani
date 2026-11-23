@@ -37,8 +37,14 @@ class Story extends Model
      */
     public const COLLECTION_TYPES = [
         'shayari', 'joke', 'quote', 'quiz', 'status', 'fact', 'yoga', 'ukhana',
-        'puzzle', 'mind_reader', 'this_or_that', 'name_secret', 'salah', 'nuskha', 'prem_patra', 'romance',
+        'puzzle', 'mind_reader', 'this_or_that', 'name_secret', 'salah', 'nuskha', 'prem_patra', 'romance', 'dharmik',
     ];
+
+    /**
+     * Studios jo menu se hata diye gaye — inka purana data Stories page par
+     * "hataye gaye studios" box me dikhta hai (wahan se delete karo).
+     */
+    public const REMOVED_TYPES = ['mind_reader', 'yoga', 'name_secret', 'puzzle', 'this_or_that'];
 
     public function isCollection(): bool
     {

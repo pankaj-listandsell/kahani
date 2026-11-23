@@ -6,14 +6,16 @@
     @php
         $routeBase = $routeBase ?? 'admin.salah';
         $isRomance = $routeBase === 'admin.romance';
-        $icon = $isRomance ? '🔞' : '💬';
+        $isDharmik = $routeBase === 'admin.dharmik';
+        $icon = $isRomance ? '🔞' : ($isDharmik ? '🙏' : '💬');
+        $studio = $isRomance ? 'Adult Kahani' : ($isDharmik ? 'Dharmik Card Studio' : 'Salah Studio');
     @endphp
-    <a href="{{ route($routeBase . '.index') }}" class="text-sm text-slate-500 hover:text-sky-700">← {{ $icon }} {{ $isRomance ? 'Adult Kahani' : 'Salah Studio' }}</a>
+    <a href="{{ route($routeBase . '.index') }}" class="text-sm text-slate-500 hover:text-sky-700">← {{ $icon }} {{ $studio }}</a>
 
     <div class="flex items-start justify-between gap-4 mt-2 mb-6 flex-wrap">
         <div>
             <h2 class="text-xl font-bold">{{ $icon }} {{ $story->title }}</h2>
-            <p class="text-slate-500 mt-1 text-sm">{{ $cards->count() }} {{ $isRomance ? 'kahani' : 'advice' }} cards · {{ ucfirst($story->status) }}</p>
+            <p class="text-slate-500 mt-1 text-sm">{{ $cards->count() }} {{ $isRomance ? 'kahani' : ($isDharmik ? 'dharmik' : 'advice') }} cards · {{ ucfirst($story->status) }}</p>
         </div>
         <form method="POST" action="{{ route($routeBase . '.destroy', $story) }}"
               onsubmit="return confirm('Poori collection delete karein?')">
@@ -83,7 +85,7 @@
             </form>
         @endforeach
 
-        <p class="text-xs text-slate-400 mt-4">{{ $isRomance ? 'Har card ek poori kahani hai.' : 'Har card ek reader ka sawaal + salah hai.' }} Auto-post inhe drip post karta hai.</p>
+        <p class="text-xs text-slate-400 mt-4">{{ $isRomance ? 'Har card ek poori kahani hai.' : ($isDharmik ? 'Har card ek dharmik mahiti card hai.' : 'Har card ek reader ka sawaal + salah hai.') }} Auto-post inhe drip post karta hai.</p>
     @endif
 </div>
 

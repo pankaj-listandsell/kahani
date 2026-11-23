@@ -324,6 +324,165 @@ PROMPT;
         return array_values(array_filter($items, 'is_array'));
     }
 
+    /**
+     * 🙏 Dharmik Card categories: key → [label (dropdown), about (AI ke liye), anukool templates].
+     * Mix mode me har card alag category se. Nayi category bas yahan jodo — dropdown apne aap.
+     */
+    public const DHARMIK_CATEGORIES = [
+        'mantra'    => ['🕉️ Mantra', 'Mantras and stotra lines (Lakshmi, Shiv, Ganesh, Hanuman, Durga, Vishnu, Navgrah, Kuber, Saraswati) — what to chant for what, and how.', ['list']],
+        'upay'      => ['🪔 Upay / Totka', 'Simple traditional remedies / upay (diya, tulsi, daan, puja vidhi, what to do on which day) for money, peace at home, career, peace of mind.', ['list']],
+        'vastu'     => ['🏠 Vastu Tips', 'Vastu tips for home, main door, kitchen, bedroom, puja room, shop and office — what to keep, where, and what to avoid.', ['list', 'grid']],
+        'kem'       => ['❓ Aavu kem karvama aave che?', 'Why do we follow this tradition? (e.g. why touch feet, why ring the temple bell, why tilak, why break a coconut, why tie a raksha sutra) — reasons from scriptures and belief.', ['article']],
+        'niyam'     => ['📜 Safalta na niyam', 'Life and success rules / good habits — motivational, practical, wisdom of elders.', ['grid']],
+        'chanakya'  => ['🧠 Chanakya Niti', 'Teachings of Chanakya Niti — about money, people to avoid, friendship, success, family (state them as Chanakya\'s teaching, not invented quotes).', ['grid', 'list']],
+        'gita'      => ['📖 Bhagavad Gita updesh', 'Teachings of Shri Krishna in the Bhagavad Gita — life lessons, karma, peace of mind (stay true to the Gita; no invented verse numbers).', ['list', 'article']],
+        'dev'       => ['🛕 Dev-Devi ni vaato', 'Facts about Gods and Goddesses (Shiv, Krishna, Ram, Hanuman, Ganesh, Mataji, Vishnu) — their symbols, vahan, favourite bhog, names and meanings.', ['article', 'list']],
+        'katha'     => ['📜 Pauranik katha', 'A short well-known story from Puranas, Ramayan or Mahabharat with its lesson (Shiv-Parvati, Ganesh, Hanuman, Krishna leela, Prahlad, Dhruv).', ['article']],
+        'mandir'    => ['🚩 Prasiddh mandir', 'Famous temples of Gujarat and India (Somnath, Dwarka, Ambaji, Pavagadh, Chotila, Bahucharaji, Shamlaji, Salangpur, Virpur, Dakor, Kashi, Kedarnath) — history, belief, darshan facts.', ['article', 'list']],
+        'sant'      => ['🙏 Sant-Mahatma', 'Saints and devotees (Narsinh Mehta, Jalaram Bapa, Mirabai, Bajrang Das Bapa, Sant Tulsidas, Kabir, Sai Baba) — life story and teachings.', ['article', 'list']],
+        'graha'     => ['🪐 Navgrah', 'Navgrah beliefs — what each planet gives, its day, colour, daan, mantra, simple ways to make it favourable.', ['list']],
+        'rashi'     => ['♈ Rashi swabhav', 'Rashi (zodiac) nature: strengths, lucky colour, lucky number, which deity to worship, which rashi is most loving / hard-working etc. Positive only.', ['grid', 'list']],
+        'ank'       => ['🔢 Ank jyotish', 'Numerology (mulank 1-9) — nature, lucky day, colour, deity for each number. Positive only.', ['grid', 'list']],
+        'ratna'     => ['💎 Ratna / Rudraksha', 'Gemstones and rudraksha beliefs — which for what, rules of wearing (always advise asking a learned astrologer first; no selling).', ['list']],
+        'vruksh'    => ['🌿 Pavitra vruksh-chhod', 'Sacred plants and trees (tulsi, pipal, vad, bili, shami, kela, aanbo) — significance, puja rules, what to do and not do.', ['list', 'article']],
+        'puja'      => ['🪷 Puja vidhi / Samagri', 'Puja vidhi and the meaning of puja items (kalash, diya, shankh, nariyal, kumkum, akshat, supari, ghanti, aarti) — how to do puja correctly at home.', ['list', 'article']],
+        'vrat'      => ['🌸 Vrat / Tahevar', 'Vrat and festivals — rules, what to do and not do, significance, katha in brief (Ekadashi, Purnima, Pradosh, Navratri, Shravan, Janmashtami).', ['list', 'grid']],
+        'daan'      => ['🤲 Daan-Punya', 'Charity — what to donate on which day / for which planet / on which festival and its punya.', ['list', 'grid']],
+        'swapna'    => ['💭 Swapna shastra', 'Dream meanings according to Swapna Shastra — auspicious dreams (positive signs only, no fear).', ['list', 'grid']],
+        'shubh'     => ['✨ Shubh sanket', 'Auspicious signs and shakun in daily life (what is considered lucky to see / hear / happen). Positive only, no fear of bad omens.', ['list', 'grid']],
+        'rasoi'     => ['🍲 Rasoi ane Annapurna', 'Kitchen and food traditions — Annapurna blessings, rules of cooking and eating from tradition, bhog to offer gods.', ['list', 'grid']],
+        'sanskar'   => ['👪 Sanskar / Parampara', 'Hindu sanskar and family traditions (16 sanskar, morning routine of elders, greeting elders, rules at home) and their meaning.', ['grid', 'list']],
+        'suvichar'  => ['💬 Dharmik suvichar', 'Short devotional / spiritual thoughts for daily life (one line each) — faith, karma, patience, gratitude.', ['grid']],
+    ];
+
+    /** Vaar → dev (Somvar=1 … Ravivar=7, Carbon dayOfWeekIso). */
+    public const DHARMIK_WEEKDAY_DEV = [
+        1 => 'Monday — Lord Shiv (Mahadev)',
+        2 => 'Tuesday — Lord Hanuman and Mataji',
+        3 => 'Wednesday — Lord Ganesh',
+        4 => 'Thursday — Lord Vishnu, Guru and Sai Baba',
+        5 => 'Friday — Goddess Lakshmi and Mataji',
+        6 => 'Saturday — Shani Dev and Hanuman',
+        7 => 'Sunday — Surya Dev',
+    ];
+
+    /**
+     * 🙏 DHARMIK CARDS: "11 Dhan Akarshan Mantra" (list), "20 Niyam" (grid),
+     * "Shivling par mathu kem?" (article) jaisa roj navo dharmik content.
+     *
+     * @param  string  $template  list | grid | article | mix
+     * @param  array   $avoid     pehle bane titles — AI inhe repeat na kare
+     */
+    public function generateDharmik(int $count = 3, string $language = 'gujarati', string $template = 'mix', string $category = 'auto', string $topic = '', array $avoid = []): array
+    {
+        $langPrompt = $this->langPrompt($language);
+        $count = max(1, min(10, $count));
+
+        $templates = ['list', 'article', 'grid'];
+        $fixedTpl = in_array($template, $templates, true);
+        $dev = self::DHARMIK_WEEKDAY_DEV[now()->dayOfWeekIso];
+
+        if ($category === 'mix') {
+            // 🔀 Dar card alag category — ek card aaj na vaar na dev nu, baaki random;
+            // template category ne anukool (mantra → list, niyam → grid, kem → article)
+            $keys = array_keys(self::DHARMIK_CATEGORIES);
+            shuffle($keys);
+            $cats = array_slice(array_merge(['vaar'], $keys, $keys), 0, $count);
+            shuffle($cats);
+
+            $assigned = [];
+            $planLines = [];
+            foreach ($cats as $i => $cat) {
+                $tpl = $fixedTpl ? $template : $this->dharmikTemplateFor($cat);
+                $assigned[] = $tpl;
+                $about = $cat === 'vaar'
+                    ? "today's deity ({$dev}) — mantra, upay or a fact"
+                    : self::DHARMIK_CATEGORIES[$cat][1];
+                $planLines[] = 'Card ' . ($i + 1) . ": template `{$tpl}` — category: {$about}";
+            }
+            $catLine = 'Every card is from a DIFFERENT category as given in the plan. Inside each category pick a specific, interesting sub-topic (not always the most obvious one).';
+            $plan = implode("\n", $planLines);
+        } else {
+            $assigned = $fixedTpl
+                ? array_fill(0, $count, $template)
+                : array_map(fn ($i) => $templates[$i % 3], range(0, $count - 1));
+            if (! $fixedTpl) {
+                shuffle($assigned);
+            }
+            $catLine = ($category === 'auto' || ! isset(self::DHARMIK_CATEGORIES[$category]))
+                ? "Today is {$dev}. Make every card about this day's deity (mix of mantra, upay, why-traditions and facts)."
+                : 'Category: ' . self::DHARMIK_CATEGORIES[$category][1];
+            $plan = collect($assigned)->map(fn ($t, $i) => 'Card ' . ($i + 1) . ": template `{$t}`")->implode("\n");
+        }
+        $topicLine = $topic !== '' ? "Specific topic from the page owner: {$topic}. Every card must be about this topic (different angles)." : 'Each card must be a different, popular topic.';
+
+        $avoid = array_values(array_filter(array_map('trim', $avoid)));
+        $avoidLine = $avoid
+            ? "These titles were already posted — do NOT repeat these topics, pick fresh ones:\n- " . implode("\n- ", array_slice($avoid, 0, 80))
+            : '';
+
+        $prompt = <<<PROMPT
+You create viral devotional (dharmik) information cards for a Gujarati Facebook/Instagram page about astrology, religion and daily rashifal.
+Generate exactly {$count} cards in {$langPrompt}, one per line of this plan, in the same order:
+{$plan}
+
+{$catLine}
+{$topicLine}
+{$avoidLine}
+
+TEMPLATES:
+- `list` — a numbered list card, like "11 ધન આકર્ષણ મંત્ર" or "7 ઉપાય જે ઘરમાં સુખ-શાંતિ લાવે".
+  `items`: 5-11 entries, each 2-12 words (one mantra / one upay / one point per entry, no numbering).
+  `note`: 25-45 words closing paragraph (how to do it with faith and what blessing it brings).
+- `grid` — a two-column checklist of short rules, like "ગરીબમાંથી અમીર બનવાનાં 20 નિયમ".
+  `items`: an EVEN number between 10 and 20 entries, each only 2-6 words, punchy (no numbering).
+  `note`: "" (empty) or max 20 words.
+- `article` — a question-and-answer explainer, like "શિવલિંગ પર માથું કેમ ટેકવવામાં આવે છે?".
+  `title` must be a curiosity question.
+  `intro`: 40-60 words — describe the tradition and ask the question again.
+  `body`: 90-140 words, 2-3 paragraphs separated by \\n\\n — the reason from scriptures / belief, ends with a devotional line.
+  `items` and `note` may be empty.
+
+RULES:
+- MANTRAS: use only authentic, widely known mantras exactly as found in scriptures (e.g. "ॐ नमः शिवाय", "ॐ श्रीं महालक्ष्म्यै नमः", "ॐ गं गणपतये नमः"). Never invent or alter a mantra. Write mantras in the output script (Gujarati script for Gujarati).
+- Use soft belief language ("માનવામાં આવે છે", "શાસ્ત્રો અનુસાર") — never guarantee money, cure, job or marriage.
+- No fear-mongering, no curses, no black magic / vashikaran / tantra, no paid remedies, no gemstone selling, no medicines or health claims.
+- No real living people, brands, apps, phone numbers or website names.
+- `title`: 3-9 words, bold hook, may contain a number (e.g. "11 ધન આકર્ષણ મંત્ર"). No quotes, no emoji.
+- `cta`: one line asking viewers to comment a devotional phrase, 6-14 words (e.g. "કોમેન્ટમાં શ્રદ્ધાપૂર્વક \"જય મહાલક્ષ્મી માં\" જરૂર લખો.").
+- `caption`: 2-4 short lines with a few emojis, asks to share with family and follow the page.
+- `hashtags`: 8-12 relevant hashtags in one string.
+- `template`: exactly the template from the plan.
+
+Return ONLY a raw JSON array of objects with keys: `template`, `title`, `items`, `intro`, `body`, `note`, `cta`, `caption`, `hashtags`.
+PROMPT;
+
+        $items = $this->callGeminiJson($prompt, 120);
+
+        $out = [];
+        foreach (array_values(array_filter($items, 'is_array')) as $i => $item) {
+            if (! in_array($item['template'] ?? '', $templates, true)) {
+                $item['template'] = $assigned[$i] ?? 'list';
+            }
+            $item['items'] = array_values(array_filter(array_map(
+                fn ($x) => trim(is_array($x) ? implode(' ', $x) : (string) $x),
+                is_array($item['items'] ?? null) ? $item['items'] : []
+            )));
+            $out[] = $item;
+        }
+
+        return $out;
+    }
+
+    /** Category ne anukool template (mix mode me). */
+    protected function dharmikTemplateFor(string $cat): string
+    {
+        // 'vaar' (aaj na dev) → list ke article
+        $options = self::DHARMIK_CATEGORIES[$cat][2] ?? ['list', 'article'];
+
+        return $options[array_rand($options)];
+    }
+
     /** Prompt ke liye language ka naam — hinglish = Hindi words, Roman (English) letters me. */
     protected function langPrompt(string $language): string
     {

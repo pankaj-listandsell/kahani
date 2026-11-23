@@ -13,6 +13,7 @@ use App\Http\Controllers\Admin\PanchangController;
 use App\Http\Controllers\Admin\RashifalController;
 use App\Http\Controllers\Admin\SalahController;
 use App\Http\Controllers\Admin\RomanceController;
+use App\Http\Controllers\Admin\DharmikController;
 use App\Http\Controllers\Admin\SettingsController;
 use App\Http\Controllers\Admin\StoryController;
 use App\Http\Controllers\Admin\QuizController;
@@ -132,6 +133,13 @@ Route::middleware('auth')->prefix('admin')->name('admin.')->group(function () {
     Route::post('romance/save', [RomanceController::class, 'save'])->name('romance.save');
     Route::get('romance/{story}', [RomanceController::class, 'show'])->name('romance.show');
     Route::delete('romance/{story}', [RomanceController::class, 'destroy'])->name('romance.destroy');
+
+    // 🙏 Dharmik Card Studio — mantra list / niyam grid / "kem?" article (4:5 text cards)
+    Route::get('dharmik', [DharmikController::class, 'index'])->name('dharmik.index');
+    Route::post('dharmik/generate', [DharmikController::class, 'generate'])->name('dharmik.generate');
+    Route::post('dharmik/save', [DharmikController::class, 'save'])->name('dharmik.save');
+    Route::get('dharmik/{story}', [DharmikController::class, 'show'])->name('dharmik.show');
+    Route::delete('dharmik/{story}', [DharmikController::class, 'destroy'])->name('dharmik.destroy');
 
     // 🔯 Aaj nu Rashifal — 12 rashi cards, sirf apne din auto-post
     // 📅 Aaj nu Panchang

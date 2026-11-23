@@ -38,7 +38,15 @@ class StoryController extends Controller
 
         $stories = $query->get();
 
-        return view('admin.stories.index', compact('stories'));
+        // Hataye gaye studios (menu se nikal diye) ka bacha hua data — index par
+        // ek box me dikhao taaki ek click me app se delete ho sake.
+        // Social par jo post ho chuka hai wo bulk-delete se nahi hatta.
+        $removed = Story::withCount('cards')
+            ->whereIn('type', Story::REMOVED_TYPES)
+            ->when(! auth()->user()->isAdmin(), fn ($q) => $q->where('user_id', auth()->id()))
+            ->get();
+
+        return view('admin.stories.index', compact('stories', 'removed'));
     }
 
     public function create()
