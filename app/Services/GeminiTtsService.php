@@ -142,6 +142,10 @@ class GeminiTtsService
                 . 'har option ke baad chhota pause do taaki sunne wala soch sake:',
             'ukhana'  => "Ye {$lang} paheli bachchon ko suna rahe ho — chulbule, khilandare andaaz me, "
                 . 'har line ke baad chhota pause dete hue padho, aur aakhir me utsukta banaye rakho:',
+            // Saaf "sirf padho" wala instruction — lamba/hukm jaisa instruction dene par Gemini TTS
+            // "Model tried to generate text" (400) deta hai aur robot-awaaz wale fallback par girta hai
+            'rashifal' => "Read the following {$lang} horoscope text aloud exactly as written, in a warm, clear and confident voice "
+                . 'at a steady pace, with a short pause after each sentence. Do not add, skip or change any words. Text:',
             default   => "Is {$lang} kahani ko ek natural, expressive kahani-sunane wale andaaz me padho:",
         };
     }

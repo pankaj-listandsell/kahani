@@ -226,6 +226,41 @@ PROMPT;
     }
 
     /**
+     * 🎬 SAPTAHIK RASHIFAL (YouTube ka lamba 16:9 video): Somvar–Ravivar ka 12 rashi ka bhavishya.
+     * $weekStart = us hafte ka Somvar ('Y-m-d').
+     */
+    public function generateWeeklyRashifal(string $weekStart, string $language = 'gujarati'): array
+    {
+        $langPrompt = $this->langPrompt($language);
+        $from = \Illuminate\Support\Carbon::parse($weekStart)->locale('en');
+        $range = $from->isoFormat('dddd D MMMM') . ' to ' . $from->copy()->addDays(6)->isoFormat('dddd D MMMM YYYY');
+
+        $prompt = <<<PROMPT
+You are a popular, positive WEEKLY horoscope (saptahik rashifal) writer for a Gujarati/Hindi YouTube channel.
+Write the horoscope for the week {$range} (Monday to Sunday) for all 12 Vedic moon signs, in {$langPrompt}.
+This text is read aloud as a voice-over in a long YouTube video, so write natural, flowing spoken sentences.
+
+Rules:
+- Exactly 12 objects, in this exact order: Mesh, Vrishabh, Mithun, Kark, Simha, Kanya, Tula, Vrishchik, Dhanu, Makar, Kumbh, Meen.
+- Each sign must feel different (no repeated sentences). Practical, hopeful, relatable tone. Talk about the WHOLE week (start, middle, weekend).
+- No fear-mongering, no death/accident/disease predictions, no paid remedies, no gemstone selling, no harmful superstition.
+- `rashi`: the English key exactly as in the list above.
+- `overview`: 55-75 words — how the week goes overall, the best part of the week and one thing to be careful about.
+- `love`, `career`, `money`, `health`: 12-20 words each, about this week.
+- `love_score`, `career_score`, `money_score`, `health_score`: integers 3-10 matching the text (shown as % meters).
+- `rating`: how good the week is, integer 1-5. Exactly 3 signs get 5, the rest 2-4 (never 1).
+- `lucky_days`: array of 1-2 English weekday names (e.g. ["Tuesday","Friday"]). `careful_day`: one English weekday name, different from lucky_days.
+- `lucky_number`: one number 1-9 (as string). `lucky_color`: one colour name in {$langPrompt}.
+- `upay`: one FREE, simple remedy for the week, 6-14 words (a short prayer, feeding animals/birds, small charity, wearing a colour). Never anything to buy.
+- `short`: ONE punchy line summarising the week, 8-14 words (no emoji).
+
+Return ONLY a raw JSON array of 12 objects with keys: `rashi`, `overview`, `love`, `career`, `money`, `health`, `love_score`, `career_score`, `money_score`, `health_score`, `rating`, `lucky_days`, `careful_day`, `lucky_number`, `lucky_color`, `upay`, `short`.
+PROMPT;
+
+        return $this->callGeminiJson($prompt, 150);
+    }
+
+    /**
      * 🌿 NUSKHA / RECIPE: Gharelu nuskhe ya recipe ke save-worthy cards.
      */
     public function generateNuskha(int $count = 3, string $language = 'gujarati', string $mode = 'nuskha', string $category = '', string $topic = ''): array

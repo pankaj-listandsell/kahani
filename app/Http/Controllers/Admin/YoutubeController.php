@@ -106,10 +106,46 @@ class YoutubeController extends Controller
         $pending = Story::where('user_id', $uid)->where('status', 'published')
             ->withCount(['cards as yt_pending' => fn ($q) => $q->whereNull('yt_status')])
             ->get()
-            ->filter(fn (Story $s) => $s->targetsPlatform('youtube') && $s->type !== 'rashifal_short') // Shorts ke frames card nahi
+            ->filter(fn (Story $s) => $s->targetsPlatform('youtube') && ! in_array($s->type, ['rashifal_short', 'rashifal_week'], true)) // video ke frames card nahi
             ->sum('yt_pending');
         $rows[] = [$pending > 0, 'Post karne ke liye cards', $pending > 0
             ? "{$pending} cards baaki hain." : 'Koi pending card nahi (sab post ho chuke, ya collections me YouTube unchecked hai).'];
+
+        // 📺 Aaj ke Rashifal Shorts (har part = ek video; status pehle frame par) — upar wali ginti me nahi aate
+        $shortParts = Story::where('user_id', $uid)->where('status', 'published')
+            ->where('type', 'rashifal_short')->where('category', $now->toDateString())
+            ->with(['parts.cards' => fn ($q) => $q->orderBy('sort_order')])->get()
+            ->flatMap->parts
+            ->reject(fn ($p) => (string) $p->body === 'short:all'); // 12 Rashi Short band
+        $byStatus = $shortParts->groupBy(fn ($p) => $p->cards->first()?->yt_status ?? 'pending')->map->count();
+        $rows[] = [$shortParts->isEmpty() ? false : (($byStatus['failed'] ?? 0) ? false : true), 'Aaj ke Rashifal Shorts', $shortParts->isEmpty()
+            ? 'Aaj (' . $now->format('d M') . ') ke Shorts save nahi hain — Rashifal page par "📺 YouTube Shorts pan banavo" tick karke aaj ka rashifal Save karo.'
+            : ($byStatus['posted'] ?? 0) . ' upload ho gaye, ' . ($byStatus['pending'] ?? 0) . ' baaki'
+                . (($byStatus['posting'] ?? 0) ? ', ' . $byStatus['posting'] . ' abhi upload ho raha' : '')
+                . (($byStatus['failed'] ?? 0) ? ', ' . $byStatus['failed'] . ' fail (neeche ❌ dekho)' : '')
+                . ' — kul ' . $shortParts->count() . '. Baaki wale agle time slots me jayenge.'];
+
+        // 🎬 Is hafte ka Saptahik video
+        $monday = $now->copy()->startOfWeek(Carbon::MONDAY);
+        $weekFirst = Story::where('user_id', $uid)->where('status', 'published')
+            ->where('type', 'rashifal_week')->where('category', $monday->toDateString())
+            ->with(['parts.cards' => fn ($q) => $q->orderBy('sort_order')])->latest('id')->first()
+            ?->parts->first()?->cards->first();
+        $nextMonday = $monday->copy()->addWeek();
+        $nextSaved = Story::where('user_id', $uid)->where('type', 'rashifal_week')->where('category', $nextMonday->toDateString())->exists();
+        $rows[] = [
+            $weekFirst ? $weekFirst->yt_status !== 'failed' : null,
+            'Is hafte ka Saptahik Video',
+            (! $weekFirst
+                ? 'Is hafte (' . $monday->format('d M') . ') ka video save nahi hai — Rashifal page par "🎬 Saptahik YouTube Video" se banao.'
+                : match ($weekFirst->yt_status) {
+                    'posted'  => '✅ Upload ho gaya (' . $weekFirst->yt_video_id . ').',
+                    'posting' => '⏳ Abhi ban ke upload ho raha hai (5-10 min).',
+                    'failed'  => '❌ Fail: ' . Str::limit((string) $weekFirst->yt_error, 160),
+                    default   => '⏳ Saved — agle time slot me upload hoga (Shorts se pehle).',
+                })
+            . ' Agle hafte (' . $nextMonday->format('d M') . ') ka: ' . ($nextSaved ? '✅ ready' : 'abhi nahi bana') . '.',
+        ];
 
         $note = Cache::get("autopost:yt:note:{$uid}");
         $rows[] = [null, 'Command ka aakhri faisla', $note ?: 'Abhi record nahi (nayi files ke baad agle minute me aayega).'];

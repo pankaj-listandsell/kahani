@@ -21,18 +21,25 @@ class RashifalController extends Controller
 {
     public function index()
     {
-        $query = Story::withCount('parts')->whereIn('type', ['rashifal', 'rashifal_short'])->orderByDesc('category')->latest();
+        $query = Story::withCount('parts')->whereIn('type', ['rashifal', 'rashifal_short', 'rashifal_week'])->orderByDesc('category')->latest();
 
         if (! auth()->user()->isAdmin()) {
             $query->where('user_id', auth()->id());
         }
 
-        return view('admin.rashifal.index', ['collections' => $query->get()]);
+        // 🎬 Saptahik videos — pichhle 2 hafte + aage ke sab (naya pehle), har ek ka YouTube status
+        $weeks = Story::where('type', 'rashifal_week')->where('user_id', auth()->id())
+            ->where('category', '>=', now()->startOfWeek(Carbon::MONDAY)->subWeeks(2)->toDateString())
+            ->with(['parts' => fn ($q) => $q->orderBy('sort_order'), 'parts.cards' => fn ($q) => $q->orderBy('sort_order')])
+            ->orderByDesc('category')->latest('id')->get()
+            ->unique('category')->values();
+
+        return view('admin.rashifal.index', ['collections' => $query->get(), 'weeks' => $weeks]);
     }
 
     public function show(Story $story)
     {
-        abort_unless(in_array($story->type, ['rashifal', 'rashifal_short'], true), 404);
+        abort_unless(in_array($story->type, ['rashifal', 'rashifal_short', 'rashifal_week'], true), 404);
         $this->authorize('view', $story);
 
         $story->load(['parts.cards']);
@@ -43,7 +50,7 @@ class RashifalController extends Controller
 
     public function destroy(Story $story, InstagramService $instagram)
     {
-        abort_unless(in_array($story->type, ['rashifal', 'rashifal_short'], true), 404);
+        abort_unless(in_array($story->type, ['rashifal', 'rashifal_short', 'rashifal_week'], true), 404);
         $this->authorize('delete', $story);
 
         $story->load('parts.cards');
@@ -54,7 +61,7 @@ class RashifalController extends Controller
             foreach ($part->cards as $card) {
                 $instagram->deleteMediaFiles($card);
             }
-            Storage::disk('public')->delete('yt/part-' . $part->id . '.mp4');
+            Storage::disk('public')->delete(['yt/part-' . $part->id . '.mp4', 'yt/week-' . $part->id . '.mp4', 'yt/week-' . $part->id . '.json']);
         }
 
         $story->delete();
@@ -124,6 +131,8 @@ class RashifalController extends Controller
             'tithi'   => $tithi,
             'shubh'   => $shubh,
             'rahu'    => $times['rahu'],
+            // Shorts ka Poonam/Amas theme
+            'moon'    => $astro['is_poonam'] ? 'poonam' : ($astro['is_amas'] ? 'amas' : ''),
         ];
     }
 
@@ -193,7 +202,7 @@ class RashifalController extends Controller
     }
 
     /**
-     * 📺 YouTube-only Rashifal Shorts — ek din ke 2 parts: 'all' (12 rashi) aur 'top3'.
+     * 📺 YouTube-only Rashifal Shorts — ek din ke 3 parts (13 themes me se, view chunta hai).
      * Har part ke frames (intro + rashi + Like/Share/Subscribe) ek Short bante hain.
      * Us din ke purane Shorts (jo abhi upload nahi hue) badal diye jaate hain.
      */
@@ -202,8 +211,8 @@ class RashifalController extends Controller
         $data = $request->validate([
             'date'                  => ['required', 'date_format:Y-m-d'],
             'language'              => ['nullable', 'in:hindi,gujarati,hinglish'],
-            'parts'                 => ['required', 'array', 'min:1', 'max:2'],
-            'parts.*.kind'          => ['required', 'in:all,top3'],
+            'parts'                 => ['required', 'array', 'min:1', 'max:3'],
+            'parts.*.kind'          => ['required', 'in:' . implode(',', array_keys(Story::RASHI_SHORT_LABELS))],
             'parts.*.caption'       => ['nullable', 'string', 'max:5000'],
             'parts.*.frames'        => ['required', 'array', 'min:2', 'max:16'],
             'parts.*.frames.*.text' => ['required', 'string'],
@@ -261,16 +270,147 @@ class RashifalController extends Controller
         }
     }
 
-    /** Short ka video banake dikhao (upload nahi) — check karne ke liye. */
+    /**
+     * 🎬 Saptahik rashifal (YouTube ka lamba video) — AI se us hafte (Somvar–Ravivar) ka 12 rashi ka bhavishya.
+     * Frames browser me bante hain (16:9), phir saveWeek().
+     */
+    public function generateWeek(Request $request, ViralStudioAiService $ai)
+    {
+        $data = $request->validate([
+            'date'     => ['required', 'date_format:Y-m-d'],
+            'language' => ['required', 'in:gujarati,hindi,hinglish'],
+        ]);
+
+        try {
+            $monday = Carbon::parse($data['date'])->startOfWeek(Carbon::MONDAY);
+            $exists = Story::where('type', 'rashifal_week')->where('user_id', auth()->id())
+                ->where('category', $monday->toDateString())->exists();
+
+            $items = $ai->generateWeeklyRashifal($monday->toDateString(), $data['language']);
+
+            // Is hafte koi tyohar? (video ka "special" hissa us tyohar ka banta hai)
+            $festival = '';
+            $panchang = app(\App\Services\PanchangService::class);
+            for ($d = 0; $d < 7 && $festival === ''; $d++) {
+                $festival = $panchang->festival($monday->copy()->addDays($d)->toDateString());
+            }
+
+            return response()->json([
+                'ok'         => true,
+                'items'      => $items,
+                'week_start' => $monday->toDateString(),
+                'week_end'   => $monday->copy()->addDays(6)->toDateString(),
+                'festival'   => $festival,
+                'exists'     => $exists,
+            ]);
+        } catch (\Throwable $e) {
+            return response()->json(['ok' => false, 'error' => $e->getMessage()], 422);
+        }
+    }
+
+    /**
+     * Saptahik video save: 1 story (type rashifal_week, category = Somvar) → 1 part = 1 video.
+     * Part body = JSON {kind, chapters[], head} (chapters ke naam, har frame ka ek; null = chapter nahi),
+     * part image_path = thumbnail. Card text = us frame ki voice-over line.
+     */
+    public function saveWeek(Request $request, InstagramService $instagram)
+    {
+        $data = $request->validate([
+            'week_start'      => ['required', 'date_format:Y-m-d'],
+            'language'        => ['nullable', 'in:hindi,gujarati,hinglish'],
+            'audio'           => ['nullable', 'in:music,voice_music'],
+            'caption'         => ['required', 'string', 'max:4500'],
+            'chapter_head'    => ['nullable', 'string', 'max:120'],
+            'thumbnail'       => ['required', 'string'],
+            'frames'          => ['required', 'array', 'min:3', 'max:20'],
+            'frames.*.text'   => ['required', 'string'],
+            'frames.*.label'  => ['nullable', 'string', 'max:80'],
+            'frames.*.image'  => ['required', 'string'],
+        ]);
+
+        try {
+            $monday = Carbon::parse($data['week_start'])->startOfWeek(Carbon::MONDAY)->toDateString();
+
+            $old = Story::where('type', 'rashifal_week')->where('user_id', auth()->id())
+                ->where('category', $monday)->with('parts.cards')->get();
+            foreach ($old as $s) {
+                if ($s->parts->flatMap->cards->contains(fn ($c) => $c->yt_status === 'posted')) {
+                    return response()->json(['ok' => false, 'error' => 'Is hafte ka video pehle hi YouTube par upload ho chuka hai — badla nahi.'], 422);
+                }
+                foreach ($s->parts as $part) {
+                    if ($part->image_path) {
+                        Storage::disk('public')->delete($part->image_path);
+                    }
+                    foreach ($part->cards as $card) {
+                        $instagram->deleteMediaFiles($card);
+                    }
+                    Storage::disk('public')->delete(['yt/week-' . $part->id . '.mp4', 'yt/week-' . $part->id . '.json']);
+                }
+                $s->delete();
+            }
+
+            $thumb = $this->decodeDataUrl($data['thumbnail']);
+            if (! $thumb) {
+                throw new \RuntimeException('Thumbnail sahi nahi aaya.');
+            }
+            $thumbPath = 'cards/' . Str::uuid() . '.' . $thumb['ext'];
+            Storage::disk('public')->put($thumbPath, $thumb['binary']);
+
+            $story = Story::create([
+                'user_id'   => auth()->id(),
+                'title'     => 'Saptahik Rashifal — ' . Carbon::parse($monday)->format('d M') . ' – ' . Carbon::parse($monday)->addDays(6)->format('d M Y'),
+                'type'      => 'rashifal_week',
+                'category'  => $monday,
+                'language'  => $data['language'] ?? 'gujarati',
+                'status'    => 'published',
+                'platforms' => ['youtube'],
+                'tts_mode'  => $data['audio'] ?? 'voice_music',
+            ]);
+
+            $frames = array_values($data['frames']);
+            $part = $story->parts()->create([
+                'sort_order' => 1,
+                'image_path' => $thumbPath,
+                'body'       => json_encode([
+                    'kind'     => 'week',
+                    'head'     => $data['chapter_head'] ?? '',
+                    'chapters' => array_map(fn ($f) => filled($f['label'] ?? null) ? $f['label'] : null, $frames),
+                ], JSON_UNESCAPED_UNICODE),
+            ]);
+
+            foreach ($frames as $i => $frame) {
+                $decoded = $this->decodeDataUrl($frame['image']);
+                if (! $decoded) {
+                    throw new \RuntimeException('Frame ' . ($i + 1) . ' ki image sahi nahi aayi.');
+                }
+                $path = 'cards/' . Str::uuid() . '.' . $decoded['ext'];
+                Storage::disk('public')->put($path, $decoded['binary']);
+                $part->cards()->create([
+                    'sort_order' => $i + 1,
+                    'image_path' => $path,
+                    'text'       => $frame['text'],
+                    'yt_caption' => $i === 0 ? $data['caption'] : null, // title + description ([CHAPTERS] upload par bharta hai)
+                ]);
+            }
+
+            return response()->json(['ok' => true, 'story' => $story->id, 'redirect' => route('admin.rashifal.show', $story)]);
+        } catch (\Throwable $e) {
+            return response()->json(['ok' => false, 'error' => $e->getMessage()], 500);
+        }
+    }
+
+    /** Short / Saptahik video banake dikhao (upload nahi) — check karne ke liye. */
     public function previewShort(Part $part, YoutubeService $youtube)
     {
-        abort_unless($part->story?->type === 'rashifal_short', 404);
+        $type = $part->story?->type;
+        abort_unless(in_array($type, ['rashifal_short', 'rashifal_week'], true), 404);
         $this->authorize('update', $part->story);
-        @set_time_limit(600);
+        @set_time_limit(900);
 
         try {
             $part->load(['story', 'cards' => fn ($q) => $q->orderBy('sort_order')]);
-            $mp4 = $youtube->forUser($part->story->user_id)->mp4ForPart($part);
+            $youtube->forUser($part->story->user_id);
+            $mp4 = $type === 'rashifal_week' ? $youtube->mp4ForWeekVideo($part)['mp4'] : $youtube->mp4ForPart($part);
 
             return response()->json(['ok' => true, 'url' => asset('storage/' . $mp4) . '?v=' . time()]);
         } catch (\Throwable $e) {
@@ -278,17 +418,18 @@ class RashifalController extends Controller
         }
     }
 
-    /** Short abhi YouTube par upload karo (auto-post ka intezaar kiye bina). */
+    /** Short / Saptahik video abhi YouTube par upload karo (auto-post ka intezaar kiye bina). */
     public function uploadShort(Part $part, YoutubeService $youtube)
     {
-        abort_unless($part->story?->type === 'rashifal_short', 404);
+        $type = $part->story?->type;
+        abort_unless(in_array($type, ['rashifal_short', 'rashifal_week'], true), 404);
         $this->authorize('update', $part->story);
-        @set_time_limit(900);
+        @set_time_limit(1200);
 
         try {
-            $id = $youtube->postPart($part);
+            $id = $type === 'rashifal_week' ? $youtube->postWeekVideo($part) : $youtube->postPart($part);
 
-            return back()->with('success', "▶️ Short YouTube par upload ho gaya (video id: {$id}).");
+            return back()->with('success', ($type === 'rashifal_week' ? '🎬 Saptahik video' : '▶️ Short') . " YouTube par upload ho gaya (video id: {$id}).");
         } catch (\Throwable $e) {
             return back()->with('error', 'Upload nahi hua: ' . $e->getMessage());
         }

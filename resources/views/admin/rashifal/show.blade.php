@@ -17,29 +17,39 @@
         </form>
     </div>
 
-    @if ($story->type === 'rashifal_short')
-        {{-- 📺 YouTube Shorts — har part = ek Short (sirf YouTube) --}}
+    @if (in_array($story->type, ['rashifal_short', 'rashifal_week'], true))
+        @php($isWeek = $story->type === 'rashifal_week')
+        {{-- 📺 YouTube Shorts / 🎬 Saptahik video — har part = ek video (sirf YouTube) --}}
         <div class="space-y-4 mb-6">
             @foreach ($story->parts->sortBy('sort_order') as $part)
                 @php($first = $part->cards->sortBy('sort_order')->first())
                 <div class="bg-white rounded-xl border border-red-200 p-4 shadow-sm">
                     <div class="flex items-center justify-between gap-3 flex-wrap">
-                        <div>
-                            <h3 class="font-bold">{{ str_contains($part->body, 'top3') ? '🍀 Top 3 Lucky Rashi' : '🔯 12 Rashi' }} — YouTube Short</h3>
+                        <div class="flex items-center gap-3">
+                            @if ($isWeek && $part->image_path)
+                                <a href="{{ asset('storage/' . $part->image_path) }}" target="_blank" title="Thumbnail">
+                                    <img src="{{ asset('storage/' . $part->image_path) }}" class="h-16 aspect-video object-cover rounded border border-slate-200" alt="Thumbnail">
+                                </a>
+                            @endif
+                            <div>
+                            <h3 class="font-bold">{{ \App\Models\Story::rashiShortLabel($part->body) }} — {{ $isWeek ? 'YouTube Video' : 'YouTube Short' }}</h3>
                             <p class="text-xs text-slate-500 mt-0.5">
                                 {{ $part->cards->count() }} frames •
                                 @if ($first?->yt_status === 'posted')
                                     ✅ Upload ho gaya{{ $first->yt_video_id ? ' (' . $first->yt_video_id . ')' : '' }}
                                 @elseif ($first?->yt_status === 'failed')
                                     ❌ Fail: {{ \Illuminate\Support\Str::limit($first->yt_error, 120) }}
+                                @elseif ($isWeek)
+                                    ⏳ Auto-post {{ \Illuminate\Support\Carbon::parse($story->category)->format('d M') }} (Somvar) se pehle time slot me upload karega
                                 @else
                                     ⏳ Auto-post {{ \Illuminate\Support\Carbon::parse($story->category)->format('d M') }} ko upload karega
                                 @endif
                             </p>
+                            </div>
                         </div>
                         <div class="flex gap-2">
                             <button type="button" class="short-preview text-xs font-semibold bg-slate-100 hover:bg-slate-200 border border-slate-300 rounded-lg px-3 py-1.5"
-                                    data-url="{{ route('admin.rashifal.short.preview', $part) }}" data-slot="short-video-{{ $part->id }}">▶ Video dekho</button>
+                                    data-url="{{ route('admin.rashifal.short.preview', $part) }}" data-slot="short-video-{{ $part->id }}" data-wide="{{ $isWeek ? 1 : 0 }}">▶ Video dekho</button>
                             @if ($first?->yt_status !== 'posted')
                                 <form method="POST" action="{{ route('admin.rashifal.short.upload', $part) }}"
                                       onsubmit="if(!confirm('Ye Short abhi YouTube par upload karein?')) return false; this.querySelector('button').disabled=true; this.querySelector('button').textContent='⏳ Upload ho raha hai…'">
@@ -129,12 +139,13 @@
     document.querySelectorAll('.short-preview').forEach(btn => {
         btn.addEventListener('click', async () => {
             const lbl = btn.textContent, slot = document.getElementById(btn.dataset.slot);
-            btn.disabled = true; btn.textContent = '⏳ Video ban raha hai… (1-2 min)';
+            const wide = btn.dataset.wide === '1';
+            btn.disabled = true; btn.textContent = wide ? '⏳ Video ban raha hai… (3-8 min, page band mat karo)' : '⏳ Video ban raha hai… (1-2 min)';
             try {
                 const r = await fetch(btn.dataset.url, { method: 'POST', headers: { 'X-CSRF-TOKEN': CSRF, 'Accept': 'application/json' } });
                 const d = await r.json();
                 if (!d.ok) throw new Error(d.error || 'Fail');
-                slot.innerHTML = '<video controls playsinline class="w-full max-w-xs rounded-lg border border-slate-200" src="' + d.url + '"></video>';
+                slot.innerHTML = '<video controls playsinline class="w-full ' + (wide ? 'max-w-3xl' : 'max-w-xs') + ' rounded-lg border border-slate-200" src="' + d.url + '"></video>';
                 slot.querySelector('video').play().catch(() => {});
                 btn.textContent = '🔄 Dobara banao';
             } catch (e) { btn.textContent = '⚠ ' + e.message; setTimeout(() => { btn.textContent = lbl; }, 4000); }

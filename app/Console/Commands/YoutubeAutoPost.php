@@ -104,7 +104,30 @@ class YoutubeAutoPost extends Command
             }
         }
 
-        // Aaj ke Rashifal Shorts (12 rashi / Top 3) sabse pehle — har ek poora part = ek Short
+        // 🎬 Is hafte ka Saptahik video (lamba, 16:9) sabse pehle — Somvar ke pehle slot me
+        if ($part = Story::nextRashifalWeekPart($uid)) {
+            $first = $part->cards->first();
+            $this->note($uid, "Saptahik video (part #{$part->id}) ban ke upload ho raha (5-10 min; is line par atka = server ne process kill kiya)");
+            Log::info('YT auto-post: Saptahik video shuru', ['user' => $uid, 'part' => $part->id]);
+
+            try {
+                $id = $youtube->postWeekVideo($part);
+                $this->info("User #{$uid}: uploaded Saptahik video (part #{$part->id}) → {$id}");
+                $this->recordSuccess($uid, 'yt', $now);
+                $this->note($uid, "Saptahik video (part #{$part->id}) upload ho gaya → {$id}");
+                Log::info('YT auto-post: Saptahik video ho gaya', ['user' => $uid, 'part' => $part->id, 'video' => $id]);
+            } catch (CardBusyException $e) {
+                $this->note($uid, 'Saptahik video busy: ' . $e->getMessage());
+            } catch (\Throwable $e) {
+                $this->error("User #{$uid} Saptahik video (part #{$part->id}) failed: " . $e->getMessage());
+                $this->recordFailure($uid, 'yt', $first, $e, $now);
+                $this->note($uid, "Saptahik video (part #{$part->id}) fail: " . $e->getMessage());
+            }
+
+            return;
+        }
+
+        // Aaj ke Rashifal Shorts (roz 3 themes) — har ek poora part = ek Short
         if ($part = Story::nextRashifalShortPart($uid)) {
             $first = $part->cards->first();
             $this->note($uid, "Rashifal Short (part #{$part->id}) upload shuru (is line par atka = server ne process kill kiya)");
@@ -229,7 +252,7 @@ class YoutubeAutoPost extends Command
             if (! $story->targetsPlatform('youtube')) {
                 continue; // ye story YouTube ke liye target nahi
             }
-            if (in_array($story->type, ['rashifal', 'rashifal_short', 'panchang'], true)) {
+            if (in_array($story->type, ['rashifal', 'rashifal_short', 'rashifal_week', 'panchang'], true)) {
                 continue; // upar nextRashifalShortPart() / nextRashifalCard() sambhalte hain — doosre din ka kabhi nahi
             }
             $isCollection = $story->isCollection();

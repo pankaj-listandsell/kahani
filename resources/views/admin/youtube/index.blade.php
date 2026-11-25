@@ -275,17 +275,17 @@
                         <div>
                             <p class="font-medium">{{ $story->title }} <span class="text-xs text-slate-400">({{ ucfirst($story->status) }})</span></p>
                             @foreach ($story->parts as $part)
-                                @if ($part->cards->isNotEmpty())
+                                @if ($part->cards->isNotEmpty() && ! ($story->type === 'rashifal_short' && (string) $part->body === 'short:all' && $part->cards->first()?->yt_status !== 'posted'))
                                     @php
                                         // 📺 Rashifal Short: poora part (intro + rashi + end frames) = EK video
-                                        $isRashiShort = $story->type === 'rashifal_short' && Route::has('admin.rashifal.short.upload');
+                                        $isRashiShort = in_array($story->type, ['rashifal_short', 'rashifal_week'], true) && Route::has('admin.rashifal.short.upload');
                                         $firstCard = $part->cards->sortBy('sort_order')->first();
                                     @endphp
                                     <div class="mt-2 border {{ $isRashiShort ? 'border-red-200 bg-red-50/30' : 'border-slate-200' }} rounded-lg p-3">
                                         <div class="flex items-center justify-between mb-2 gap-2 flex-wrap">
                                             <span class="text-sm font-medium">
                                                 @if ($isRashiShort)
-                                                    {{ str_contains((string) $part->body, 'top3') ? '🍀 Top 3 Lucky Rashi' : '🔯 12 Rashi' }} — 1 Short · {{ $part->cards->count() }} frames
+                                                    {{ \App\Models\Story::rashiShortLabel($part->body) }} — {{ $story->type === 'rashifal_week' ? '1 Video' : '1 Short' }} · {{ $part->cards->count() }} frames
                                                     @if ($firstCard?->yt_status === 'posted')
                                                         <a href="https://youtube.com/watch?v={{ $firstCard->yt_video_id }}" target="_blank" class="ml-1 text-xs text-green-700 font-semibold hover:underline">✅ YouTube par che ↗</a>
                                                     @elseif ($firstCard?->yt_status === 'failed')

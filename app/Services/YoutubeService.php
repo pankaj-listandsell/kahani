@@ -623,6 +623,15 @@ class YoutubeService
     }
 
     /** Float ko locale-safe ffmpeg string me. */
+    /** ffmpeg ka asli error aakhri lines me hota hai (shuru me sirf version-banner) — wahi dikhao. */
+    protected function ffTail(?string $out, int $max = 300): string
+    {
+        $lines = array_values(array_filter(array_map('trim', preg_split('/\r?\n/', (string) $out)), fn ($l) => $l !== ''
+            && ! preg_match('/^(ffmpeg version|built with|configuration:|lib\w+\s+\d|Copyright|Press \[q\])/i', $l)));
+
+        return Str::limit(implode(' | ', array_slice($lines, -4)), $max);
+    }
+
     protected function fnum(float $x): string
     {
         return rtrim(rtrim(sprintf('%.3f', $x), '0'), '.') ?: '0';
@@ -687,7 +696,7 @@ class YoutubeService
     /**
      * mp4 file ko YouTube par upload karo, video id return karo.
      */
-    public function uploadShort(string $absPath, string $title, string $description, string $privacy = 'public'): string
+    public function uploadShort(string $absPath, string $title, string $description, string $privacy = 'public', string $categoryId = '24'): string
     {
         if (! is_file($absPath)) {
             throw new \RuntimeException('Video file nahi mili: ' . $absPath);
@@ -701,7 +710,7 @@ class YoutubeService
             'snippet' => [
                 'title'       => Str::limit($title, 95, ''),
                 'description' => Str::limit($description, 4900, ''),
-                'categoryId'  => '24', // Entertainment
+                'categoryId'  => $categoryId, // 24 = Entertainment, 22 = People & Blogs
             ],
             'status' => [
                 'privacyStatus'           => $privacy,
@@ -941,10 +950,10 @@ class YoutubeService
                         continue;
                     }
                     // Frame ka time: pehla (intro) / aakhri (Like-Share-Subscribe) 3 sec, rashi frame 4.5
-                    // (Top 3 me 5.5 — kam frames, aaram se padhe). Voice ho to us jitna.
+                    // (3-rashi Shorts me 5.5 — kam frames, aaram se padhe). Voice ho to us jitna.
                     $edge = $i === 0 || $i === $cards->count() - 1;
                     $seg = ['path' => $disk->path($card->image_path),
-                        'dur' => $edge ? 3.0 : (str_contains((string) $part->body, 'top3') ? 5.5 : 4.5)];
+                        'dur' => $edge ? 3.0 : ((string) $part->body === 'short:all' ? 4.5 : 5.5)];
                     if ($voice = $this->voiceFor($card)) {
                         $seg['voice'] = $disk->path($voice['path']);
                         $seg['dur'] = max($seg['dur'], $voice['seconds'] + 0.5);
@@ -984,7 +993,7 @@ class YoutubeService
             }
 
             if (! $list) {
-                throw new \RuntimeException('Short nahi ban paaya (ffmpeg). ' . Str::limit($lastErr, 150));
+                throw new \RuntimeException('Short nahi ban paaya (ffmpeg). ' . $this->ffTail($lastErr));
             }
 
             // Clips jodo (sab same settings ke — re-encode ki zaroorat nahi)
@@ -993,7 +1002,7 @@ class YoutubeService
             $joined = $disk->path("{$tmpDir}/joined.mp4");
             $res = Process::timeout(180)->run([$ffmpeg, '-y', '-f', 'concat', '-safe', '0', '-i', $listFile, '-c', 'copy', $joined]);
             if (! $res->successful() || ! is_file($joined)) {
-                throw new \RuntimeException('Short ke clips jud nahi paaye. ' . Str::limit($res->errorOutput(), 150));
+                throw new \RuntimeException('Short ke clips jud nahi paaye. ' . $this->ffTail($res->errorOutput()));
             }
 
             // Music: music-mode me poori awaaz, voice_music me voice ke peeche halka; sirf voice → bina music
@@ -1009,12 +1018,12 @@ class YoutubeService
                     '-movflags', '+faststart', '-shortest', $out,
                 ]);
                 if (! $res->successful() || ! is_file($out)) {
-                    throw new \RuntimeException('Short me music nahi jud paaya. ' . Str::limit($res->errorOutput(), 150));
+                    throw new \RuntimeException('Short me music nahi jud paaya. ' . $this->ffTail($res->errorOutput()));
                 }
             } else {
                 $res = Process::timeout(120)->run([$ffmpeg, '-y', '-i', $joined, '-c', 'copy', '-movflags', '+faststart', $out]);
                 if (! $res->successful() || ! is_file($out)) {
-                    throw new \RuntimeException('Short save nahi hua. ' . Str::limit($res->errorOutput(), 150));
+                    throw new \RuntimeException('Short save nahi hua. ' . $this->ffTail($res->errorOutput()));
                 }
             }
         } finally {
@@ -1022,6 +1031,316 @@ class YoutubeService
         }
 
         return ReelOutro::append($mp4, $story?->user_id, $story?->language, $story?->tts_voice);
+    }
+
+    /* ===================================================================
+     |  🎬 SAPTAHIK RASHIFAL — lamba 16:9 video (Short nahi)
+     * =================================================================== */
+
+    /** Frame ka samay (bina voice): intro 10s (YouTube chapter kam se kam 10s), rashi 22s, aakhri 8s. */
+    protected const WEEK_BASE = ['intro' => 10.0, 'rashi' => 22.0, 'end' => 8.0];
+
+    /**
+     * Frames (1920×1080) → 720p video. Voice mode me awaaz 1 + 4 Gemini calls me banti hai
+     * (intro, phir 3-3 rashi) — free plan ki ~10/din limit me rahe. Har group ke frames ka samay
+     * text ki lambai ke hisaab se baanta jaata hai. Koi bhi voice fail ho to poora video sirf music par.
+     * Return: ['mp4' => rel path, 'durations' => [sec, …]] (durations chapters ke liye json me bhi).
+     */
+    public function mp4ForWeekVideo(Part $part): array
+    {
+        // Ek video ek waqt me ek hi jagah bane ("▶ Video dekho" + "⬆ Upload" / cron ek saath dabe to)
+        $lock = \Illuminate\Support\Facades\Cache::lock('yt-week-build-' . $part->id, 1800);
+        if (! $lock->get()) {
+            throw new \App\Exceptions\CardBusyException('Ye video abhi kahin aur ban raha hai (preview / upload / auto-post) — 5-10 minute baad dobara try karo.');
+        }
+
+        try {
+            return $this->buildWeekVideo($part);
+        } finally {
+            $lock->release();
+        }
+    }
+
+    protected function buildWeekVideo(Part $part): array
+    {
+        $story = $part->story;
+        $this->withAudioMode($story?->tts_mode);
+        $this->withVoice($story?->tts_voice);
+
+        $cards = $part->cards->sortBy('sort_order')->values();
+        $n = $cards->count();
+        if ($n < 3) {
+            throw new \RuntimeException('Video ke liye frames kam hain.');
+        }
+
+        $disk = Storage::disk('public');
+        $disk->makeDirectory('yt');
+        // Har build ka apna temp folder — koi doosra build iski files nahi mita sakta
+        $tmpDir = 'yt/week-' . $part->id . '-tmp-' . Str::lower(Str::random(8));
+        $disk->makeDirectory($tmpDir);
+        $mp4 = 'yt/week-' . $part->id . '.mp4';
+        $ffmpeg = config('services.ffmpeg.path', 'ffmpeg');
+
+        $kindOf = fn (int $i) => $i === 0 ? 'intro' : ($i === $n - 1 ? 'end' : 'rashi');
+        $durs = [];
+        for ($i = 0; $i < $n; $i++) {
+            $durs[$i] = self::WEEK_BASE[$kindOf($i)];
+        }
+
+        // ---- Voice-over (groups: [intro], [1,2,3], [4,5,6], …; aakhri frame bina voice) ----
+        $voices = []; // [[absWav, firstIndex], …]
+        if ($this->ttsMode() !== 'music' && (new GeminiTtsService())->isConfigured()) {
+            // Intro + (special frame ho to wo bhi) ek call me, baaki 3-3 — 15 frames par bhi 5 calls
+            $middle = range(1, $n - 2);
+            $groups = [count($middle) % 3 === 1 ? [0, array_shift($middle)] : [0]];
+            foreach (array_chunk($middle, 3) as $g) {
+                $groups[] = $g;
+            }
+            $tts   = new GeminiTtsService();
+            $voice = $this->voiceOverride ?: ($this->setting('tts_voice') ?: null);
+            $lang  = $story?->language ?: 'hindi';
+            $newDurs = $durs;
+
+            try {
+                foreach ($groups as $g) {
+                    $texts = array_map(fn ($i) => trim((string) $cards[$i]->text), $g);
+                    $res   = $tts->speak(implode("\n\n", $texts), $voice, 'rashifal', $lang);
+                    $total = $res['seconds'] + 1.2;
+                    $weights = array_map(fn ($t) => max(1, mb_strlen($t)), $texts);
+                    $sum = array_sum($weights);
+                    foreach ($g as $k => $i) {
+                        $min = $kindOf($i) === 'intro' ? 10.0 : 12.0;
+                        $newDurs[$i] = max($min, round($total * $weights[$k] / $sum, 2));
+                    }
+                    $voices[] = [$disk->path($res['path']), $g[0]];
+                }
+                $durs = $newDurs;
+            } catch (\Throwable $e) {
+                Log::warning('Weekly video voice fail — sirf music', ['part' => $part->id, 'error' => $e->getMessage()]);
+                $voices = [];
+            }
+        }
+        $withVoice = $voices !== [];
+
+        // Har frame kab shuru hota hai
+        $starts = [];
+        $t = 0.0;
+        foreach ($durs as $i => $d) {
+            $starts[$i] = $t;
+            $t += $d;
+        }
+        $total = $t;
+
+        $venc = [
+            '-c:v', 'libx264', '-preset', 'ultrafast', '-tune', 'stillimage', '-threads', '1',
+            '-profile:v', 'high', '-level', '4.0', '-pix_fmt', 'yuv420p', '-r', '25',
+            '-g', '250', '-keyint_min', '25', '-an',
+        ];
+
+        try {
+            // ---- 1) Har frame ka chhota (bina awaaz) clip — ek waqt me ek tasveer memory me ----
+            $list = [];
+            $lastErr = '';
+            foreach ([[1280, 720], [854, 480]] as [$w, $h]) {
+                $list = [];
+                foreach ($cards as $i => $card) {
+                    if (! $card->image_path || ! $disk->exists($card->image_path)) {
+                        throw new \RuntimeException('Frame ' . ($i + 1) . ' ki image nahi mili.');
+                    }
+                    $clip = $disk->path("{$tmpDir}/c{$i}.mp4");
+                    $dur  = $this->fnum($durs[$i]);
+                    try {
+                        $res = Process::timeout(300)->run([
+                            $ffmpeg, '-y', '-loop', '1', '-framerate', '25', '-t', $dur, '-i', $disk->path($card->image_path),
+                            '-vf', "scale={$w}:{$h}:flags=lanczos,setsar=1,format=yuv420p", '-t', $dur, ...$venc, $clip,
+                        ]);
+                    } catch (\Throwable $e) {
+                        $res = null;
+                        $lastErr = $e->getMessage();
+                    }
+                    if (! $res || ! $res->successful() || ! is_file($clip)) {
+                        $lastErr = $res ? ($res->errorOutput() ?: $res->output()) : $lastErr;
+                        $list = [];
+                        break;
+                    }
+                    $list[] = "file '" . str_replace("'", "'\\''", str_replace('\\', '/', $clip)) . "'";
+                }
+                if ($list) {
+                    break;
+                }
+                Log::warning('Weekly video clip fail, lower-res retry', ['part' => $part->id, 'res' => "{$w}x{$h}", 'err' => Str::limit($lastErr, 300)]);
+            }
+            if (! $list) {
+                throw new \RuntimeException('Video nahi ban paaya (ffmpeg). ' . $this->ffTail($lastErr));
+            }
+
+            $listFile = $disk->path("{$tmpDir}/list.txt");
+            file_put_contents($listFile, implode("\n", $list) . "\n");
+            $joined = $disk->path("{$tmpDir}/joined.mp4");
+            $res = Process::timeout(300)->run([$ffmpeg, '-y', '-f', 'concat', '-safe', '0', '-i', $listFile, '-c', 'copy', $joined]);
+            if (! $res->successful() || ! is_file($joined)) {
+                throw new \RuntimeException('Video ke clips jud nahi paaye. ' . $this->ffTail($res->errorOutput()));
+            }
+
+            // ---- 2) Awaaz: voice (apne samay par) + music (voice ho to halka) ----
+            $music = ReelMusic::path($this->settingsUserId, 'yt_music');
+            $cmd = [$ffmpeg, '-y', '-i', $joined];
+            $filters = [];
+            $mixIn = [];
+            $idx = 1;
+            foreach ($voices as $k => [$wav, $first]) {
+                $cmd = array_merge($cmd, ['-i', $wav]);
+                $ms = (int) round($starts[$first] * 1000) + 300;
+                $filters[] = "[{$idx}:a]aresample=44100,aformat=sample_rates=44100:channel_layouts=stereo,adelay={$ms}|{$ms}[v{$k}]";
+                $mixIn[] = "[v{$k}]";
+                $idx++;
+            }
+            if ($music) {
+                $cmd = array_merge($cmd, ['-stream_loop', '-1', '-i', $music]);
+                $vol = $withVoice ? '0.12' : '0.9';
+                $filters[] = "[{$idx}:a]volume={$vol},aformat=sample_rates=44100:channel_layouts=stereo[m]";
+                $mixIn[] = '[m]';
+                $idx++;
+            }
+            if (! $mixIn) {
+                $cmd = array_merge($cmd, ['-f', 'lavfi', '-i', 'anullsrc=channel_layout=stereo:sample_rate=44100']);
+                $filters[] = "[{$idx}:a]anull[s]";
+                $mixIn[] = '[s]';
+            }
+            $tot = $this->fnum($total);
+            $filters[] = implode('', $mixIn) . 'amix=inputs=' . count($mixIn) . ":duration=longest:normalize=0,apad,atrim=duration={$tot}[a]";
+
+            // Pehle temp me banao, poora ban jaye tab asli naam par — adhoora video kabhi upload na ho
+            $out = $disk->path("{$tmpDir}/final.mp4");
+            $res = Process::timeout(600)->run(array_merge($cmd, [
+                '-filter_complex', implode(';', $filters),
+                '-map', '0:v', '-map', '[a]', '-c:v', 'copy', '-c:a', 'aac', '-b:a', '160k', '-ar', '44100', '-ac', '2',
+                '-t', $tot, '-movflags', '+faststart', $out,
+            ]));
+            if (! $res->successful() || ! is_file($out)) {
+                throw new \RuntimeException('Video me awaaz nahi jud paayi. ' . $this->ffTail($res->errorOutput()));
+            }
+            $disk->delete($mp4);
+            if (! @rename($out, $disk->path($mp4))) {
+                throw new \RuntimeException('Bana hua video save nahi hua (file rename).');
+            }
+        } finally {
+            $disk->deleteDirectory($tmpDir);
+        }
+
+        $disk->put('yt/week-' . $part->id . '.json', json_encode(['durations' => $durs, 'voice' => $withVoice]));
+
+        return ['mp4' => $mp4, 'durations' => $durs];
+    }
+
+    /** "0:00 Shuruaat\n0:12 Mesh …" — YouTube chapters (pehla 0:00, har ek 10s+, kam se kam 3). */
+    public function weekChapters(Part $part, array $durations): string
+    {
+        $meta = json_decode((string) $part->body, true) ?: [];
+        $labels = $meta['chapters'] ?? [];
+        $rows = [];
+        $t = 0.0;
+        foreach ($durations as $i => $d) {
+            $label = $labels[$i] ?? null;
+            if (filled($label) && $d >= 10) {
+                $s = (int) floor($t);
+                $stamp = $s >= 3600
+                    ? sprintf('%d:%02d:%02d', intdiv($s, 3600), intdiv($s % 3600, 60), $s % 60)
+                    : sprintf('%d:%02d', intdiv($s, 60), $s % 60);
+                $rows[] = ($rows ? $stamp : '0:00') . ' ' . $label;
+            }
+            $t += $d;
+        }
+        if (count($rows) < 3) {
+            return '';
+        }
+
+        return trim(($meta['head'] ?? '') . "\n" . implode("\n", $rows));
+    }
+
+    /** Lamba video upload: bina #Shorts, chapters description me, phir custom thumbnail. */
+    public function postWeekVideo(Part $part): string
+    {
+        $part->loadMissing(['story', 'cards' => fn ($q) => $q->orderBy('sort_order')]);
+        $cards = $part->cards->sortBy('sort_order')->values();
+        $first = $cards->first();
+        if (! $first) {
+            throw new \RuntimeException('Is video me koi frame nahi hai.');
+        }
+
+        $this->forUser($part->story?->user_id);
+        if (! $this->isConfigured()) {
+            throw new \RuntimeException('YouTube configured nahi. Pehle channel connect karo.');
+        }
+
+        @set_time_limit(1800);
+
+        // Preview / doosra upload abhi bana raha ho to card ko 'failed' kiye bina ruk jao
+        $lock = \Illuminate\Support\Facades\Cache::lock('yt-week-build-' . $part->id, 1800);
+        if (! $lock->get()) {
+            throw new \App\Exceptions\CardBusyException('Ye video abhi kahin aur ban raha hai (preview / upload) — 5-10 minute baad dobara try karo.');
+        }
+
+        try {
+            $first->claimFor('yt');
+        } catch (\Throwable $e) {
+            $lock->release();
+            throw $e;
+        }
+
+        try {
+            $built = $this->buildWeekVideo($part);
+            $caption = trim((string) $first->yt_caption);
+            $chapters = $this->weekChapters($part, $built['durations']);
+            $description = str_contains($caption, '[CHAPTERS]')
+                ? str_replace('[CHAPTERS]', $chapters, $caption)
+                : $caption . ($chapters !== '' ? "\n\n" . $chapters : '');
+            $description = preg_replace("/\n{3,}/", "\n\n", $description);
+
+            $id = $this->uploadShort(
+                Storage::disk('public')->path($built['mp4']),
+                $this->buildTitle($first, $part),
+                $description,
+                (string) $this->setting('yt_privacy', 'public'),
+                '22', // People & Blogs
+            );
+
+            foreach ($cards as $card) {
+                $this->markCardPosted($card, $id);
+            }
+
+            // Thumbnail na lage (channel verified nahi / limit) to bhi video upload ho chuka — sirf log
+            if ($part->image_path && Storage::disk('public')->exists($part->image_path)) {
+                try {
+                    $this->setThumbnail($id, Storage::disk('public')->path($part->image_path));
+                } catch (\Throwable $e) {
+                    Log::warning('YT thumbnail set nahi hua', ['video' => $id, 'error' => $e->getMessage()]);
+                }
+            }
+
+            return $id;
+        } catch (\Throwable $e) {
+            Log::error('YT weekly video post failed', ['part' => $part->id, 'error' => $e->getMessage()]);
+            $this->markCardFailed($first, $e->getMessage());
+            throw $e;
+        } finally {
+            $lock->release();
+        }
+    }
+
+    /** Custom thumbnail (JPG/PNG, 2MB tak). Channel phone-verified hona chahiye. */
+    public function setThumbnail(string $videoId, string $absImagePath): void
+    {
+        $ext  = strtolower(pathinfo($absImagePath, PATHINFO_EXTENSION));
+        $mime = $ext === 'png' ? 'image/png' : 'image/jpeg';
+        $res = Http::withToken($this->accessToken())
+            ->timeout(120)
+            ->withBody(file_get_contents($absImagePath), $mime)
+            ->post('https://www.googleapis.com/upload/youtube/v3/thumbnails/set?uploadType=media&videoId=' . urlencode($videoId));
+
+        if (! $res->successful()) {
+            throw new \RuntimeException($res->json('error.message') ?? ('HTTP ' . $res->status()));
+        }
     }
 
     protected function markCardPosted(PartCard $card, string $videoId): void

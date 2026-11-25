@@ -58,9 +58,65 @@ class Story extends Model
      * @param  string  $platform  instagram | youtube | facebook
      * @param  string  $statusCol  ig_status | yt_status | fb_status
      */
+    /** Rashifal Short ke part ka kind (body = "short:<kind>") → admin me dikhne wala naam. */
+    public const RASHI_SHORT_LABELS = [
+        'savdhan' => '⚠️ Savdhan Rahe 3 Rashi',
+        'prem'    => '💕 Prem me Lucky 3 Rashi',
+        'dhan'    => '💰 Dhan Labh Top 3',
+        'rang'    => '🎨 Shubh Rang 3 Rashi',
+        'ank'     => '🔢 Lucky Number 3 Rashi',
+        'upay'    => '🙏 Upay 3 Rashi',
+        'galti'   => '🚫 Galti Mat Karna 3 Rashi',
+        'shaadi'  => '💍 Rishta Pakka 3 Rashi',
+        'naukri'  => '📈 Naukri-Business Tarakki 3 Rashi',
+        'jodi'    => '🤝 Aaj ki Best Jodi',
+        'week'    => '🗓️ Is Hafte ki Top 3',
+        'chandra' => '🌕 Poonam / Amas 3 Rashi',
+        'fest'    => '🪔 Tyohar Special 3 Rashi',
+        'top3'    => '🍀 Top 3 Lucky Rashi', // purane saved
+        'all'     => '🔯 12 Rashi',          // purane saved (ab nahi bante)
+    ];
+
+    /**
+     * 🎬 Is hafte ka Saptahik video (type 'rashifal_week', category = Somvar) jo upload nahi hua.
+     * Sirf usi hafte (Somvar–Ravivar) — purane hafte ka kabhi nahi.
+     */
+    public static function nextRashifalWeekPart(int $userId): ?Part
+    {
+        $monday = now()->startOfWeek(\Carbon\Carbon::MONDAY)->toDateString();
+        $stories = static::where('status', 'published')->where('user_id', $userId)
+            ->where('type', 'rashifal_week')->where('category', $monday)
+            ->with(['parts' => fn ($q) => $q->orderBy('sort_order'), 'parts.cards' => fn ($q) => $q->orderBy('sort_order')])
+            ->orderBy('id')->get();
+
+        foreach ($stories as $story) {
+            foreach ($story->parts as $part) {
+                $first = $part->cards->first();
+                // Lamba video banne + upload me der lagti hai — 'posting' 60 min tak atka maano
+                $stuck = $first?->yt_status === 'posting'
+                    && $first->updated_at?->lt(now()->subMinutes(max(60, PartCard::POSTING_STALE_MINUTES)));
+                if ($first && ($first->yt_status === null || $stuck)) {
+                    return $part;
+                }
+            }
+        }
+
+        return null;
+    }
+
+    public static function rashiShortLabel(?string $body): string
+    {
+        if (str_starts_with(ltrim((string) $body), '{')) {
+            return '🎬 Saptahik Video (16:9)';
+        }
+        $kind = str_starts_with((string) $body, 'short:') ? substr((string) $body, 6) : '';
+
+        return self::RASHI_SHORT_LABELS[$kind] ?? '📺 Rashifal Short';
+    }
+
     /**
      * Aaj ke Rashifal YouTube Shorts (type 'rashifal_short', category = din) me se agla part
-     * jo upload nahi hua — har part = ek Short (12 rashi, fir Top 3). Status pehle card par.
+     * jo upload nahi hua — har part = ek Short (roz 3 themes). Status pehle card par.
      */
     public static function nextRashifalShortPart(int $userId): ?Part
     {
@@ -71,6 +127,9 @@ class Story extends Model
 
         foreach ($stories as $story) {
             foreach ($story->parts as $part) {
+                if ((string) $part->body === 'short:all') {
+                    continue; // 12 Rashi Short band — YouTube par sirf Top 3
+                }
                 $first = $part->cards->first();
                 $stuck = $first?->yt_status === 'posting'
                     && $first->updated_at?->lt(now()->subMinutes(PartCard::POSTING_STALE_MINUTES));
