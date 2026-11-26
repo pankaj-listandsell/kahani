@@ -541,18 +541,19 @@
             deco: null, starCount: 1,
         },
         hindi: {
-            accent: '#fb923c', soft: '#fdba74', a: rgbaOf('251, 146, 60'),
-            medal: ['#ffedd5', '#ea580c'], ink: '#450a0a', stroke: '#2a0508', deep: rgbaOf('45, 6, 12'),
-            banner: ['#f97316', '#fed7aa'], bannerTop: '#7f1d1d',
+            // Shaahi neela-jaamuni + kesariya (chamakdar, Gujarati ke peele-laal se alag)
+            accent: '#ff9f1c', soft: '#ffc46b', a: rgbaOf('255, 159, 28'),
+            medal: ['#ffe8c2', '#f76707'], ink: '#0b1446', stroke: '#050a2a', deep: rgbaOf('8, 14, 52'),
+            banner: ['#ff9f1c', '#ffe0a3'], bannerTop: '#7c2d12',
             sky: i => [
-                ['#1c0208', '#5f0a1f', '#8f1d2c'], // Agni — rani/laal
-                ['#170409', '#4a0d1d', '#6b2216'], // Prithvi — maroon
-                ['#1a0318', '#4f0a3a', '#7a1650'], // Vayu — gulabi-jaamuni
-                ['#12030f', '#3d0a35', '#5e1046'], // Jal — gehra jaamuni
+                ['#0a0f3d', '#1e3a8a', '#7c3aed'], // Agni — neela → jaamuni
+                ['#071233', '#1d4ed8', '#0e7490'], // Prithvi — neela → firozi
+                ['#0b0b3b', '#3730a3', '#9333ea'], // Vayu — indigo → baingani
+                ['#050d2e', '#1e40af', '#2563eb'], // Jal — gehra neela
             ][i % 4],
-            skyAlt: ['#1a0210', '#560b26', '#7f1d3a'],
-            skySpecial: ['#2a0510', '#701a33', '#9a2a1a'], skyThumb: ['#4a0519', '#9f1239', '#c2410c'],
-            deco: 'mandala', starCount: 0.45,
+            skyAlt: ['#0a0f3d', '#312e81', '#7c3aed'],
+            skySpecial: ['#0a0f3d', '#3730a3', '#9333ea'], skyThumb: ['#1e1b4b', '#4338ca', '#c026d3'],
+            deco: 'mandala', starCount: 0.9,
         },
         hinglish: {
             accent: '#5eead4', soft: '#99f6e4', a: rgbaOf('94, 234, 212'),
@@ -700,7 +701,8 @@
         }
         drawDeco(ctx, W, H, idx);
 
-        // Rashi chakra ki halki rings
+        // Rashi chakra ki halki rings (khaali = nahi)
+        if (!rings.length) return;
         ctx.save();
         ctx.strokeStyle = dz().a(0.18);
         ctx.lineWidth = 3;
@@ -754,8 +756,173 @@
         return out.join('   •   ');
     }
 
+    /**
+     * 🟠 Hindi card ka apna layout (Gujarati wale se alag dhaancha):
+     * upar kesariya patti → baayein rashi chinh + daayein naam/akshar/★ → bhavishya →
+     * 3 gol meter (prem/karyar/sehat) → 4 dabbe (karo / na karo / upay / mantra) → shubh chips → samay → DM banner.
+     */
+    function drawRashiHindi(c, item) {
+        const ctx = c.getContext('2d');
+        const L = tr(), C = ct(), D = dz();
+        const i = item._idx;
+        const f = !!fest();
+        K.reset(ctx);
+        drawSky(ctx, i, 470, []);
+        const top = f ? 70 : 44;
+
+        // (1) Kesariya patti: heading
+        ctx.save();
+        const band = ctx.createLinearGradient(40, 0, W - 40, 0);
+        band.addColorStop(0, D.medal[1]); band.addColorStop(0.5, D.accent); band.addColorStop(1, D.medal[1]);
+        ctx.shadowColor = 'rgba(0,0,0,0.4)'; ctx.shadowBlur = 20;
+        ctx.fillStyle = band;
+        ctx.beginPath(); ctx.roundRect(48, top, W - 96, 104, 52); ctx.fill();
+        ctx.shadowColor = 'transparent';
+        ctx.strokeStyle = 'rgba(255,255,255,0.85)'; ctx.lineWidth = 3; ctx.stroke();
+        ctx.fillStyle = D.ink; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+        const hd = (f ? fest().deco + ' ' : '🪔 ') + headText() + (f ? ' ' + fest().deco : ' 🪔');
+        K.fitOneLine(ctx, hd, W - 200, 60, 38);
+        ctx.fillText(hd, W / 2, top + 55);
+        ctx.restore();
+
+        drawDatePill(ctx, top + 160, 38, 66);
+        const tl = tithiLine();
+        if (tl) {
+            ctx.fillStyle = 'rgba(255,255,255,0.85)'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+            K.fitOneLine(ctx, tl, W - 160, 30, 20, '400');
+            ctx.fillText(tl, W / 2, top + 220);
+        }
+
+        // (2) Baayein bada chinh, daayein naam + akshar + ★ + chandra
+        const hy = top + 430, mx = 255, mr = 140;
+        drawMedalBack(ctx, mx, hy, mr);
+        ctx.save();
+        ctx.shadowColor = D.a(0.7); ctx.shadowBlur = 44;
+        const mg = ctx.createRadialGradient(mx, hy, mr / 7, mx, hy, mr + 10);
+        mg.addColorStop(0, D.medal[0]); mg.addColorStop(1, D.medal[1]);
+        ctx.fillStyle = mg;
+        ctx.beginPath(); ctx.arc(mx, hy, mr, 0, Math.PI * 2); ctx.fill();
+        ctx.restore();
+        ctx.save();
+        ctx.strokeStyle = '#ffffff'; ctx.lineWidth = 6;
+        ctx.beginPath(); ctx.arc(mx, hy, mr, 0, Math.PI * 2); ctx.stroke();
+        ctx.fillStyle = D.ink; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+        ctx.font = `150px "Segoe UI Symbol", "Noto Sans Symbols 2", ${K.STACK}`;
+        ctx.fillText(SYMBOLS[i] + '︎', mx, hy + 8);
+        ctx.restore();
+
+        const rx = 470, rw = W - rx - 60, rcx = rx + rw / 2;
+        ctx.save();
+        ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.fillStyle = '#ffffff';
+        ctx.shadowColor = 'rgba(0,0,0,0.45)'; ctx.shadowBlur = 14;
+        K.fitOneLine(ctx, L.names[i], rw, 110, 60);
+        ctx.fillText(L.names[i], rcx, hy - 90);
+        ctx.shadowColor = 'transparent';
+        if (L.letters) {
+            ctx.fillStyle = D.soft;
+            const lf = K.fit(ctx, '(' + L.letters[i] + ')', { maxW: rw, maxH: 84, size: 30, minSize: 20, lineHeight: 1.3, weight: '400' });
+            K.drawLines(ctx, lf.lines, rcx, hy - 4, lf.lh);
+        }
+        ctx.font = `58px "Segoe UI Symbol", ${K.STACK}`;
+        const n = ratingOf(item);
+        for (let k = 0; k < 5; k++) {
+            ctx.fillStyle = k < n ? D.accent : 'rgba(255,255,255,0.22)';
+            ctx.fillText('★', rcx + (k - 2) * 66, hy + 76);
+        }
+        const ms = moonState(i);
+        if (ms) {
+            const txt = ms === 'in' ? C.moonIn : C.moon8;
+            const s = K.fitOneLine(ctx, txt, rw - 40, 30, 20);
+            const bw = Math.min(rw, ctx.measureText(txt).width + 50), bh = 54;
+            ctx.fillStyle = ms === 'in' ? '#fde68a' : '#fdba74';
+            ctx.beginPath(); ctx.roundRect(rcx - bw / 2, hy + 112, bw, bh, bh / 2); ctx.fill();
+            ctx.fillStyle = D.ink; ctx.font = K.font(s);
+            ctx.fillText(txt, rcx, hy + 112 + bh / 2 + 2);
+        }
+        ctx.restore();
+
+        // (3) Bhavishya — baayein kesariya patti wala panel
+        let y = hy + 200;
+        const px = 60, pw = W - 120, pa = 240;
+        glass(ctx, px, y, pw, pa);
+        ctx.fillStyle = D.accent;
+        ctx.beginPath(); ctx.roundRect(px + 14, y + 22, 10, pa - 44, 5); ctx.fill();
+        ctx.fillStyle = '#ffffff';
+        const la = K.fitRich(ctx, [[{ t: K.str(item.prediction), b: false }]], pw - 90, pa - 40, 44, 24);
+        K.drawRich(ctx, la, px + 50, y + (pa - la.height) / 2);
+        y += pa + 22;
+
+        // (4) 3 gol meter
+        const meters = [['❤️', L.love, 'love', '#f472b6'], ['💼', L.career, 'career', D.accent], ['🩺', L.health, 'health', '#4ade80']];
+        const gw = (pw - 2 * 18) / 3, gh = 310;
+        meters.forEach(([ico, label, key, color], k) => {
+            const gx = px + k * (gw + 18), gcx = gx + gw / 2, gcy = y + 102, R = 68;
+            glass(ctx, gx, y, gw, gh);
+            const pct = scorePct(item, key + '_score');
+            ctx.save();
+            ctx.lineCap = 'round'; ctx.lineWidth = 16;
+            ctx.strokeStyle = 'rgba(255,255,255,0.16)';
+            ctx.beginPath(); ctx.arc(gcx, gcy, R, 0, Math.PI * 2); ctx.stroke();
+            ctx.strokeStyle = color;
+            ctx.beginPath(); ctx.arc(gcx, gcy, R, -Math.PI / 2, -Math.PI / 2 + Math.PI * 2 * pct / 100); ctx.stroke();
+            ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+            ctx.fillStyle = '#ffffff'; ctx.font = K.font(40);
+            ctx.fillText(num(pct) + '%', gcx, gcy + 2);
+            const lbl = ico + ' ' + String(label).replace(/[:：]\s*$/, '');
+            ctx.fillStyle = D.soft;
+            K.fitOneLine(ctx, lbl, gw - 30, 34, 22);
+            ctx.fillText(lbl, gcx, y + 206);
+            const hint = K.str(item[key]).trim();
+            if (hint) {
+                ctx.fillStyle = 'rgba(255,255,255,0.9)';
+                const hf = K.fit(ctx, hint, { maxW: gw - 34, maxH: 70, size: 26, minSize: 18, lineHeight: 1.25, weight: '400' });
+                K.drawLines(ctx, hf.lines, gcx, y + 262, hf.lh);
+            }
+            ctx.restore();
+        });
+        y += gh + 22;
+
+        // (5) 4 dabbe: karo / na karo / upay / mantra
+        const tiles = [
+            [C.doL, K.str(item.do), '#86efac'],
+            [C.dontL, K.str(item.dont), '#fca5a5'],
+            [C.upay, K.str(item.upay), D.accent],
+            [C.mantra, C.mantras[LORD[i]], D.soft],
+        ];
+        const tw = (pw - 18) / 2, th2 = 160;
+        tiles.forEach(([label, text, color], k) => {
+            const tx = px + (k % 2) * (tw + 18), ty = y + Math.floor(k / 2) * (th2 + 16);
+            glass(ctx, tx, ty, tw, th2);
+            ctx.save();
+            ctx.fillStyle = color;
+            ctx.beginPath(); ctx.roundRect(tx, ty + 18, 8, th2 - 36, 4); ctx.fill();
+            ctx.textAlign = 'left'; ctx.textBaseline = 'middle';
+            K.fitOneLine(ctx, label, tw - 50, 32, 22);
+            ctx.fillText(label, tx + 28, ty + 38);
+            ctx.fillStyle = '#ffffff';
+            const tf = K.fit(ctx, text || '—', { maxW: tw - 50, maxH: 96, size: 32, minSize: 18, lineHeight: 1.28, weight: '400' });
+            K.drawLines(ctx, tf.lines, tx + 28, ty + 108, tf.lh);
+            ctx.restore();
+        });
+        y += 2 * th2 + 16 + 24;
+
+        // (6) Shubh ank / rang / disha + samay
+        drawLuckyChips(ctx, item, y + 38);
+        y += 92;
+        const tline = timeLine();
+        if (tline) {
+            ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.fillStyle = '#ffffff';
+            K.fitOneLine(ctx, tline, W - 100, 30, 20);
+            ctx.fillText(tline, W / 2, y + 18);
+        }
+
+        drawDmBanner(ctx, f);
+        drawFestDeco(ctx, false);
+    }
+
     function drawRashi(c, item) {
         const ctx = c.getContext('2d'); drawLang = itemsLang;
+        if (itemsLang === 'hindi') return drawRashiHindi(c, item); // Hindi ka apna layout
         const L = tr(), C = ct();
         const i = item._idx;
         const f = !!fest();

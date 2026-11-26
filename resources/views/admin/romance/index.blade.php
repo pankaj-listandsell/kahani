@@ -67,11 +67,11 @@
                 </select>
             </div>
             <div>
-                <label class="block text-xs font-bold text-slate-700 uppercase tracking-wide mb-1.5">🔢 Card Count</label>
+                <label class="block text-xs font-bold text-slate-700 uppercase tracking-wide mb-1.5">🔢 Kahani Count</label>
                 <select id="count" class="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:ring-2 focus:ring-amber-500 focus:outline-none font-medium">
-                    <option value="1">1 Card</option>
-                    <option value="3" selected>3 Cards</option>
-                    <option value="5">5 Cards</option>
+                    <option value="1">1 Kahani</option>
+                    <option value="3" selected>3 Kahani</option>
+                    <option value="5">5 Kahani</option>
                 </select>
             </div>
             <div>
@@ -81,7 +81,15 @@
             </div>
         </div>
         <div class="grid sm:grid-cols-4 gap-4">
-            <div class="sm:col-span-3">
+            <div>
+                <label class="block text-xs font-bold text-slate-700 uppercase tracking-wide mb-1.5">📄 1 Kahani = Ketla Card</label>
+                <select id="parts" class="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:ring-2 focus:ring-amber-500 focus:outline-none font-medium">
+                    <option value="1" selected>1 Card (aakhi kahani)</option>
+                    <option value="2">2 Card (Bhaag 1–2)</option>
+                    <option value="3">3 Card (Bhaag 1–3)</option>
+                </select>
+            </div>
+            <div class="sm:col-span-2">
                 <label class="block text-xs font-bold text-slate-700 uppercase tracking-wide mb-1.5">✍️ Topic (optional — category khali hoy to jaruri)</label>
                 <input id="topic" type="text" maxlength="200" placeholder="e.g. વિસનગરની ઓફિસમાં મોડે સુધી કામ / ટ્રેનમાં મળેલી અજાણી સ્ત્રી"
                        class="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:ring-2 focus:ring-amber-500 focus:outline-none">
@@ -179,11 +187,16 @@
     const cat = window.MultiCategory(el('category'));
 
     const I18N = {
-        gujarati: { q: 'પ્રશ્ન:', a: 'જવાબ:', s: 'સમાધાન:', brand: 'દિલની વાત', digits: '૦૧૨૩૪૫૬૭૮૯' },
-        hindi:    { q: 'प्रश्न:', a: 'जवाब:', s: 'समाधान:', brand: 'दिल की बात', digits: '०१२३४५६७८९' },
-        hinglish: { q: 'Sawaal:', a: 'Jawab:', s: 'Samadhan:', brand: 'Dil Ki Baat', digits: '0123456789' },
+        gujarati: { q: 'પ્રશ્ન:', a: 'જવાબ:', s: 'સમાધાન:', brand: 'દિલની વાત', digits: '૦૧૨૩૪૫૬૭૮૯',
+            part: 'ભાગ', next: '👉 આગળ વાંચવા માટે ફોલો કરો', nextSub: 'ભાગ {n} જલ્દી આવશે…', end: '❤️ આવી વધુ કહાનીઓ માટે ફોલો કરો', endSub: 'કહાની ગમી હોય તો શેર કરો' },
+        hindi:    { q: 'प्रश्न:', a: 'जवाब:', s: 'समाधान:', brand: 'दिल की बात', digits: '०१२३४५६७८९',
+            part: 'भाग', next: '👉 आगे पढ़ने के लिए फॉलो करें', nextSub: 'भाग {n} जल्द आएगा…', end: '❤️ ऐसी और कहानियों के लिए फॉलो करें', endSub: 'कहानी पसंद आई हो तो शेयर करें' },
+        hinglish: { q: 'Sawaal:', a: 'Jawab:', s: 'Samadhan:', brand: 'Dil Ki Baat', digits: '0123456789',
+            part: 'Part', next: '👉 Aage padhne ke liye Follow karo', nextSub: 'Part {n} jald aayega…', end: '❤️ Aisi aur kahaniyon ke liye Follow karo', endSub: 'Kahani pasand aayi ho to Share karo' },
     };
     const tr = () => I18N[itemsLang] || I18N.gujarati;
+    /** "ભાગ ૧/૩" */
+    const partLabel = item => tr().part + ' ' + num(item.part) + '/' + num(item.total);
     const num = n => String(n).replace(/\d/g, d => tr().digits[d]);
     const brandName = () => el('brand').value.trim() || tr().brand;
 
@@ -209,12 +222,15 @@
             const r = await fetch(GEN_URL, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json', 'X-CSRF-TOKEN': CSRF, 'Accept': 'application/json' },
-                body: JSON.stringify({ count: el('count').value, language: el('language').value, categories: cat.values(), topic: el('topic').value, style: 'kahani' })
+                body: JSON.stringify({ count: el('count').value, language: el('language').value, categories: cat.values(), topic: el('topic').value, style: 'kahani', parts: el('parts').value })
             });
             const d = await r.json();
             if (!d.ok) throw new Error(K.saveError(d));
 
-            items = (Array.isArray(d.items) ? d.items : []).map(it => ({ ...it, style: 'kahani' }));
+            // 2-3 card: har bhaag = ek card (group = kahani no., part/total = Bhaag 1/3)
+            items = (Array.isArray(d.items) ? d.items : []).flatMap((it, k) => Array.isArray(it.parts) && it.parts.length > 1
+                ? it.parts.map((p, j) => ({ ...it, style: 'kahani', story: p, part: j + 1, total: it.parts.length, group: k + 1 }))
+                : [{ ...it, style: 'kahani', story: it.story || (it.parts || [])[0] || '' }]);
             if (!items.length) throw new Error('AI ne koi card nahi diya — dobara try karo.');
             itemsLang = el('language').value;
             // Story ka naam / category: pasand kari category na naam (emoji vagar), " + " thi jodi
@@ -257,7 +273,7 @@
             box.className = 'bg-white rounded-xl border border-slate-200 overflow-hidden shadow-sm flex flex-col';
             box.innerHTML = `
                 <div class="p-3 bg-amber-50 border-b border-amber-100 flex items-center justify-between gap-2 text-xs font-bold text-amber-900">
-                    <span class="truncate">#${idx + 1}: ${K.esc(item.title)}</span>
+                    <span class="truncate">#${idx + 1}: ${K.esc(item.title)}${item.total > 1 ? ' — ' + K.esc(partLabel(item)) : ''}</span>
                     <button type="button" class="remove shrink-0 text-red-600 hover:underline">✕</button>
                 </div>
                 <div class="p-3 canvas-slot"></div>
@@ -429,13 +445,16 @@
     }
 
     function drawSalah(c, item) {
+        if (item.style === 'kahani' && item.total > 1) return drawSeriesCard(c, item); // 2-3 card wali kahani ka alag design
         const ctx = c.getContext('2d');
         const L = tr();
         K.reset(ctx);
 
         drawPaper(ctx);
 
-        const titleBottom = drawTitle(ctx, item.title, 110);
+        const series = item.style === 'kahani' && item.total > 1;
+        if (series) drawPartPill(ctx, partLabel(item));
+        const titleBottom = drawTitle(ctx, item.title, series ? 130 : 110);
 
         // Body paragraphs
         const sol = solutionsOf(item);
@@ -458,13 +477,135 @@
         ].filter(Boolean);
 
         const x = 70, maxW = W - 140;
-        const top = titleBottom + 30, bottom = H - 120;
+        const top = titleBottom + 30, bottom = series ? H - 250 : H - 120;
         ctx.fillStyle = pp().ink;
         // Kahani: sabse bada font jo fit ho + bachi jagah line/para ke beech — card neeche tak bhara dikhe
         const layout = item.style === 'kahani'
             ? fillRich(ctx, paras, maxW, bottom - top)
             : K.fitRich(ctx, paras, maxW, bottom - top, 44);
         K.drawRich(ctx, layout, x, top);
+        if (series) drawFollowBar(ctx, item);
+    }
+
+    // ---------- 📚 2-3 card wali kahani: alag design (raat jaisa gehra, gulabi chamak) ----------
+    const SERIES = {
+        gujarati: { glow: '236, 72, 153', accent: '#f472b6', accent2: '#fbcfe8', bg: ['#3a0b24', '#1c0614', '#0a0208'] },
+        hindi:    { glow: '225, 29, 72', accent: '#fb7185', accent2: '#fecdd3', bg: ['#3d0a16', '#1d050c', '#0b0205'] },
+        hinglish: { glow: '139, 92, 246', accent: '#a78bfa', accent2: '#ddd6fe', bg: ['#24104a', '#120826', '#06030f'] },
+    };
+    function drawSeriesCard(c, item) {
+        const ctx = c.getContext('2d');
+        const L = tr(), T = SERIES[itemsLang] || SERIES.gujarati;
+        K.reset(ctx);
+
+        // Background: gehra radial + dhundhli roshni ke gole (bokeh)
+        const g = ctx.createRadialGradient(W / 2, H * 0.38, 80, W / 2, H / 2, H * 0.8);
+        g.addColorStop(0, T.bg[0]); g.addColorStop(0.55, T.bg[1]); g.addColorStop(1, T.bg[2]);
+        ctx.fillStyle = g; ctx.fillRect(0, 0, W, H);
+        const r = rng(97 + (item.group || 1) * 13);
+        for (let i = 0; i < 26; i++) {
+            const x = r() * W, y = r() * H, rad = 30 + r() * 110;
+            const bg = ctx.createRadialGradient(x, y, 0, x, y, rad);
+            bg.addColorStop(0, `rgba(${T.glow}, ${0.10 + r() * 0.12})`); bg.addColorStop(1, `rgba(${T.glow}, 0)`);
+            ctx.fillStyle = bg; ctx.beginPath(); ctx.arc(x, y, rad, 0, Math.PI * 2); ctx.fill();
+        }
+
+        // Upar: bhaag ki progress patti (1/3 → ek hissa bhara)
+        const segW = (W - 160 - (item.total - 1) * 16) / item.total;
+        for (let k = 0; k < item.total; k++) {
+            ctx.fillStyle = k < item.part ? T.accent : 'rgba(255,255,255,0.18)';
+            ctx.beginPath(); ctx.roundRect(80 + k * (segW + 16), 54, segW, 12, 6); ctx.fill();
+        }
+
+        // Bhaag ki ribbon
+        ctx.save();
+        const pl = partLabel(item);
+        const ps = K.fitOneLine(ctx, pl, 420, 40, 26);
+        const pw = ctx.measureText(pl).width + 90, ph = ps + 30, py = 100;
+        const rg = ctx.createLinearGradient(W / 2 - pw / 2, 0, W / 2 + pw / 2, 0);
+        rg.addColorStop(0, T.accent); rg.addColorStop(1, T.accent2);
+        ctx.fillStyle = rg;
+        ctx.beginPath(); ctx.roundRect(W / 2 - pw / 2, py, pw, ph, ph / 2); ctx.fill();
+        ctx.fillStyle = T.bg[2]; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+        ctx.fillText(pl, W / 2, py + ph / 2 + 2);
+        ctx.restore();
+
+        // Title: safed, gulabi chamak, neeche patli lakeer
+        ctx.save();
+        ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+        const tf = K.fit(ctx, String(item.title || '').trim(), { maxW: W - 150, maxH: 200, size: 62, minSize: 40, lineHeight: 1.22 });
+        ctx.shadowColor = `rgba(${T.glow}, 0.8)`; ctx.shadowBlur = 26;
+        ctx.fillStyle = '#ffffff';
+        const ty = 205 + (tf.lines.length * tf.lh) / 2;
+        K.drawLines(ctx, tf.lines, W / 2, ty, tf.lh);
+        ctx.restore();
+        const lineY = 205 + tf.lines.length * tf.lh + 22;
+        const lg = ctx.createLinearGradient(W / 2 - 220, 0, W / 2 + 220, 0);
+        lg.addColorStop(0, `rgba(${T.glow}, 0)`); lg.addColorStop(0.5, T.accent); lg.addColorStop(1, `rgba(${T.glow}, 0)`);
+        ctx.fillStyle = lg; ctx.fillRect(W / 2 - 220, lineY, 440, 4);
+
+        // Kahani: halka gulabi-safed text
+        const paras = K.str(item.story).split(/\n\s*\n|\n/).map(p => p.trim()).filter(Boolean).map(p => [{ t: p, b: false }]);
+        const top = lineY + 40, bottom = H - 250;
+        ctx.fillStyle = '#fdf2f8';
+        const layout = fillRich(ctx, paras, W - 140, bottom - top);
+        K.drawRich(ctx, layout, 70, top);
+
+        // Neeche: follow patti (gulabi) + chhota brand
+        const last = item.part >= item.total;
+        const main = last ? L.end : L.next;
+        const sub = last ? L.endSub : L.nextSub.replace('{n}', num(item.part + 1));
+        const bx = 60, bw = W - 120, bh = 150, by = H - 70 - bh;
+        ctx.save();
+        const fg = ctx.createLinearGradient(bx, 0, bx + bw, 0);
+        fg.addColorStop(0, T.accent); fg.addColorStop(1, T.accent2);
+        ctx.shadowColor = `rgba(${T.glow}, 0.6)`; ctx.shadowBlur = 30;
+        ctx.fillStyle = fg;
+        ctx.beginPath(); ctx.roundRect(bx, by, bw, bh, 75); ctx.fill();
+        ctx.shadowColor = 'transparent';
+        ctx.fillStyle = T.bg[2]; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+        K.fitOneLine(ctx, main, bw - 80, 46, 28);
+        ctx.fillText(main, W / 2, by + 58);
+        ctx.fillStyle = 'rgba(0,0,0,0.65)';
+        K.fitOneLine(ctx, sub, bw - 100, 32, 22, '400');
+        ctx.fillText(sub, W / 2, by + 106);
+        ctx.fillStyle = `rgba(${T.glow}, 0.9)`;
+        K.fitOneLine(ctx, '♥ ' + brandName(), 500, 30, 20);
+        ctx.fillText('♥ ' + brandName(), W / 2, H - 36);
+        ctx.restore();
+    }
+
+    /** Upar beech me "ભાગ ૧/૩" ki chhoti pill. */
+    function drawPartPill(ctx, text) {
+        ctx.save();
+        const s = K.fitOneLine(ctx, text, 400, 36, 24);
+        const w = ctx.measureText(text).width + 70, h = s + 26, y = 52;
+        ctx.fillStyle = pp().title;
+        ctx.beginPath(); ctx.roundRect(W / 2 - w / 2, y, w, h, h / 2); ctx.fill();
+        ctx.fillStyle = '#ffffff'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+        ctx.fillText(text, W / 2, y + h / 2 + 2);
+        ctx.restore();
+    }
+
+    /** Neeche patti: beech ke bhaag = "aage padhne ke liye follow karo", aakhri = "aisi aur kahaniyon ke liye follow". */
+    function drawFollowBar(ctx, item) {
+        const L = tr(), last = item.part >= item.total;
+        const main = last ? L.end : L.next;
+        const sub = last ? L.endSub : L.nextSub.replace('{n}', num(item.part + 1));
+        const x = 60, w = W - 120, h = 150, y = H - 60 - h;
+        ctx.save();
+        ctx.shadowColor = 'rgba(0,0,0,0.25)'; ctx.shadowBlur = 18;
+        ctx.fillStyle = pp().title;
+        ctx.beginPath(); ctx.roundRect(x, y, w, h, 30); ctx.fill();
+        ctx.shadowColor = 'transparent';
+        ctx.strokeStyle = pp().hl; ctx.lineWidth = 6; ctx.stroke();
+        ctx.fillStyle = '#ffffff'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+        K.fitOneLine(ctx, main, w - 60, 46, 28);
+        ctx.fillText(main, W / 2, y + 58);
+        ctx.fillStyle = 'rgba(255,255,255,0.85)';
+        K.fitOneLine(ctx, sub, w - 80, 32, 22, '400');
+        ctx.fillText(sub, W / 2, y + 108);
+        ctx.restore();
     }
 
     /**
@@ -516,7 +657,10 @@
             return {
                 order: idx + 1,
                 text: voiceText(item),
-                caption: K.str(item.caption),
+                caption: item.total > 1
+                    ? [partLabel(item) + ' — ' + K.str(item.title), K.str(item.caption), item.part >= item.total ? tr().end : tr().next].join('\n\n')
+                    : K.str(item.caption),
+                group: item.total > 1 ? item.group : null,
                 hashtags: K.str(item.hashtags),
                 image: off.toDataURL('image/webp', 0.92),
             };

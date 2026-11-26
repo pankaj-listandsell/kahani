@@ -206,6 +206,19 @@ class InstagramAutoPost extends Command
             }
             $isCollection = $story->isCollection();
             foreach ($story->parts as $part) {
+                // 📚 Series (2-3 card ki Adult Kahani): kram me — shuru ho chuki ho to pehle wahi poori karo,
+                // warna sirf uska pehla bhaag random pool me (aadhi kahani beech se kabhi na jaaye)
+                if ($isCollection && Story::isSeriesPart($part)) {
+                    $series = $part->cards->sortBy('sort_order')->values();
+                    $next = $series->first(fn ($c) => $c->ig_status === null);
+                    if ($next) {
+                        if ($series->contains(fn ($c) => $c->ig_status !== null)) {
+                            return $next;
+                        }
+                        $randomPool[] = $next;
+                    }
+                    continue;
+                }
                 foreach ($part->cards as $card) {
                     // Sirf fresh cards (jo abhi tak kabhi post/queue/fail nahi hue).
                     if ($card->ig_status !== null) {

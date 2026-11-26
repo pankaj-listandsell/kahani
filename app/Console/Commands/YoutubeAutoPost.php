@@ -257,6 +257,19 @@ class YoutubeAutoPost extends Command
             }
             $isCollection = $story->isCollection();
             foreach ($story->parts as $part) {
+                // 📚 Series (2-3 card ki Adult Kahani): kram me — shuru ho chuki ho to pehle wahi poori karo,
+                // warna sirf uska pehla bhaag random pool me (aadhi kahani beech se kabhi na jaaye)
+                if ($isCollection && Story::isSeriesPart($part)) {
+                    $series = $part->cards->sortBy('sort_order')->values();
+                    $next = $series->first(fn ($c) => $c->yt_status === null);
+                    if ($next) {
+                        if ($series->contains(fn ($c) => $c->yt_status !== null)) {
+                            return $next;
+                        }
+                        $randomPool[] = $next;
+                    }
+                    continue;
+                }
                 foreach ($part->cards as $card) {
                     // 'posting' 30+ min purana = pichhla upload beech me kill hua — dobara try karo
                     $stuck = $card->yt_status === 'posting'

@@ -46,6 +46,12 @@ class Story extends Model
      */
     public const REMOVED_TYPES = ['mind_reader', 'yoga', 'name_secret', 'puzzle', 'this_or_that'];
 
+    /** 2-3 card ki kahani ka part (body "series:N") — auto-post isko kram me bhejta hai. */
+    public static function isSeriesPart($part): bool
+    {
+        return str_starts_with((string) $part?->body, 'series:');
+    }
+
     public function isCollection(): bool
     {
         return in_array($this->type, self::COLLECTION_TYPES, true);

@@ -61,35 +61,6 @@
             <span id="audioSaved" class="text-green-600 text-xs font-medium"></span>
             <p class="text-xs text-slate-400">"Default" = aapki global voice-over setting. Voice tabhi aayegi jab Gemini TTS quota bacha ho.</p>
         </div>
-
-
-        {{-- Background Music Track & SFX (Per-user setting) --}}
-        @php($userBgm = \App\Models\Setting::getFor(auth()->id(), 'quiz_bgm_track', 'suspense'))
-        @php($userSfx = \App\Models\Setting::getFor(auth()->id(), 'quiz_sfx_enabled', '1') !== '0')
-        <div class="grid sm:grid-cols-2 gap-3 border-t border-slate-100 pt-4"
-             data-url="{{ route('admin.settings.reelaudio') }}" id="bgmSfxBox">
-            <div>
-                <label class="block text-xs font-semibold text-slate-500 uppercase tracking-wide mb-1.5">🎵 Background Music</label>
-                <select id="bgmTrackSel" class="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:ring-2 focus:ring-violet-400 focus:outline-none">
-                    <option value="suspense" @selected($userBgm === 'suspense')>🥁 Suspense / Drama (Pulse)</option>
-                    <option value="lofi" @selected($userBgm === 'lofi')>🎧 Lo-Fi Chill (Relaxing)</option>
-                    <option value="inspiration" @selected($userBgm === 'inspiration')>✨ Inspirational (Uplifting)</option>
-                    <option value="none" @selected($userBgm === 'none')>🔇 None (Voice only)</option>
-                </select>
-            </div>
-            <div>
-                <label class="block text-xs font-semibold text-slate-500 uppercase tracking-wide mb-1.5">🔔 Reel Sound Effects</label>
-                <label class="flex items-center gap-2 mt-2 cursor-pointer">
-                    <input type="checkbox" id="sfxCheck" class="accent-violet-600 w-4 h-4" @checked($userSfx)>
-                    <span class="text-sm font-medium">⏱️ Tick-Tick &amp; Ding! 🔔 Chime</span>
-                </label>
-            </div>
-        </div>
-        <div class="flex items-center gap-2">
-            <span id="bgmSfxSaved" class="text-green-600 text-xs font-medium"></span>
-            <p class="text-xs text-slate-400">Quiz reels me ye track halka (22% volume) voice ke peeche bajta hai. Baaki reels me ye tab bajta hai jab Instagram / YouTube page par apna music upload na kiya ho.</p>
-        </div>
-
     </div>
 </div>
 
@@ -152,27 +123,5 @@
         syncVoice();
     }
 
-    // ---------- BGM & SFX ----------
-    const sbox = document.getElementById('bgmSfxBox');
-    if (sbox) {
-        const bgmSel = document.getElementById('bgmTrackSel');
-        const sfxChk = document.getElementById('sfxCheck');
-        const saved  = document.getElementById('bgmSfxSaved');
-
-        async function saveBgmSfx() {
-            saved.textContent = '…';
-            try {
-                const r = await fetch(sbox.dataset.url, {
-                    method: 'POST',
-                    headers: { 'X-CSRF-TOKEN': CSRF, 'Accept': 'application/json', 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ bgm_track: bgmSel.value, sfx_enabled: sfxChk.checked }),
-                });
-                saved.textContent = (await r.json()).ok ? '✓ saved' : '⚠ fail';
-            } catch (e) { saved.textContent = '⚠ error'; }
-            setTimeout(() => { saved.textContent = ''; }, 2500);
-        }
-        bgmSel.addEventListener('change', saveBgmSfx);
-        sfxChk.addEventListener('change', saveBgmSfx);
-    }
 })();
 </script>

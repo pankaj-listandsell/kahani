@@ -43,7 +43,7 @@ class ViralStudioAiService
         return collect($language === 'gujarati' ? self::GUJARAT_CITIES : self::INDIA_CITIES)->shuffle()->take(max(1, $count))->values();
     }
 
-    public function generateSalah(int $count = 3, string $language = 'gujarati', string $category = 'Parenting', string $topic = '', string $style = 'normal'): array
+    public function generateSalah(int $count = 3, string $language = 'gujarati', string $category = 'Parenting', string $topic = '', string $style = 'normal', int $parts = 1): array
     {
         $langPrompt = $this->langPrompt($language);
         $category = trim($category);
@@ -55,7 +55,9 @@ class ViralStudioAiService
 
         // confession = lambi, dil kholkar likhi kahani (age, sheher, kya hua, kya mehsoos hua) + chhota jawab
         if ($style === 'kahani') {
-            return $this->generateKahaniCards($count, $langPrompt, $category, $topic, $language);
+            return $parts > 1
+                ? $this->generateKahaniSeries($count, $langPrompt, $category, $topic, $language, min(3, $parts))
+                : $this->generateKahaniCards($count, $langPrompt, $category, $topic, $language);
         }
 
         $guj = $language === 'gujarati'; // Gujarati = Gujarat ke udaharan, warna poore Bharat ke
@@ -119,31 +121,10 @@ PROMPT;
         return $this->callGeminiJson($prompt, 90);
     }
 
-    /**
-     * 💕 1-CARD KAHANI: ek hi 9:16 card me poori romantic / affair / pehli-raat wali kahani.
-     * Intimacy sirf ishaare me (kiss/aalingan tak, phir fade-to-black) — IG/FB par chalne layak.
-     */
-    protected function generateKahaniCards(int $count, string $langPrompt, string $category, string $topic, string $language = 'gujarati'): array
+    /** Adult Kahani ke likhne ke niyam (1 card aur 2-3 card dono me same): asli jeevan, mood, sakht seemayein. */
+    protected function kahaniRules(string $life): string
     {
-        $topicLine = $topic !== '' ? "Specific topic: {$topic}. Every card must be a different story on this topic." : 'Each card must be a completely different situation and couple.';
-
-        $cities   = $this->citiesFor($language, $count);
-        $guj      = $language === 'gujarati';
-        // Gujarati page = Gujarati jeevan; Hindi/Hinglish = poore Bharat ka (Gujarat nahi)
-        $page     = $guj ? 'a Gujarati' : 'a Hindi (pan-India)';
-        $life     = $guj
-            ? 'Ordinary middle-class Gujarati life: real places (society, office, college canteen, bus stand, garba ground, monsoon evening)'
-            : 'Ordinary middle-class Indian life anywhere in India except Gujarat: real places (mohalla / society, office, college canteen, railway station, local mela, terrace, monsoon evening)';
-        $cityLine = 'Cities (one per card, in this order, written in the output language/script): '
-            . $cities->map(fn ($c, $i) => 'card ' . ($i + 1) . ' = ' . $c)->implode(', ') . '.';
-
-        $prompt = <<<PROMPT
-You write viral one-card romantic short stories ("sachchi ghatna se prerit") for {$page} Instagram/Facebook page.
-Each story must be COMPLETE on a single 9:16 text card. Generate {$count} cards in {$langPrompt}.
-Theme / category: {$category}.
-{$topicLine}
-{$cityLine}
-
+        return <<<RULES
 How to make it feel REAL:
 - {$life}, common first names, ages 22-40, small concrete details (chai, rain, phone notification, saree, scooter).
 - Show feelings through small moments and dialogue: nervous hands, a long glance, heartbeat, hesitation, a whispered line.
@@ -162,7 +143,37 @@ Hard limits (strict — posted on Instagram/Facebook):
 - All characters are adults (22+). Consent is clear and mutual.
 - Kisses on lips / neck / shoulder and touching the waist, back, hair and hands are fine. Never describe sexual acts, nudity, undressing, breasts/nipples or private body parts — not directly, not with euphemisms, slang or coded words. Everything beyond the kiss and embrace happens off-page (cut-away).
 - No vulgar words. Affairs can be daring but show honest feelings (temptation, guilt, consequence).
+RULES;
+    }
 
+    /**
+     * 💕 1-CARD KAHANI: ek hi 9:16 card me poori romantic / affair / pehli-raat wali kahani.
+     * Intimacy sirf ishaare me (kiss/aalingan tak, phir fade-to-black) — IG/FB par chalne layak.
+     */
+    protected function generateKahaniCards(int $count, string $langPrompt, string $category, string $topic, string $language = 'gujarati'): array
+    {
+        $topicLine = $topic !== '' ? "Specific topic: {$topic}. Every card must be a different story on this topic." : 'Each card must be a completely different situation and couple.';
+
+        $cities   = $this->citiesFor($language, $count);
+        $guj      = $language === 'gujarati';
+        // Gujarati page = Gujarati jeevan; Hindi/Hinglish = poore Bharat ka (Gujarat nahi)
+        $page     = $guj ? 'a Gujarati' : 'a Hindi (pan-India)';
+        $life     = $guj
+            ? 'Ordinary middle-class Gujarati life: real places (society, office, college canteen, bus stand, garba ground, monsoon evening)'
+            : 'Ordinary middle-class Indian life anywhere in India except Gujarat: real places (mohalla / society, office, college canteen, railway station, local mela, terrace, monsoon evening)';
+        $cityLine = 'Cities (one per card, in this order, written in the output language/script): '
+            . $cities->map(fn ($c, $i) => 'card ' . ($i + 1) . ' = ' . $c)->implode(', ') . '.';
+
+        $rules    = $this->kahaniRules($life);
+
+        $prompt = <<<PROMPT
+You write viral one-card romantic short stories ("sachchi ghatna se prerit") for {$page} Instagram/Facebook page.
+Each story must be COMPLETE on a single 9:16 text card. Generate {$count} cards in {$langPrompt}.
+Theme / category: {$category}.
+{$topicLine}
+{$cityLine}
+
+{$rules}
 Fields (all text in {$langPrompt}):
 - `title`: 6-10 word curiosity hook headline (no quotes) — short, it must fit in 2 lines.
 - `story`: the full story, 185-205 words (count them — it must fill exactly one card at a large font; never more than 210), 5-6 short paragraphs separated by \\n\\n, with 2-3 lines of dialogue (whispered, teasing, shy). Keep every sentence rich — fewer words, more mood.
@@ -189,6 +200,85 @@ PROMPT;
         }
 
         return array_map(fn ($item) => is_array($item) ? $item + ['style' => 'kahani'] : $item, $items);
+    }
+
+    /**
+     * 📚 2-3 CARD KAHANI: ek kahani {$parts} card me (har card = ek bhaag). Pehle bhaag cliffhanger par
+     * rukte hain — card par "aage padhne ke liye follow karo" view banata hai. Auto-post bhaag kram me bhejta hai.
+     * Return: [{title, parts:[bhaag1, bhaag2, …], caption, hashtags, …}, …]
+     */
+    protected function generateKahaniSeries(int $count, string $langPrompt, string $category, string $topic, string $language, int $parts): array
+    {
+        $topicLine = $topic !== '' ? "Specific topic: {$topic}. Every story must be a different story on this topic." : 'Each story must be a completely different situation and couple.';
+
+        $cities = $this->citiesFor($language, $count);
+        $guj    = $language === 'gujarati';
+        $page   = $guj ? 'a Gujarati' : 'a Hindi (pan-India)';
+        $life   = $guj
+            ? 'Ordinary middle-class Gujarati life: real places (society, office, college canteen, bus stand, garba ground, monsoon evening)'
+            : 'Ordinary middle-class Indian life anywhere in India except Gujarat: real places (mohalla / society, office, college canteen, railway station, local mela, terrace, monsoon evening)';
+        $cityLine = 'Cities (one per story, in this order, written in the output language/script): '
+            . $cities->map(fn ($c, $i) => 'story ' . ($i + 1) . ' = ' . $c)->implode(', ') . '.';
+        $rules = $this->kahaniRules($life);
+
+        $plan = $parts === 2
+            ? "Part 1 = hook, the characters, the place and growing attraction — STOP at a tense, unfinished moment (a knock, a touch, a whispered question) so readers want part 2.\n  Part 2 = the key intimate moment (as allowed below), the cut-away and the aftermath / twist ending."
+            : "Part 1 = hook, the characters, the place and the first spark — STOP at a curious, unfinished moment.\n  Part 2 = attraction grows, tension and temptation build — STOP right before the key moment (cliffhanger).\n  Part 3 = the key intimate moment (as allowed below), the cut-away and the aftermath / twist ending.";
+
+        $timeout = min(240, 90 + $count * $parts * 15);
+
+        $prompt = <<<PROMPT
+You write viral romantic short stories ("sachchi ghatna se prerit") for {$page} Instagram/Facebook page.
+Each story is told in EXACTLY {$parts} parts; each part fills ONE 9:16 text card and is posted as a separate post.
+Generate {$count} stories in {$langPrompt}.
+Theme / category: {$category}.
+{$topicLine}
+{$cityLine}
+
+Story plan:
+  {$plan}
+- Every part except the last must END on a cliffhanger line that makes the reader desperate for the next part. Do NOT write "follow" / "next part" / "to be continued" yourself — the card adds that.
+- Each part must make sense on its own for a new reader: start parts 2+ with one short line recalling what happened (names included).
+
+{$rules}
+Fields (all text in {$langPrompt}):
+- `title`: 6-10 word curiosity hook headline for the whole story (no quotes) — short, it must fit in 2 lines.
+- `parts`: array of EXACTLY {$parts} strings. Each part 165-185 words (count them — it must fill one card at a large font; never more than 190), 4-5 short paragraphs separated by \\n\\n, with 1-2 lines of dialogue.
+- Write every word only in the output language's own script — never mix letters from another script inside a word.
+- `asker`: "— first name, city" style signature of the narrator or the couple.
+- `takeaway`: one closing line (12-22 words) — a feeling, lesson or twist.
+- `cta_question`: question for comments, 10-20 words.
+- `caption`: 2-4 short lines with a few emojis, ends with "(Kaalpanik kahani)" in the output language.
+- `hashtags`: 8-12 relevant hashtags in one string.
+
+Return ONLY a raw JSON array of objects with keys: `title`, `parts`, `asker`, `takeaway`, `cta_question`, `caption`, `hashtags`.
+PROMPT;
+
+        $items = $this->callGeminiJson($prompt, $timeout);
+
+        if (str_contains($langPrompt, 'Gujarati')) {
+            array_walk_recursive($items, function (&$v) {
+                if (is_string($v)) {
+                    $v = preg_replace('/[\p{Devanagari}\p{Hebrew}\p{Arabic}\p{Bengali}\p{Gurmukhi}\p{Tamil}\p{Telugu}]+/u', '', $v) ?? $v;
+                }
+            });
+        }
+
+        // Bhaag kam/zyada aaye to bhi sahi: khaali hatao, zyada ho to aakhri me jodo
+        return array_values(array_filter(array_map(function ($item) use ($parts) {
+            if (! is_array($item)) {
+                return null;
+            }
+            $list = array_values(array_filter(array_map(fn ($p) => trim((string) $p), (array) ($item['parts'] ?? [])), 'strlen'));
+            if (! $list && filled($item['story'] ?? null)) {
+                $list = [trim((string) $item['story'])];
+            }
+            if (count($list) > $parts) {
+                $list = array_merge(array_slice($list, 0, $parts - 1), [implode("\n\n", array_slice($list, $parts - 1))]);
+            }
+
+            return $list ? ['parts' => $list, 'style' => 'kahani'] + $item : null;
+        }, $items)));
     }
 
     /**

@@ -82,6 +82,8 @@ class SalahController extends Controller
             'categories.*' => ['nullable', 'string', 'max:300'],
             'topic'        => ['nullable', 'string', 'max:200'],
             'style'        => ['nullable', 'in:normal,confession,kahani'],
+            // Adult Kahani: ek kahani kitne card me (1 / 2 / 3)
+            'parts'        => ['nullable', 'integer', 'min:1', 'max:3'],
         ]);
 
         $cats = array_values(array_filter(array_map('trim', (array) ($data['categories'] ?? []))));
@@ -100,7 +102,8 @@ class SalahController extends Controller
                 $data['language'],
                 $this->categoryPlan($cats, (int) $data['count']),
                 trim((string) ($data['topic'] ?? '')),
-                $this->forcedStyle ?? ($data['style'] ?? 'normal')
+                $this->forcedStyle ?? ($data['style'] ?? 'normal'),
+                (int) ($data['parts'] ?? 1)
             );
 
             return response()->json(['ok' => true, 'items' => $items]);
@@ -120,6 +123,8 @@ class SalahController extends Controller
             'cards.*.caption' => ['nullable', 'string', 'max:2200'], // Instagram caption limit
             'cards.*.hashtags'=> ['nullable', 'string', 'max:2000'],
             'cards.*.image'   => ['required', 'string'],
+            // 2-3 card ki kahani: ek kahani ke saare bhaag ka same group (1, 2, …)
+            'cards.*.group'   => ['nullable', 'integer', 'min:1'],
         ]);
 
         try {
@@ -134,7 +139,23 @@ class SalahController extends Controller
                 'status'   => 'published',
                 'tts_mode' => 'music', // naye cards: Reel Audio pehle se "Music only" (page par badal sakte ho)
             ]);
-            $part = $story->parts()->create(['sort_order' => 1, 'body' => $cardsInput[0]['text'] ?? 'Salah']);
+            // Group ho to har kahani = alag part (body "series:N") — auto-post uske bhaag kram me bhejta hai.
+            // Warna purana tareeka: sab cards ek part me (random order).
+            $groups = collect($cardsInput)->groupBy(fn ($c) => (int) ($c['group'] ?? 0));
+            $series = $groups->count() > 1 || $groups->keys()->first() !== 0;
+            $parts = [];
+            $partFor = function (array $cardItem) use ($story, $groups, $series, &$parts, $cardsInput) {
+                $g = $series ? (int) ($cardItem['group'] ?? 0) : 0;
+                if (! isset($parts[$g])) {
+                    $n = $groups->get($g)?->count() ?? 1;
+                    $parts[$g] = $story->parts()->create([
+                        'sort_order' => count($parts) + 1,
+                        'body'       => $series && $n > 1 ? 'series:' . $n : ($cardsInput[0]['text'] ?? 'Salah'),
+                    ]);
+                }
+
+                return $parts[$g];
+            };
 
             foreach ($cardsInput as $cardItem) {
                 $decoded = $this->decodeDataUrl($cardItem['image']);
@@ -146,7 +167,7 @@ class SalahController extends Controller
                 $tags = trim((string) ($cardItem['hashtags'] ?? ''));
                 $caption = trim(($cardItem['caption'] ?? '') . ($tags !== '' ? "\n\n" . $tags : ''));
 
-                $part->cards()->create([
+                $partFor($cardItem)->cards()->create([
                     'sort_order' => $cardItem['order'],
                     'image_path' => $path,
                     'text'       => $cardItem['text'],
