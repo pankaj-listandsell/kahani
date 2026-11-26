@@ -81,8 +81,61 @@ class YoutubeService
     /** App-level Google credentials set hain? (.env) */
     public function appConfigured(): bool
     {
-        return filled(config('services.youtube.client_id'))
-            && filled(config('services.youtube.client_secret'));
+        return filled($this->clientId()) && filled($this->clientSecret());
+    }
+
+    /** Is user ka apna Google project set hai? (warna server ka .env wala) */
+    public function usesOwnApp(): bool
+    {
+        return filled($this->setting('yt_client_id')) && filled($this->ownSecret());
+    }
+
+    /** Google OAuth Client ID — user ka apna (Settings) ho to wahi, warna .env. Har channel ka alag project = alag quota. */
+    public function clientId(): ?string
+    {
+        return $this->usesOwnApp() ? trim((string) $this->setting('yt_client_id')) : config('services.youtube.client_id');
+    }
+
+    public function clientSecret(): ?string
+    {
+        return $this->usesOwnApp() ? $this->ownSecret() : config('services.youtube.client_secret');
+    }
+
+    /** Secret DB me encrypt hokar rehta hai. */
+    protected function ownSecret(): ?string
+    {
+        $enc = $this->setting('yt_client_secret');
+        if (blank($enc)) {
+            return null;
+        }
+        try {
+            return \Illuminate\Support\Facades\Crypt::decryptString($enc);
+        } catch (\Throwable $e) {
+            return null;
+        }
+    }
+
+    /** User ka apna Google project save karo (dono khaali = server ka default). Project badla to purana connection hatao. */
+    public function saveOwnApp(?string $clientId, ?string $secret): bool
+    {
+        $oldId = $this->clientId();
+        $clientId = trim((string) $clientId);
+        $secret = trim((string) $secret);
+        if ($clientId === '') {
+            $this->putSetting('yt_client_id', null);
+            $this->putSetting('yt_client_secret', null);
+        } else {
+            $this->putSetting('yt_client_id', $clientId);
+            if ($secret !== '') { // khaali = purana secret rehne do
+                $this->putSetting('yt_client_secret', \Illuminate\Support\Facades\Crypt::encryptString($secret));
+            }
+        }
+        $changed = $oldId !== $this->clientId();
+        if ($changed) {
+            $this->disconnect(); // purane project ka token naye project par nahi chalta
+        }
+
+        return $changed;
     }
 
     /** Is user ka channel connect hai (refresh token maujood)? */
@@ -109,7 +162,7 @@ class YoutubeService
     public function authUrl(string $state): string
     {
         $params = http_build_query([
-            'client_id'              => config('services.youtube.client_id'),
+            'client_id'              => $this->clientId(),
             'redirect_uri'           => $this->redirectUri(),
             'response_type'          => 'code',
             'scope'                  => 'https://www.googleapis.com/auth/youtube.upload https://www.googleapis.com/auth/youtube.readonly',
@@ -129,8 +182,8 @@ class YoutubeService
     public function exchangeCode(string $code): void
     {
         $res = Http::asForm()->post('https://oauth2.googleapis.com/token', [
-            'client_id'     => config('services.youtube.client_id'),
-            'client_secret' => config('services.youtube.client_secret'),
+            'client_id'     => $this->clientId(),
+            'client_secret' => $this->clientSecret(),
             'code'          => $code,
             'grant_type'    => 'authorization_code',
             'redirect_uri'  => $this->redirectUri(),
@@ -187,8 +240,8 @@ class YoutubeService
         }
 
         $res = Http::asForm()->post('https://oauth2.googleapis.com/token', [
-            'client_id'     => config('services.youtube.client_id'),
-            'client_secret' => config('services.youtube.client_secret'),
+            'client_id'     => $this->clientId(),
+            'client_secret' => $this->clientSecret(),
             'refresh_token' => $refresh,
             'grant_type'    => 'refresh_token',
         ]);

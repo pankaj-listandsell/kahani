@@ -59,7 +59,7 @@
                     @if ($configured)
                         <p class="text-sm text-green-600">✓ Connected @if($settings['yt_channel_title'])— <b>{{ $settings['yt_channel_title'] }}</b>@endif</p>
                     @elseif (! $appConfigured)
-                        <p class="text-sm text-red-600">⚠️ Google client ID/secret .env me set nahi (setup guide dekho)</p>
+                        <p class="text-sm text-red-600">⚠️ Google Client ID/Secret set nahi — neeche "Apna Google project" me daalo (ya .env me)</p>
                     @else
                         <p class="text-sm text-amber-600">⚠️ Channel connect nahi — "Connect YouTube" dabao</p>
                     @endif
@@ -82,6 +82,51 @@
             </div>
         </div>
 
+        {{-- 🔑 Apna Google project (har channel ka alag quota) --}}
+        @php
+            $ytSvc = app(\App\Services\YoutubeService::class);
+            $ownApp = $ytSvc->usesOwnApp();
+            $ownId = \App\Models\Setting::get('yt_client_id');
+        @endphp
+        <div class="bg-white rounded-xl border border-slate-200 p-5">
+            <div class="flex items-center justify-between gap-3 flex-wrap mb-3">
+                <div>
+                    <p class="font-semibold">🔑 Apna Google Cloud project <span class="text-xs font-normal text-slate-500">(optional)</span></p>
+                    <p class="text-xs text-slate-500 mt-0.5">
+                        Abhi chal raha hai:
+                        @if ($ownApp)
+                            <b class="text-green-700">aapka apna project</b> — is channel ka quota alag
+                        @else
+                            <b>server ka default project</b> (.env) — doosre users ke saath quota share
+                        @endif
+                    </p>
+                </div>
+            </div>
+            <form method="POST" action="{{ route('admin.youtube.app') }}" class="grid sm:grid-cols-2 gap-3"
+                  onsubmit="return confirm('Google project badalne par YouTube channel dobara connect karna padega. Aage badhein?')">
+                @csrf @method('PUT')
+                <label class="block text-sm">
+                    <span class="text-xs font-semibold text-slate-500">Client ID</span>
+                    <input name="client_id" value="{{ old('client_id', $ownId) }}" placeholder="xxxx.apps.googleusercontent.com"
+                           class="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm">
+                </label>
+                <label class="block text-sm">
+                    <span class="text-xs font-semibold text-slate-500">Client Secret</span>
+                    <input name="client_secret" type="password" autocomplete="new-password"
+                           placeholder="{{ $ownApp ? '•••••••• (save hai — badalna ho to hi likho)' : 'GOCSPX-…' }}"
+                           class="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm">
+                </label>
+                <div class="sm:col-span-2 flex items-center justify-between gap-3 flex-wrap">
+                    <p class="text-xs text-slate-500">
+                        Google Console me <b>Authorized redirect URI</b>:
+                        <code class="bg-slate-100 px-1 rounded break-all">{{ config('services.youtube.redirect') ?: url('/admin/youtube/callback') }}</code><br>
+                        Dono khaali karke Save = wapas server ka default project. Secret encrypt hokar save hota hai.
+                    </p>
+                    <button class="text-sm bg-slate-800 hover:bg-slate-900 text-white rounded-lg px-4 py-2">💾 Save</button>
+                </div>
+            </form>
+        </div>
+
         {{-- Setup guide --}}
         <details class="bg-blue-50 border border-blue-200 rounded-xl p-5 text-sm text-blue-900">
             <summary class="font-semibold cursor-pointer">📖 Setup guide (Google Cloud — ek baar ka kaam)</summary>
@@ -92,7 +137,8 @@
                 <li><b>Credentials → OAuth client ID → Web application</b> banao.</li>
                 <li>Authorized redirect URI me exactly ye daalo (aur ye <code>GOOGLE_REDIRECT_URI</code> se bilkul match kare):<br>
                     <code class="bg-white px-1 rounded break-all">{{ config('services.youtube.redirect') ?: url('/admin/youtube/callback') }}</code></li>
-                <li>Client ID &amp; secret ko <code class="bg-white px-1 rounded">.env</code> me <code>GOOGLE_CLIENT_ID</code> / <code>GOOGLE_CLIENT_SECRET</code> me daalo, phir <code class="bg-white px-1 rounded">php artisan config:clear</code>.</li>
+                <li>Client ID &amp; secret upar <b>"🔑 Apna Google Cloud project"</b> me daalo (sirf is user/channel ke liye) — ya sab users ke liye <code class="bg-white px-1 rounded">.env</code> me <code>GOOGLE_CLIENT_ID</code> / <code>GOOGLE_CLIENT_SECRET</code>, phir <code class="bg-white px-1 rounded">php artisan config:clear</code>.</li>
+                <li>OAuth consent screen ko <b>Publish</b> karo — warna test mode me token 7 din me expire hota hai.</li>
                 <li>Upar <b>Connect YouTube</b> dabao.</li>
             </ol>
             <p class="mt-3 text-amber-800">⚠️ Free quota: <b>10,000 units/din</b>, aur har upload <b>1600 units</b> — yaani ~<b>6 Shorts/din</b>.</p>

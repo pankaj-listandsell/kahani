@@ -258,6 +258,26 @@ class YoutubeController extends Controller
             ->with('success', 'YouTube channel connect ho gaya' . ($title ? ': ' . $title : '') . ' ✅');
     }
 
+    /** 🔑 Is user ka apna Google Cloud project (Client ID/Secret) — har channel ka alag quota. Khaali = server ka default. */
+    public function saveApp(Request $request)
+    {
+        $data = $request->validate([
+            'client_id'     => ['nullable', 'string', 'max:255', 'regex:/\.apps\.googleusercontent\.com$/'],
+            'client_secret' => ['nullable', 'string', 'max:255'],
+        ], ['client_id.regex' => 'Client ID ".apps.googleusercontent.com" par khatam hona chahiye.']);
+
+        $id = trim((string) ($data['client_id'] ?? ''));
+        $secret = trim((string) ($data['client_secret'] ?? ''));
+        if ($id !== '' && $secret === '' && ! $this->youtube->usesOwnApp()) {
+            return back()->with('error', 'Client Secret bhi daalo.');
+        }
+
+        $changed = $this->youtube->saveOwnApp($id, $secret);
+        $msg = $id === '' ? 'Apna Google project hata diya — ab server ka default project chalega.' : 'Apna Google project save ho gaya.';
+
+        return back()->with('success', $msg . ($changed ? ' Ab "Connect YouTube" dabake channel dobara jodo.' : ''));
+    }
+
     public function disconnect()
     {
         $this->youtube->disconnect();

@@ -88,6 +88,7 @@ Route::middleware('auth')->prefix('admin')->name('admin.')->group(function () {
     Route::get('youtube', [YoutubeController::class, 'index'])->name('youtube.index');
     Route::get('youtube/connect', [YoutubeController::class, 'connect'])->name('youtube.connect');
     Route::get('youtube/callback', [YoutubeController::class, 'callback'])->name('youtube.callback');
+    Route::put('youtube/app', [YoutubeController::class, 'saveApp'])->name('youtube.app');
     Route::post('youtube/disconnect', [YoutubeController::class, 'disconnect'])->name('youtube.disconnect');
     Route::post('youtube/test', [YoutubeController::class, 'test'])->name('youtube.test');
     Route::put('youtube/auto-post', [YoutubeController::class, 'saveAutoPost'])->name('youtube.autopost');
