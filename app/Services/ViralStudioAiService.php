@@ -27,6 +27,22 @@ class ViralStudioAiService
         'ઉપલેટા', 'વાંકાનેર', 'લીંબડી', 'ધ્રાંગધ્રા', 'સાવરકુંડલા', 'ધંધુકા', 'વિરમગામ', 'ઝાલોદ', 'છોટા ઉદેપુર', 'લુણાવાડા',
     ];
 
+    /** Hindi / Hinglish ke liye — poore Bharat ke shahar (Gujarat sirf Gujarati page par). */
+    public const INDIA_CITIES = [
+        'Delhi', 'Mumbai', 'Jaipur', 'Lucknow', 'Kanpur', 'Patna', 'Bhopal', 'Indore', 'Pune', 'Nagpur',
+        'Varanasi', 'Prayagraj', 'Agra', 'Meerut', 'Dehradun', 'Chandigarh', 'Ludhiana', 'Amritsar', 'Jodhpur', 'Udaipur',
+        'Kota', 'Ajmer', 'Gwalior', 'Jabalpur', 'Raipur', 'Ranchi', 'Jamshedpur', 'Dhanbad', 'Gaya', 'Muzaffarpur',
+        'Gorakhpur', 'Bareilly', 'Aligarh', 'Mathura', 'Haridwar', 'Rishikesh', 'Shimla', 'Jammu', 'Kolkata', 'Bhubaneswar',
+        'Hyderabad', 'Bengaluru', 'Chennai', 'Nashik', 'Aurangabad', 'Mysuru', 'Kochi', 'Noida', 'Gurugram', 'Faridabad',
+        'Ghaziabad', 'Rohtak', 'Hisar', 'Panipat', 'Bikaner', 'Ujjain', 'Sagar', 'Bilaspur', 'Siliguri', 'Guwahati',
+    ];
+
+    /** Bhasha ke hisaab se shahar: Gujarati = Gujarat, Hindi/Hinglish = poora Bharat. */
+    protected function citiesFor(string $language, int $count)
+    {
+        return collect($language === 'gujarati' ? self::GUJARAT_CITIES : self::INDIA_CITIES)->shuffle()->take(max(1, $count))->values();
+    }
+
     public function generateSalah(int $count = 3, string $language = 'gujarati', string $category = 'Parenting', string $topic = '', string $style = 'normal'): array
     {
         $langPrompt = $this->langPrompt($language);
@@ -39,30 +55,35 @@ class ViralStudioAiService
 
         // confession = lambi, dil kholkar likhi kahani (age, sheher, kya hua, kya mehsoos hua) + chhota jawab
         if ($style === 'kahani') {
-            return $this->generateKahaniCards($count, $langPrompt, $category, $topic);
+            return $this->generateKahaniCards($count, $langPrompt, $category, $topic, $language);
         }
+
+        $guj = $language === 'gujarati'; // Gujarati = Gujarat ke udaharan, warna poore Bharat ke
 
         [$questionRule, $askerRule, $answerRule, $solutionsRule, $limit] = $style === 'confession'
             ? [
                 '150-200 words, a heartfelt first-person confession told like a story: age, city, living situation, how it started, what happened step by step, how they felt (loneliness, attraction, guilt, confusion), what they tried, ends asking "what should I do?". Bold, gossip-worthy, emotionally honest, but never explicit.',
-                'First name + city (e.g. "રિયા, અમદાવાદ").',
+                'First name + city (e.g. ' . ($guj ? '"રિયા, અમદાવાદ"' : '"Riya, Jaipur"') . ').',
                 '45-60 words: name the psychology behind the feeling (e.g. validation craving, loneliness, emotional dependence) without judging.',
                 'Array of exactly 2 objects {"heading": 3-6 word step title, "text": 20-35 word explanation}.',
                 320,
             ]
             : [
                 '55-80 words, first person, starts with a greeting (e.g. "નમસ્તે,"), realistic detail, ends asking for advice.',
-                'Short anonymous signature: who + city (e.g. "એક ચિંતિત માતા, વડોદરા").',
+                'Short anonymous signature: who + city (e.g. ' . ($guj ? '"એક ચિંતિત માતા, વડોદરા"' : '"a worried mother, Lucknow"') . ').',
                 '50-70 words: validate the feeling, explain the reason simply.',
                 'Array of exactly 4 objects {"heading": 3-7 word bold step title, "text": 12-25 word explanation}.',
                 260,
             ];
 
-        // Har card ka alag sheher — poore Gujarat se random
-        $cities   = collect(self::GUJARAT_CITIES)->shuffle()->take(max(1, $count))->values();
+        // Har card ka alag sheher — Gujarati: poore Gujarat se, Hindi/Hinglish: poore Bharat se
+        $cities   = $this->citiesFor($language, $count);
         $cityLine = 'Cities for `asker` (use them in this order, one per card; write the name in the output language/script): '
             . $cities->map(fn ($c, $i) => 'card ' . ($i + 1) . ' = ' . $c)->implode(', ')
-            . '. Use the same city inside the letter (`question`) where a city is mentioned. Do NOT default to Ahmedabad/Surat.';
+            . '. Use the same city inside the letter (`question`) where a city is mentioned. '
+            . ($guj ? 'Do NOT default to Ahmedabad/Surat.' : 'Do NOT default to Delhi/Mumbai, and do not use Gujarat as the setting.');
+
+        $audience = $guj ? 'Gujarati' : 'Indian (Hindi-speaking, from all over India)';
 
         $prompt = <<<PROMPT
 You write a popular "reader asks, expert answers" advice column that is posted as Instagram Reels text cards.
@@ -72,7 +93,7 @@ Category: {$category}.
 {$cityLine}
 
 Tone & safety:
-- Warm, respectful, practical — like a trusted elder sister / family counsellor. Relatable to Indian (Gujarati/Hindi) families.
+- Warm, respectful, practical — like a trusted elder sister / family counsellor. Relatable to {$audience} families.
 - Sensitive topics (health, puberty, marriage, mental health) must be handled tastefully and non-explicitly.
 - For health / medical / legal issues, never diagnose or prescribe medicine — recommend consulting a doctor or professional as one of the steps.
 - No shaming, no superstition, no fear-mongering.
@@ -102,23 +123,29 @@ PROMPT;
      * 💕 1-CARD KAHANI: ek hi 9:16 card me poori romantic / affair / pehli-raat wali kahani.
      * Intimacy sirf ishaare me (kiss/aalingan tak, phir fade-to-black) — IG/FB par chalne layak.
      */
-    protected function generateKahaniCards(int $count, string $langPrompt, string $category, string $topic): array
+    protected function generateKahaniCards(int $count, string $langPrompt, string $category, string $topic, string $language = 'gujarati'): array
     {
         $topicLine = $topic !== '' ? "Specific topic: {$topic}. Every card must be a different story on this topic." : 'Each card must be a completely different situation and couple.';
 
-        $cities   = collect(self::GUJARAT_CITIES)->shuffle()->take(max(1, $count))->values();
+        $cities   = $this->citiesFor($language, $count);
+        $guj      = $language === 'gujarati';
+        // Gujarati page = Gujarati jeevan; Hindi/Hinglish = poore Bharat ka (Gujarat nahi)
+        $page     = $guj ? 'a Gujarati' : 'a Hindi (pan-India)';
+        $life     = $guj
+            ? 'Ordinary middle-class Gujarati life: real places (society, office, college canteen, bus stand, garba ground, monsoon evening)'
+            : 'Ordinary middle-class Indian life anywhere in India except Gujarat: real places (mohalla / society, office, college canteen, railway station, local mela, terrace, monsoon evening)';
         $cityLine = 'Cities (one per card, in this order, written in the output language/script): '
             . $cities->map(fn ($c, $i) => 'card ' . ($i + 1) . ' = ' . $c)->implode(', ') . '.';
 
         $prompt = <<<PROMPT
-You write viral one-card romantic short stories ("sachchi ghatna se prerit") for a Gujarati Instagram/Facebook page.
+You write viral one-card romantic short stories ("sachchi ghatna se prerit") for {$page} Instagram/Facebook page.
 Each story must be COMPLETE on a single 9:16 text card. Generate {$count} cards in {$langPrompt}.
 Theme / category: {$category}.
 {$topicLine}
 {$cityLine}
 
 How to make it feel REAL:
-- Ordinary middle-class Gujarati life: real places (society, office, college canteen, bus stand, garba ground, monsoon evening), common first names, ages 22-40, small concrete details (chai, rain, phone notification, saree, scooter).
+- {$life}, common first names, ages 22-40, small concrete details (chai, rain, phone notification, saree, scooter).
 - Show feelings through small moments and dialogue: nervous hands, a long glance, heartbeat, hesitation, a whispered line.
 - Clear arc: hook in the first line → build-up of attraction/tension → the key moment → an ending (sweet, painful or a twist) that stays with the reader.
 

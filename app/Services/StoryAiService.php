@@ -52,6 +52,10 @@ class StoryAiService
         }
 
         $langRule = $this->langRule($language);
+        // Gujarati = Gujarat ke shahar; Hindi/Hinglish = poore Bharat ke (Gujarat nahi)
+        $setting = $language === 'gujarati'
+            ? 'Aam middle-class Gujarati ghar, asli jaisi jagah (Surat, Ahmedabad, Rajkot, Vadodara, Bhavnagar, Junagadh…)'
+            : 'Aam middle-class Indian ghar, poore Bharat ki asli jaisi jagah (Lucknow, Jaipur, Patna, Indore, Bhopal, Kanpur, Delhi, Pune…) — Gujarat nahi';
 
         $words = match ($length) {
             'long'   => '500-700',
@@ -93,8 +97,7 @@ class StoryAiService
         - {$lengthRule}
         {$genreRule}- Chhote paragraphs, saral bhasha, natural kahani-sunane wala andaaz.
         - KAHANI KA ANDAAZ: real-life, "sachchi ghatna se prerit" rishton / parivaar ki kahani — jaise
-          akhbaar ke "dil ki baat" column me log apni zindagi likhte hain. Aam middle-class Gujarati/Indian
-          ghar, asli jaisi jagah (Surat, Ahmedabad, Rajkot, Vadodara…), aam naam (kaalpanik). Bhavna, ghutan,
+          akhbaar ke "dil ki baat" column me log apni zindagi likhte hain. {$setting}, aam naam (kaalpanik). Bhavna, ghutan,
           galti, guilt, samvaad (dialogue) aur parivaar ka dabaav — sab asli lage.
         - Pehli line hi hook ho (jaise ek kabool-naama / chaunkane wala pal), beech me tension badhe,
           aur ant me ek saaf SEEKH ya faisla — galat kaam ko sahi ya glamorous mat dikhao.

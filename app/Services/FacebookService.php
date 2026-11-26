@@ -2,9 +2,13 @@
 
 namespace App\Services;
 
+use App\Exceptions\CardBusyException;
 use App\Exceptions\FacebookRateLimitException;
+use App\Models\Part;
 use App\Models\PartCard;
 use App\Models\Setting;
+use App\Models\Story;
+use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Storage;
@@ -167,69 +171,7 @@ class FacebookService
             $mp4 = $this->instagram->mp4PathFor($card);
             $absolute = Storage::disk('public')->path($mp4);
 
-            // 2) Reel session start → video_id
-            $start = Http::asForm()->post($this->apiBase() . '/' . $this->pageId() . '/video_reels', [
-                'upload_phase' => 'start',
-                'access_token' => $this->token(),
-            ]);
-
-            $videoId = $start->json('video_id');
-            if (! $videoId) {
-                Log::error('FB reel start failed', ['card' => $card->id, 'body' => $start->json()]);
-                throw $this->graphException($start->json('error'), 'Reel start fail.');
-            }
-
-            // 3) Upload — pehle file ke bytes seedhe bhejo. Ye `file_url` se
-            //    zyada reliable hai: shared hosting ka WAF Facebook ke rupload
-            //    fetcher ko 403 de sakta hai, aur localhost par to koi public
-            //    URL hi nahi hota. Bytes bhejne me ye dono problem nahi.
-            $upload = $this->uploadReelBytes($videoId, $absolute);
-
-            // Bytes wala raasta na chale to purana hosted-URL tareeka try karo.
-            if (! $upload->successful()) {
-                Log::warning('FB reel byte-upload fail — file_url fallback', [
-                    'card' => $card->id,
-                    'body' => $upload->json() ?: $upload->body(),
-                ]);
-
-                $videoUrl = $this->publicUrl($mp4) ?? $this->instagram->uploadToTempHost($absolute);
-
-                if (! $videoUrl) {
-                    throw new \RuntimeException('Could not upload video to a public host.');
-                }
-
-                Log::info('FB reel video_url', ['card' => $card->id, 'url' => $videoUrl]);
-
-                $upload = Http::withHeaders([
-                    'Authorization' => 'OAuth ' . $this->token(),
-                    'file_url'      => $videoUrl,
-                ])->timeout(180)->post('https://rupload.facebook.com/video-upload/v21.0/' . $videoId);
-            }
-
-            if (! $upload->successful()) {
-                Log::error('FB reel upload failed', ['card' => $card->id, 'body' => $upload->json() ?: $upload->body()]);
-                // rupload `error` ki jagah `debug_info` deta hai — asli wajah
-                // wahi hoti hai (jaise "Unable to fetch media from URL … 403").
-                $detail = $upload->json('debug_info.message') ?? $upload->json('error.message');
-                throw $this->graphException(
-                    $upload->json('error'),
-                    'Reel upload fail.' . ($detail ? ' — ' . $detail : '')
-                );
-            }
-
-            // 4) Finish + publish
-            $finish = Http::asForm()->post($this->apiBase() . '/' . $this->pageId() . '/video_reels', [
-                'video_id'     => $videoId,
-                'upload_phase' => 'finish',
-                'video_state'  => 'PUBLISHED',
-                'description'  => $caption,
-                'access_token' => $this->token(),
-            ]);
-
-            if (! $finish->successful() || ! ($finish->json('success') || $finish->json('post_id'))) {
-                Log::error('FB reel finish failed', ['card' => $card->id, 'body' => $finish->json()]);
-                throw $this->graphException($finish->json('error'), 'Reel publish fail.');
-            }
+            $videoId = $this->publishReel($mp4, $caption, ['card' => $card->id]);
 
             $this->markPosted($card, $videoId);
 
@@ -244,6 +186,339 @@ class FacebookService
             }
             throw $e;
         }
+    }
+
+    /**
+     * mp4 (storage/public relative) → Facebook Reel. Return: video_id.
+     * Start → bytes upload (fallback: hosted URL) → finish + publish.
+     */
+    protected function publishReel(string $mp4, string $caption, array $logCtx = []): string
+    {
+        $absolute = Storage::disk('public')->path($mp4);
+
+        // 1) Reel session start → video_id
+        $start = Http::asForm()->post($this->apiBase() . '/' . $this->pageId() . '/video_reels', [
+            'upload_phase' => 'start',
+            'access_token' => $this->token(),
+        ]);
+
+        $videoId = $start->json('video_id');
+        if (! $videoId) {
+            Log::error('FB reel start failed', $logCtx + ['body' => $start->json()]);
+            throw $this->graphException($start->json('error'), 'Reel start fail.');
+        }
+
+        // 2) Upload — pehle file ke bytes seedhe bhejo. Ye `file_url` se
+        //    zyada reliable hai: shared hosting ka WAF Facebook ke rupload
+        //    fetcher ko 403 de sakta hai, aur localhost par to koi public
+        //    URL hi nahi hota. Bytes bhejne me ye dono problem nahi.
+        $upload = $this->uploadReelBytes($videoId, $absolute);
+
+        // Bytes wala raasta na chale to purana hosted-URL tareeka try karo.
+        if (! $upload->successful()) {
+            Log::warning('FB reel byte-upload fail — file_url fallback', $logCtx + [
+                'body' => $upload->json() ?: $upload->body(),
+            ]);
+
+            $videoUrl = $this->publicUrl($mp4) ?? $this->instagram->uploadToTempHost($absolute);
+
+            if (! $videoUrl) {
+                throw new \RuntimeException('Could not upload video to a public host.');
+            }
+
+            Log::info('FB reel video_url', $logCtx + ['url' => $videoUrl]);
+
+            $upload = Http::withHeaders([
+                'Authorization' => 'OAuth ' . $this->token(),
+                'file_url'      => $videoUrl,
+            ])->timeout(180)->post('https://rupload.facebook.com/video-upload/v21.0/' . $videoId);
+        }
+
+        if (! $upload->successful()) {
+            Log::error('FB reel upload failed', $logCtx + ['body' => $upload->json() ?: $upload->body()]);
+            // rupload `error` ki jagah `debug_info` deta hai — asli wajah
+            // wahi hoti hai (jaise "Unable to fetch media from URL … 403").
+            $detail = $upload->json('debug_info.message') ?? $upload->json('error.message');
+            throw $this->graphException(
+                $upload->json('error'),
+                'Reel upload fail.' . ($detail ? ' — ' . $detail : '')
+            );
+        }
+
+        // 3) Finish + publish
+        $finish = Http::asForm()->post($this->apiBase() . '/' . $this->pageId() . '/video_reels', [
+            'video_id'     => $videoId,
+            'upload_phase' => 'finish',
+            'video_state'  => 'PUBLISHED',
+            'description'  => $caption,
+            'access_token' => $this->token(),
+        ]);
+
+        if (! $finish->successful() || ! ($finish->json('success') || $finish->json('post_id'))) {
+            Log::error('FB reel finish failed', $logCtx + ['body' => $finish->json()]);
+            throw $this->graphException($finish->json('error'), 'Reel publish fail.');
+        }
+
+        return $videoId;
+    }
+
+    /* ===================================================================
+     |  🔯 RASHIFAL — Facebook ke liye khaas posts
+     * =================================================================== */
+
+    /**
+     * Aaj ke 12 rashi cards → EK post me saari photos (album). 12 alag posts se
+     * page spam jaisa lagta hai aur reach girti hai. Saare cards ek saath claim
+     * hote hain (aadha album kabhi na bane); safal = sab 'posted'.
+     *
+     * @param  iterable<PartCard>  $cards
+     */
+    public function postRashifalAlbum(Part $part, iterable $cards): string
+    {
+        $part->loadMissing('story');
+        $story = $part->story;
+        $this->forUser($story?->user_id);
+
+        if (! $this->isConfigured()) {
+            throw new \RuntimeException('Facebook configured nahi. Pehle Page ID + token daalo.');
+        }
+
+        $cards = collect($cards)->sortBy('sort_order')->values();
+        if ($cards->isEmpty()) {
+            throw new \RuntimeException('Album ke liye koi card nahi.');
+        }
+
+        @set_time_limit(600);
+
+        // Sab claim — koi ek busy ho to jo claim hue unhe wapas chhod do
+        $claimed = [];
+        try {
+            foreach ($cards as $card) {
+                $claimed[] = [$card, $card->claimFor('fb')];
+            }
+        } catch (\Throwable $e) {
+            foreach ($claimed as [$c, $prev]) {
+                $c->releaseClaim('fb', $prev);
+            }
+            throw $e;
+        }
+
+        try {
+            // 1) Har photo unpublished upload (bytes — public URL ki zaroorat nahi)
+            $mediaIds = [];
+            foreach ($cards as $card) {
+                $jpeg = Storage::disk('public')->path($this->instagram->jpegPathFor($card));
+                $res = Http::timeout(120)
+                    ->attach('source', file_get_contents($jpeg), 'rashi-' . $card->sort_order . '.jpg')
+                    ->post($this->apiBase() . '/' . $this->pageId() . '/photos', [
+                        'published'    => 'false',
+                        'access_token' => $this->token(),
+                    ]);
+                if (! $res->successful() || ! $res->json('id')) {
+                    Log::error('FB album photo upload failed', ['card' => $card->id, 'body' => $res->json()]);
+                    throw $this->graphException($res->json('error'), 'Album photo upload fail.');
+                }
+                $mediaIds[] = $res->json('id');
+            }
+
+            // 2) Ek post, saari photos ke saath
+            $res = Http::asForm()->timeout(120)->post($this->apiBase() . '/' . $this->pageId() . '/feed', [
+                'message'        => $this->rashifalAlbumCaption($story, $cards),
+                'attached_media' => array_map(fn ($id) => json_encode(['media_fbid' => $id]), $mediaIds),
+                'access_token'   => $this->token(),
+            ]);
+            if (! $res->successful() || ! $res->json('id')) {
+                Log::error('FB album post failed', ['part' => $part->id, 'body' => $res->json()]);
+                throw $this->graphException($res->json('error'), 'Album post fail.');
+            }
+
+            $postId = $res->json('id');
+            foreach ($cards as $card) {
+                $this->markPosted($card, $postId);
+            }
+
+            return $postId;
+        } catch (\Throwable $e) {
+            Log::error('FB rashifal album error', ['part' => $part->id, 'error' => $e->getMessage()]);
+            foreach ($claimed as [$c, $prev]) {
+                $e instanceof FacebookRateLimitException
+                    ? $c->releaseClaim('fb', $prev)
+                    : $this->markFailed($c, $e->getMessage());
+            }
+            throw $e;
+        }
+    }
+
+    /** Album caption: tareekh + har rashi ki ek line + "apni rashi comment karo" + hashtags. */
+    public function rashifalAlbumCaption(?Story $story, iterable $cards): string
+    {
+        $lang = $story?->language ?: 'gujarati';
+        $date = $story?->category ? Carbon::parse($story->category)->format('d-m-Y') : now()->format('d-m-Y');
+        [$head, $ask] = match ($lang) {
+            'hindi'    => ['🔯 आज का राशिफल', '👇 अपनी राशि कमेंट में लिखें और परिवार के साथ शेयर करें 🙏'],
+            'hinglish' => ['🔯 Aaj ka Rashifal', '👇 Apni rashi comment me likho aur family ke saath share karo 🙏'],
+            default    => ['🔯 આજનું રાશિફળ', '👇 તમારી રાશિ કૉમેન્ટમાં લખો અને પરિવાર સાથે શેર કરો 🙏'],
+        };
+
+        $lines = [];
+        $tags = '';
+        foreach ($cards as $card) {
+            $rows = collect(preg_split('/\R/u', (string) $card->ig_caption))->map(fn ($l) => trim($l))->filter();
+            $text = $rows->first(fn ($l) => ! Str::startsWith($l, '#'));
+            if ($text) {
+                $lines[] = Str::limit($text, 160);
+            }
+            $tags = $tags ?: (string) $rows->first(fn ($l) => Str::startsWith($l, '#'));
+        }
+
+        $suffix = trim((string) $this->setting('fb_caption_suffix'));
+
+        return trim(implode("\n\n", array_filter([
+            "{$head} — {$date}",
+            implode("\n", $lines),
+            $ask,
+            $suffix !== '' ? $suffix : $tags,
+        ])));
+    }
+
+    /**
+     * Aaj ka Rashifal Short (3 rashi) → Facebook Reel. Wahi video jo YouTube ke liye
+     * bana (yt/part-{id}.mp4) — maujood ho to dobara nahi banta. Status pehle card par.
+     */
+    public function postShortPart(Part $part): string
+    {
+        $part->loadMissing(['story', 'cards' => fn ($q) => $q->orderBy('sort_order')]);
+        $cards = $part->cards->sortBy('sort_order')->values();
+        $first = $cards->first();
+        if (! $first) {
+            throw new \RuntimeException('Is Short me koi frame nahi hai.');
+        }
+
+        $this->forUser($part->story?->user_id);
+        if (! $this->isConfigured()) {
+            throw new \RuntimeException('Facebook configured nahi. Pehle Page ID + token daalo.');
+        }
+
+        @set_time_limit(900);
+        $previous = $first->claimFor('fb');
+
+        try {
+            $mp4 = 'yt/part-' . $part->id . '.mp4';
+            if (! Storage::disk('public')->exists($mp4)) {
+                $mp4 = $this->youtube($part)->mp4ForPart($part);
+            }
+
+            $videoId = $this->publishReel($mp4, $this->videoCaption($first, $part), ['part' => $part->id]);
+            foreach ($cards as $card) {
+                $this->markPosted($card, $videoId);
+            }
+
+            return $videoId;
+        } catch (\Throwable $e) {
+            Log::error('FB rashifal reel error', ['part' => $part->id, 'error' => $e->getMessage()]);
+            $e instanceof FacebookRateLimitException
+                ? $first->releaseClaim('fb', $previous)
+                : $this->markFailed($first, $e->getMessage());
+            throw $e;
+        }
+    }
+
+    /**
+     * Saptahik Rashifal (16:9, 12 rashi) → Facebook Page video. YouTube wala bana hua
+     * video (yt/week-{id}.mp4) reuse — dobara banane me Gemini voice ki limit lagti hai.
+     * Chapters ke time description me (Facebook par text ki tarah dikhte hain) + thumbnail.
+     */
+    public function postWeekVideo(Part $part): string
+    {
+        $part->loadMissing(['story', 'cards' => fn ($q) => $q->orderBy('sort_order')]);
+        $cards = $part->cards->sortBy('sort_order')->values();
+        $first = $cards->first();
+        if (! $first) {
+            throw new \RuntimeException('Is video me koi frame nahi hai.');
+        }
+
+        $this->forUser($part->story?->user_id);
+        if (! $this->isConfigured()) {
+            throw new \RuntimeException('Facebook configured nahi. Pehle Page ID + token daalo.');
+        }
+
+        @set_time_limit(1800);
+        $previous = $first->claimFor('fb');
+
+        try {
+            $disk = Storage::disk('public');
+            $yt = $this->youtube($part);
+            $mp4 = 'yt/week-' . $part->id . '.mp4';
+            $metaFile = 'yt/week-' . $part->id . '.json';
+            $meta = $disk->exists($metaFile) ? (json_decode((string) $disk->get($metaFile), true) ?: []) : [];
+            if ($disk->exists($mp4) && ! empty($meta['durations'])) {
+                $durations = $meta['durations'];
+            } else {
+                $built = $yt->mp4ForWeekVideo($part);
+                [$mp4, $durations] = [$built['mp4'], $built['durations']];
+            }
+
+            $caption = trim((string) $first->yt_caption);
+            $chapters = $yt->weekChapters($part, $durations);
+            $description = str_contains($caption, '[CHAPTERS]')
+                ? str_replace('[CHAPTERS]', $chapters, $caption)
+                : $caption . ($chapters !== '' ? "\n\n" . $chapters : '');
+            $description = $this->forFacebook(preg_replace("/\n{3,}/", "\n\n", $description));
+
+            $req = Http::timeout(1200)
+                ->attach('source', fopen($disk->path($mp4), 'r'), 'saptahik-rashifal.mp4');
+            if ($part->image_path && $disk->exists($part->image_path)) {
+                $req = $req->attach('thumb', file_get_contents($disk->path($part->image_path)), 'thumb.jpg');
+            }
+            $res = $req->post('https://graph-video.facebook.com/v21.0/' . $this->pageId() . '/videos', [
+                'title'        => $yt->buildTitle($first, $part),
+                'description'  => $description,
+                'access_token' => $this->token(),
+            ]);
+
+            if (! $res->successful() || ! $res->json('id')) {
+                Log::error('FB week video upload failed', ['part' => $part->id, 'body' => $res->json()]);
+                throw $this->graphException($res->json('error'), 'Video upload fail.');
+            }
+
+            $videoId = $res->json('id');
+            foreach ($cards as $card) {
+                $this->markPosted($card, $videoId);
+            }
+
+            return $videoId;
+        } catch (\Throwable $e) {
+            Log::error('FB week video error', ['part' => $part->id, 'error' => $e->getMessage()]);
+            // Rate-limit / doosri jagah video ban raha → card pending rahe, baad me retry
+            $e instanceof FacebookRateLimitException || $e instanceof CardBusyException
+                ? $first->releaseClaim('fb', $previous)
+                : $this->markFailed($first, $e->getMessage());
+            throw $e;
+        }
+    }
+
+    /** Short ka YouTube title+description → Facebook caption (#Shorts hata ke, suffix ant me). */
+    protected function videoCaption(PartCard $first, Part $part): string
+    {
+        $text = trim((string) $first->yt_caption) ?: $this->youtube($part)->buildTitle($first, $part);
+
+        return $this->forFacebook($text);
+    }
+
+    /** YouTube wala text Facebook ke hisaab se: #Shorts nahi, "Subscribe" → "Follow", suffix ant me. */
+    public function forFacebook(string $text): string
+    {
+        $text = preg_replace('/[ \t]*#shorts\b/iu', '', $text);
+        $text = str_ireplace(['subscribe', 'સબ્સ્ક્રાઇબ', 'सब्सक्राइब'], ['Follow', 'ફોલો', 'फॉलो'], $text);
+        $suffix = trim((string) $this->setting('fb_caption_suffix'));
+
+        return trim($text . ($suffix !== '' && ! str_contains($text, $suffix) ? "\n\n" . $suffix : ''));
+    }
+
+    /** Usi user ki YouTube settings (music/voice/outro) wala video builder. */
+    protected function youtube(Part $part): YoutubeService
+    {
+        return app(YoutubeService::class)->forUser($part->story?->user_id);
     }
 
     /* ===================================================================

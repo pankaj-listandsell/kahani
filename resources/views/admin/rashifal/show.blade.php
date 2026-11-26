@@ -18,11 +18,11 @@
     </div>
 
     @if (in_array($story->type, ['rashifal_short', 'rashifal_week'], true))
-        @php($isWeek = $story->type === 'rashifal_week')
+        @php $isWeek = $story->type === 'rashifal_week'; @endphp
         {{-- 📺 YouTube Shorts / 🎬 Saptahik video — har part = ek video (sirf YouTube) --}}
         <div class="space-y-4 mb-6">
             @foreach ($story->parts->sortBy('sort_order') as $part)
-                @php($first = $part->cards->sortBy('sort_order')->first())
+                @php $first = $part->cards->sortBy('sort_order')->first(); @endphp
                 <div class="bg-white rounded-xl border border-red-200 p-4 shadow-sm">
                     <div class="flex items-center justify-between gap-3 flex-wrap">
                         <div class="flex items-center gap-3">
@@ -45,6 +45,18 @@
                                     ⏳ Auto-post {{ \Illuminate\Support\Carbon::parse($story->category)->format('d M') }} ko upload karega
                                 @endif
                             </p>
+                            <p class="text-xs text-slate-500 mt-0.5">
+                                📘 Facebook {{ $isWeek ? 'video' : 'Reel' }}:
+                                @if ($first?->fb_status === 'posted')
+                                    ✅ Post ho gaya
+                                @elseif ($first?->fb_status === 'failed')
+                                    ❌ Fail: {{ \Illuminate\Support\Str::limit($first->fb_error, 120) }}
+                                @elseif ($first?->fb_status === 'posting')
+                                    ⏳ Post ho raha hai…
+                                @else
+                                    ⏳ Auto-post YouTube ke baad bhejega
+                                @endif
+                            </p>
                             </div>
                         </div>
                         <div class="flex gap-2">
@@ -57,11 +69,51 @@
                                     <button class="text-xs font-semibold text-white bg-red-600 hover:bg-red-700 rounded-lg px-3 py-1.5">⬆ Abhi YouTube par upload karo</button>
                                 </form>
                             @endif
+                            @if ($first && $first->fb_status !== 'posted' && ! ($first->fb_status === 'posting' && $first->updated_at?->gt(now()->subMinutes(\App\Models\PartCard::POSTING_STALE_MINUTES))))
+                                <form method="POST" action="{{ route('admin.rashifal.short.facebook', $part) }}"
+                                      onsubmit="if(!confirm('{{ $isWeek ? 'Ye video' : 'Ye Reel' }} abhi Facebook par bhejein?')) return false; this.querySelector('button').disabled=true; this.querySelector('button').textContent='⏳ Facebook par ja raha hai…'">
+                                    @csrf
+                                    <button class="text-xs font-semibold text-white bg-blue-600 hover:bg-blue-700 rounded-lg px-3 py-1.5">📘 Facebook {{ $isWeek ? 'par Video' : 'Reel' }} bhejo</button>
+                                </form>
+                            @endif
                         </div>
                     </div>
                     <div id="short-video-{{ $part->id }}" class="mt-3"></div>
                 </div>
             @endforeach
+        </div>
+    @endif
+
+    @if ($story->type === 'rashifal' && $cards->isNotEmpty())
+        @php
+            $fbLeft = $cards->filter(fn ($c) => $c->fb_status !== 'posted');
+            $fbBusy = $cards->contains(fn ($c) => $c->fb_status === 'posting' && $c->updated_at?->gt(now()->subMinutes(\App\Models\PartCard::POSTING_STALE_MINUTES)));
+        @endphp
+        {{-- 📘 Facebook: saare rashi cards ek album post me --}}
+        <div class="bg-white rounded-xl border border-blue-200 p-4 shadow-sm mb-6 flex items-center justify-between gap-3 flex-wrap">
+            <div>
+                <h3 class="font-bold">📘 Facebook Album — saari rashi ek post me</h3>
+                <p class="text-xs text-slate-500 mt-0.5">
+                    @if ($fbLeft->isEmpty())
+                        ✅ Saare {{ $cards->count() }} cards Facebook par post ho gaye
+                    @elseif ($fbBusy)
+                        ⏳ Post ho raha hai…
+                    @else
+                        {{ $fbLeft->count() }} / {{ $cards->count() }} cards baaki •
+                        auto-post {{ \Illuminate\Support\Carbon::parse($story->category)->format('d M') }} ko ek album me bhejega
+                        @if ($f = $fbLeft->firstWhere('fb_status', 'failed'))
+                            <br>❌ Pichhli baar fail: {{ \Illuminate\Support\Str::limit($f->fb_error, 120) }}
+                        @endif
+                    @endif
+                </p>
+            </div>
+            @if ($fbLeft->isNotEmpty() && ! $fbBusy)
+                <form method="POST" action="{{ route('admin.rashifal.facebook', $story) }}"
+                      onsubmit="if(!confirm('{{ $fbLeft->count() }} photo ka album abhi Facebook par bhejein?')) return false; this.querySelector('button').disabled=true; this.querySelector('button').textContent='⏳ Facebook par ja raha hai…'">
+                    @csrf
+                    <button class="text-sm font-semibold text-white bg-blue-600 hover:bg-blue-700 rounded-lg px-4 py-2">📘 Facebook par Album bhejo</button>
+                </form>
+            @endif
         </div>
     @endif
 

@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Admin;
 use App\Http\Controllers\Controller;
 use App\Models\Part;
 use App\Models\Story;
+use App\Services\FacebookService;
 use App\Services\InstagramService;
 use App\Services\ViralStudioAiService;
 use App\Services\YoutubeService;
@@ -432,6 +433,45 @@ class RashifalController extends Controller
             return back()->with('success', ($type === 'rashifal_week' ? '🎬 Saptahik video' : '▶️ Short') . " YouTube par upload ho gaya (video id: {$id}).");
         } catch (\Throwable $e) {
             return back()->with('error', 'Upload nahi hua: ' . $e->getMessage());
+        }
+    }
+
+    /** 📘 Aaj ke rashi cards (jo Facebook par nahi gaye) → abhi ek album post. */
+    public function facebookAlbum(Story $story, FacebookService $facebook)
+    {
+        abort_unless($story->type === 'rashifal', 404);
+        $this->authorize('update', $story);
+        @set_time_limit(600);
+
+        $part = $story->parts()->orderBy('sort_order')->first();
+        $cards = $part?->cards()->orderBy('sort_order')->get()->filter(fn ($c) => $c->fb_status !== 'posted')->values();
+        if (! $part || $cards->isEmpty()) {
+            return back()->with('error', 'Facebook par bhejne ke liye koi card baaki nahi.');
+        }
+
+        try {
+            $id = $facebook->postRashifalAlbum($part, $cards);
+
+            return back()->with('success', "📘 {$cards->count()} photo ka album Facebook par post ho gaya (post id: {$id}).");
+        } catch (\Throwable $e) {
+            return back()->with('error', 'Facebook par post nahi hua: ' . $e->getMessage());
+        }
+    }
+
+    /** 📘 Short → Facebook Reel / Saptahik video → Facebook video, abhi. */
+    public function facebookShort(Part $part, FacebookService $facebook)
+    {
+        $type = $part->story?->type;
+        abort_unless(in_array($type, ['rashifal_short', 'rashifal_week'], true), 404);
+        $this->authorize('update', $part->story);
+        @set_time_limit(1800);
+
+        try {
+            $id = $type === 'rashifal_week' ? $facebook->postWeekVideo($part) : $facebook->postShortPart($part);
+
+            return back()->with('success', ($type === 'rashifal_week' ? '📘 Saptahik video' : '📘 Reel') . " Facebook par post ho gaya (id: {$id}).");
+        } catch (\Throwable $e) {
+            return back()->with('error', 'Facebook par post nahi hua: ' . $e->getMessage());
         }
     }
 

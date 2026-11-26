@@ -156,6 +156,8 @@ Route::middleware('auth')->prefix('admin')->name('admin.')->group(function () {
     Route::post('rashifal/short', [RashifalController::class, 'saveShort'])->name('rashifal.short.save');
     Route::post('rashifal/short/{part}/preview', [RashifalController::class, 'previewShort'])->name('rashifal.short.preview');
     Route::post('rashifal/short/{part}/upload', [RashifalController::class, 'uploadShort'])->name('rashifal.short.upload');
+    Route::post('rashifal/short/{part}/facebook', [RashifalController::class, 'facebookShort'])->name('rashifal.short.facebook');
+    Route::post('rashifal/{story}/facebook', [RashifalController::class, 'facebookAlbum'])->name('rashifal.facebook');
     Route::post('rashifal/week/generate', [RashifalController::class, 'generateWeek'])->name('rashifal.week.generate');
     Route::post('rashifal/week/save', [RashifalController::class, 'saveWeek'])->name('rashifal.week.save');
     Route::get('rashifal/{story}', [RashifalController::class, 'show'])->name('rashifal.show');

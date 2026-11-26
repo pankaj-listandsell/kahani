@@ -307,7 +307,79 @@
         return () => (seed = (seed * 16807) % 2147483647) / 2147483647;
     }
 
+    // 🎨 Bhasha ke hisaab se kaagaz — har bhasha ka account alag dikhe.
+    // Gujarati = purana peela kaagaz. Hindi = gulabi ruled notebook. English/Hinglish = saaf neela-saleti card + bindu jaali.
+    const PAPER = {
+        gujarati: { hl: 'rgba(253, 224, 71, 0.92)', title: '#1c140b', ink: '#21180e' },
+        hindi:    { hl: 'rgba(251, 113, 133, 0.42)', title: '#3b0a1e', ink: '#1f1b3a' },
+        hinglish: { hl: 'rgba(45, 212, 191, 0.45)', title: '#0f2a2e', ink: '#0f172a' },
+    };
+    const pp = () => PAPER[itemsLang] || PAPER.gujarati;
+
+    /** Hindi: gulabi notebook — neeli rekhayein, laal double margin, kono me phool, beech me dil wala watermark. */
+    function drawPaperHindi(ctx) {
+        const g = ctx.createLinearGradient(0, 0, 0, H);
+        g.addColorStop(0, '#fff8f6'); g.addColorStop(0.6, '#fdecea'); g.addColorStop(1, '#f6d3cf');
+        ctx.fillStyle = g;
+        ctx.fillRect(0, 0, W, H);
+        ctx.save();
+        ctx.strokeStyle = 'rgba(59, 130, 246, 0.13)'; ctx.lineWidth = 2;
+        for (let y = 150; y < H - 40; y += 64) { ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(W, y); ctx.stroke(); }
+        ctx.strokeStyle = 'rgba(225, 29, 72, 0.35)'; ctx.lineWidth = 3;
+        [44, 54].forEach(x => { ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, H); ctx.stroke(); });
+        // Kono me chhote phool
+        const flower = (cx, cy, r) => {
+            ctx.fillStyle = 'rgba(225, 29, 72, 0.22)';
+            for (let p = 0; p < 6; p++) {
+                const a = (p / 6) * Math.PI * 2;
+                ctx.beginPath(); ctx.ellipse(cx + Math.cos(a) * r, cy + Math.sin(a) * r, r * 0.75, r * 0.42, a, 0, Math.PI * 2); ctx.fill();
+            }
+            ctx.fillStyle = 'rgba(234, 88, 12, 0.35)';
+            ctx.beginPath(); ctx.arc(cx, cy, r * 0.45, 0, Math.PI * 2); ctx.fill();
+        };
+        flower(W - 70, 70, 26); flower(W - 70, H - 70, 26);
+        // Watermark: dil + brand
+        ctx.globalAlpha = 0.07;
+        ctx.fillStyle = '#be123c';
+        const cx = W / 2, cy = H * 0.55, s = 300;
+        ctx.beginPath();
+        ctx.moveTo(cx, cy + s * 0.9);
+        ctx.bezierCurveTo(cx - s * 1.5, cy - s * 0.1, cx - s * 0.7, cy - s * 1.1, cx, cy - s * 0.45);
+        ctx.bezierCurveTo(cx + s * 0.7, cy - s * 1.1, cx + s * 1.5, cy - s * 0.1, cx, cy + s * 0.9);
+        ctx.fill();
+        ctx.globalAlpha = 0.12;
+        ctx.fillStyle = '#881337';
+        K.fitDraw(ctx, brandName(), cx, cy - 20, { maxW: 420, maxH: 300, size: 100, minSize: 46, lineHeight: 1.2 });
+        ctx.restore();
+    }
+
+    /** English/Hinglish: saaf modern card — bindu jaali, firozi frame + upar patti, gol-chaukor watermark. */
+    function drawPaperEnglish(ctx) {
+        const g = ctx.createLinearGradient(0, 0, W, H);
+        g.addColorStop(0, '#f8fafc'); g.addColorStop(0.6, '#eef2f7'); g.addColorStop(1, '#d9e2ec');
+        ctx.fillStyle = g;
+        ctx.fillRect(0, 0, W, H);
+        ctx.save();
+        ctx.fillStyle = 'rgba(15, 23, 42, 0.08)';
+        for (let y = 40; y < H; y += 36) for (let x = 40; x < W; x += 36) { ctx.beginPath(); ctx.arc(x, y, 1.6, 0, Math.PI * 2); ctx.fill(); }
+        ctx.strokeStyle = 'rgba(13, 148, 136, 0.55)'; ctx.lineWidth = 4;
+        ctx.beginPath(); ctx.roundRect(24, 24, W - 48, H - 48, 28); ctx.stroke();
+        ctx.fillStyle = '#0d9488';
+        ctx.beginPath(); ctx.roundRect(W / 2 - 90, 58, 180, 8, 4); ctx.fill();
+        ctx.globalAlpha = 0.07;
+        ctx.strokeStyle = '#0f766e';
+        ctx.lineWidth = 14;
+        ctx.beginPath(); ctx.roundRect(W / 2 - 320, H * 0.55 - 320, 640, 640, 90); ctx.stroke();
+        ctx.lineWidth = 5;
+        ctx.beginPath(); ctx.roundRect(W / 2 - 280, H * 0.55 - 280, 560, 560, 70); ctx.stroke();
+        ctx.fillStyle = '#0f766e';
+        K.fitDraw(ctx, brandName(), W / 2, H * 0.55, { maxW: 480, maxH: 360, size: 110, minSize: 50, lineHeight: 1.2 });
+        ctx.restore();
+    }
+
     function drawPaper(ctx) {
+        if (itemsLang === 'hindi') return drawPaperHindi(ctx);
+        if (itemsLang === 'hinglish') return drawPaperEnglish(ctx);
         const g = ctx.createRadialGradient(W / 2, H * 0.45, 200, W / 2, H / 2, H * 0.75);
         g.addColorStop(0, '#f7ecd3');
         g.addColorStop(0.6, '#ead6ad');
@@ -344,9 +416,9 @@
         r.lines.forEach((line, i) => {
             const y = top + r.lh * (i + 0.5);
             const w = ctx.measureText(line).width;
-            ctx.fillStyle = 'rgba(253, 224, 71, 0.92)';
+            ctx.fillStyle = pp().hl;
             ctx.fillRect(W / 2 - w / 2 - 16, y - r.lh / 2 + 4, w + 32, r.lh - 4);
-            ctx.fillStyle = '#1c140b';
+            ctx.fillStyle = pp().title;
             ctx.fillText(line, W / 2, y);
         });
         return top + r.lines.length * r.lh;
@@ -386,7 +458,7 @@
         // Body box me fit hone tak font chhota karo
         const x = 70, maxW = W - 140;
         const top = titleBottom + 30, bottom = H - 120;
-        ctx.fillStyle = '#21180e';
+        ctx.fillStyle = pp().ink;
         K.drawRich(ctx, K.fitRich(ctx, paras, maxW, bottom - top, 44), x, top);
     }
 

@@ -527,6 +527,124 @@
         });
     }
 
+    // ---------- 🎨 Bhasha ke hisaab se design (har bhasha ka account alag dikhe) ----------
+    // Gujarati = asli design (sunehra + tatva ke rang). Hindi = kesariya-maroon + mandala.
+    // English (Hinglish) = neela-firozi + chaandi + taaramandal. Cards, Shorts, weekly video sab isi se.
+    const rgbaOf = rgb => a => `rgba(${rgb}, ${a})`;
+    const DESIGN = {
+        gujarati: {
+            accent: '#facc15', soft: '#fcd34d', a: rgbaOf('250, 204, 21'),
+            medal: ['#fde68a', '#d97706'], ink: '#3b0764', stroke: '#1e0538', deep: rgbaOf('11, 16, 51'),
+            banner: ['#fbbf24', '#fde68a'], bannerTop: '#7c2d12',
+            sky: i => ELEMENT_SKY[i % 4], skyAlt: ['#0b1033', '#2a1260', '#4a1450'],
+            skySpecial: ['#1e0b3a', '#4c1d95', '#7c2d12'], skyThumb: ['#3b0764', '#86198f', '#b91c1c'],
+            deco: null, starCount: 1,
+        },
+        hindi: {
+            accent: '#fb923c', soft: '#fdba74', a: rgbaOf('251, 146, 60'),
+            medal: ['#ffedd5', '#ea580c'], ink: '#450a0a', stroke: '#2a0508', deep: rgbaOf('45, 6, 12'),
+            banner: ['#f97316', '#fed7aa'], bannerTop: '#7f1d1d',
+            sky: i => [
+                ['#1c0208', '#5f0a1f', '#8f1d2c'], // Agni — rani/laal
+                ['#170409', '#4a0d1d', '#6b2216'], // Prithvi — maroon
+                ['#1a0318', '#4f0a3a', '#7a1650'], // Vayu — gulabi-jaamuni
+                ['#12030f', '#3d0a35', '#5e1046'], // Jal — gehra jaamuni
+            ][i % 4],
+            skyAlt: ['#1a0210', '#560b26', '#7f1d3a'],
+            skySpecial: ['#2a0510', '#701a33', '#9a2a1a'], skyThumb: ['#4a0519', '#9f1239', '#c2410c'],
+            deco: 'mandala', starCount: 0.45,
+        },
+        hinglish: {
+            accent: '#5eead4', soft: '#99f6e4', a: rgbaOf('94, 234, 212'),
+            medal: ['#f8fafc', '#94a3b8'], ink: '#0f172a', stroke: '#04151c', deep: rgbaOf('2, 20, 31'),
+            banner: ['#2dd4bf', '#ccfbf1'], bannerTop: '#134e4a',
+            sky: i => [
+                ['#020617', '#0c2d48', '#134e4a'],
+                ['#03140f', '#064e3b', '#0f3a4a'],
+                ['#050a24', '#1e3a8a', '#155e75'],
+                ['#020b16', '#0e3a5c', '#0f766e'],
+            ][i % 4],
+            skyAlt: ['#020617', '#0f2a4a', '#134e4a'],
+            skySpecial: ['#020617', '#1e3a8a', '#0f766e'], skyThumb: ['#0c1445', '#1d4ed8', '#0d9488'],
+            deco: 'constellation', starCount: 0.6,
+        },
+    };
+    let drawLang = 'gujarati'; // har draw function shuru me set karta hai (roz ke cards: itemsLang, weekly: weekLang)
+    const dz = () => DESIGN[drawLang] || DESIGN.gujarati;
+
+    /** Background ke upar bhasha ki khaas sajawat (Gujarati par kuch nahi). w×h = canvas, seed = alag pattern. */
+    function drawDeco(ctx, w, h, seed) {
+        const D = dz();
+        if (!D.deco) return;
+        ctx.save();
+        if (D.deco === 'mandala') {
+            // Kono me halke mandala + andar double border (paramparik frame)
+            const mandala = (cx, cy, R) => {
+                ctx.strokeStyle = D.a(0.16); ctx.lineWidth = 2;
+                [1, 0.78, 0.56, 0.34].forEach(k => { ctx.beginPath(); ctx.arc(cx, cy, R * k, 0, Math.PI * 2); ctx.stroke(); });
+                for (let p = 0; p < 16; p++) {
+                    const a = (p / 16) * Math.PI * 2;
+                    ctx.beginPath();
+                    ctx.ellipse(cx + Math.cos(a) * R * 0.67, cy + Math.sin(a) * R * 0.67, R * 0.2, R * 0.075, a, 0, Math.PI * 2);
+                    ctx.stroke();
+                }
+            };
+            const R = Math.min(w, h) * 0.34;
+            mandala(0, 0, R); mandala(w, h, R);
+            mandala(w, 0, R * 0.6); mandala(0, h, R * 0.6);
+            ctx.strokeStyle = D.a(0.55); ctx.lineWidth = 4;
+            ctx.strokeRect(16, 16, w - 32, h - 32);
+            ctx.strokeStyle = D.a(0.28); ctx.lineWidth = 1.5;
+            ctx.strokeRect(28, 28, w - 56, h - 56);
+            ctx.fillStyle = D.a(0.8);
+            [[22, 22], [w - 22, 22], [22, h - 22], [w - 22, h - 22]].forEach(([x, y]) => {
+                ctx.beginPath(); ctx.moveTo(x, y - 12); ctx.lineTo(x + 12, y); ctx.lineTo(x, y + 12); ctx.lineTo(x - 12, y); ctx.closePath(); ctx.fill();
+            });
+        } else if (D.deco === 'constellation') {
+            // Halki jaali + taaramandal (bindu jude hue) + upar-neeche patli firozi patti
+            ctx.strokeStyle = 'rgba(255,255,255,0.035)'; ctx.lineWidth = 1;
+            const step = Math.round(Math.min(w, h) / 9);
+            for (let x = step; x < w; x += step) { ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, h); ctx.stroke(); }
+            for (let y = step; y < h; y += step) { ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(w, y); ctx.stroke(); }
+            const r = rng(31 + seed * 17);
+            for (let c = 0; c < 6; c++) {
+                const cx = r() * w, cy = r() * h, pts = [];
+                for (let p = 0; p < 5; p++) pts.push([cx + (r() - 0.5) * w * 0.28, cy + (r() - 0.5) * h * 0.16]);
+                ctx.strokeStyle = D.a(0.22); ctx.lineWidth = 1.5;
+                ctx.beginPath(); pts.forEach(([x, y], k) => (k ? ctx.lineTo(x, y) : ctx.moveTo(x, y))); ctx.stroke();
+                ctx.fillStyle = D.a(0.7);
+                pts.forEach(([x, y]) => { ctx.beginPath(); ctx.arc(x, y, 3.2, 0, Math.PI * 2); ctx.fill(); });
+            }
+            const bar = ctx.createLinearGradient(0, 0, w, 0);
+            bar.addColorStop(0, D.a(0)); bar.addColorStop(0.5, D.a(0.9)); bar.addColorStop(1, D.a(0));
+            ctx.fillStyle = bar;
+            ctx.fillRect(0, 0, w, 6); ctx.fillRect(0, h - 6, w, 6);
+        }
+        ctx.restore();
+    }
+
+    /** Beech ke gole ke peeche bhasha ka nishaan: Hindi = kamal ki pankhudiyan, English = do patli ring. */
+    function drawMedalBack(ctx, x, y, r) {
+        const D = dz();
+        if (!D.deco) return;
+        ctx.save();
+        if (D.deco === 'mandala') {
+            ctx.fillStyle = D.a(0.35);
+            for (let p = 0; p < 12; p++) {
+                const a = (p / 12) * Math.PI * 2;
+                ctx.beginPath();
+                ctx.ellipse(x + Math.cos(a) * r * 1.02, y + Math.sin(a) * r * 1.02, r * 0.32, r * 0.13, a, 0, Math.PI * 2);
+                ctx.fill();
+            }
+        } else {
+            ctx.strokeStyle = D.a(0.8); ctx.lineWidth = Math.max(2, r / 40);
+            ctx.beginPath(); ctx.arc(x, y, r * 1.12, 0, Math.PI * 2); ctx.stroke();
+            ctx.strokeStyle = D.a(0.35);
+            ctx.beginPath(); ctx.arc(x, y, r * 1.24, 0, Math.PI * 2); ctx.stroke();
+        }
+        ctx.restore();
+    }
+
     // ---------- Card drawing ----------
     const CY = 455; // rashi chinh / chakra ka centre (y)
 
@@ -566,7 +684,7 @@
     function drawSky(ctx, idx, cy = CY, rings = [200, 245]) {
         const g = ctx.createLinearGradient(0, 0, 0, H);
         // Tyohar ho to uska rang; warna rashi ke tatva ka rang (intro/end frames par purana jaamuni)
-        const sky = fest()?.sky || (idx < 12 ? ELEMENT_SKY[idx % 4] : ['#0b1033', '#2a1260', '#4a1450']);
+        const sky = fest()?.sky || (idx < 12 ? dz().sky(idx) : dz().skyAlt);
         g.addColorStop(0, sky[0]);
         g.addColorStop(0.55, sky[1]);
         g.addColorStop(1, sky[2]);
@@ -575,20 +693,21 @@
 
         // Taare — har rashi ka alag pattern
         const r = rng(7 + idx * 101);
-        for (let i = 0; i < 260; i++) {
+        for (let i = 0; i < Math.round(260 * dz().starCount); i++) {
             const s = r() * 2.6 + 0.4;
             ctx.fillStyle = `rgba(255,255,255,${0.25 + r() * 0.6})`;
             ctx.beginPath(); ctx.arc(r() * W, r() * H, s, 0, Math.PI * 2); ctx.fill();
         }
+        drawDeco(ctx, W, H, idx);
 
         // Rashi chakra ki halki rings
         ctx.save();
-        ctx.strokeStyle = 'rgba(250, 204, 21, 0.18)';
+        ctx.strokeStyle = dz().a(0.18);
         ctx.lineWidth = 3;
         rings.forEach(rad => { ctx.beginPath(); ctx.arc(W / 2, cy, rad, 0, Math.PI * 2); ctx.stroke(); });
         const mid = (rings[0] + rings[1]) / 2;
         ctx.font = K.font(Math.round(mid / 7.4), '400');
-        ctx.fillStyle = 'rgba(250, 204, 21, 0.35)';
+        ctx.fillStyle = dz().a(0.35);
         ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
         SYMBOLS.forEach((sym, i) => {
             const a = (i / 12) * Math.PI * 2 - Math.PI / 2;
@@ -603,7 +722,7 @@
     function glass(ctx, x, y, w, h) {
         ctx.save();
         ctx.fillStyle = 'rgba(255,255,255,0.10)';
-        ctx.strokeStyle = 'rgba(250, 204, 21, 0.45)';
+        ctx.strokeStyle = dz().a(0.45);
         ctx.lineWidth = 3;
         ctx.beginPath(); ctx.roundRect(x, y, w, h, 30); ctx.fill(); ctx.stroke();
         ctx.restore();
@@ -636,18 +755,18 @@
     }
 
     function drawRashi(c, item) {
-        const ctx = c.getContext('2d');
+        const ctx = c.getContext('2d'); drawLang = itemsLang;
         const L = tr(), C = ct();
         const i = item._idx;
         const f = !!fest();
         const cy = CARD_CY + (f ? 25 : 0); // tyohar par upar toran — sab thoda neeche
-        const gold = '#fcd34d';
+        const gold = dz().soft;
         K.reset(ctx);
         drawSky(ctx, i, cy, [128, 158]);
 
         // Upar: heading + date + tithi
         ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-        ctx.fillStyle = '#facc15';
+        ctx.fillStyle = dz().accent;
         const hd = (f ? fest().deco + ' ' : '✨ ') + headText() + (f ? ' ' + fest().deco : ' ✨');
         K.fitOneLine(ctx, hd, W - 120, 58, 38);
         ctx.fillText(hd, W / 2, f ? 100 : 68);
@@ -681,11 +800,11 @@
             ctx.save();
             const s = K.fitOneLine(ctx, txt, W - 260, 34, 24);
             const bw = ctx.measureText(txt).width + 70, bh = 62;
-            ctx.fillStyle = ms === 'in' ? '#fde68a' : '#fdba74';
+            ctx.fillStyle = ms === 'in' ? dz().medal[0] : '#fdba74';
             ctx.shadowColor = 'rgba(0,0,0,0.35)'; ctx.shadowBlur = 16;
             ctx.beginPath(); ctx.roundRect(W / 2 - bw / 2, y + 6, bw, bh, bh / 2); ctx.fill();
             ctx.shadowBlur = 0;
-            ctx.fillStyle = '#3b0764';
+            ctx.fillStyle = dz().ink;
             ctx.font = K.font(s);
             ctx.textAlign = 'center';
             ctx.fillText(txt, W / 2, y + 6 + bh / 2 + 2);
@@ -706,7 +825,7 @@
         // (B) Meters — ❤️ Prem / 💼 Kaam / 🩺 Swasthya: patti + % + ek line
         const meters = [
             ['❤️ ', L.love, 'love', '#f472b6'],
-            ['💼 ', L.career, 'career', '#facc15'],
+            ['💼 ', L.career, 'career', dz().accent],
             ['🩺 ', L.health, 'health', '#4ade80'],
         ];
         const rowH = 86, pb = 30 + rowH * meters.length;
@@ -785,7 +904,7 @@
         ctx.save();
         ctx.shadowColor = 'rgba(0,0,0,0.45)'; ctx.shadowBlur = 22;
         const g = ctx.createLinearGradient(bx, 0, bx + bw, 0);
-        g.addColorStop(0, '#fbbf24'); g.addColorStop(0.5, '#fde68a'); g.addColorStop(1, '#fbbf24');
+        g.addColorStop(0, dz().banner[0]); g.addColorStop(0.5, dz().banner[1]); g.addColorStop(1, dz().banner[0]);
         ctx.fillStyle = g;
         ctx.beginPath(); ctx.roundRect(bx, by, bw, bh, 26); ctx.fill();
         ctx.shadowBlur = 0;
@@ -799,10 +918,10 @@
             ctx.fillText('🪔', bx + bw - 42, by + bh / 2 + 2);
         }
         ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-        ctx.fillStyle = '#7c2d12';
+        ctx.fillStyle = dz().bannerTop;
         K.fitOneLine(ctx, C.dmTop, bw - 60 - side * 2, 28, 18, '400');
         ctx.fillText(C.dmTop, W / 2, by + 30);
-        ctx.fillStyle = '#3b0764';
+        ctx.fillStyle = dz().ink;
         K.fitOneLine(ctx, C.dmBottom, bw - 50 - side * 2, 36, 20);
         ctx.fillText(C.dmBottom, W / 2, by + 70);
         ctx.restore();
@@ -819,7 +938,7 @@
         const w = 310, h = 76, gap = 15, x0 = W / 2 - (w * 3 + gap * 2) / 2;
         chips.forEach(([t, swatch], k) => {
             const cx = x0 + k * (w + gap) + w / 2;
-            ctx.fillStyle = 'rgba(250, 204, 21, 0.95)';
+            ctx.fillStyle = dz().a(0.95);
             ctx.beginPath(); ctx.roundRect(cx - w / 2, cy - h / 2, w, h, h / 2); ctx.fill();
             ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
             const dot = swatch ? 18 : 0, dg = swatch ? 10 : 0;
@@ -831,7 +950,7 @@
                 ctx.strokeStyle = '#ffffff'; ctx.lineWidth = 4;
                 ctx.beginPath(); ctx.arc(left + dot, cy, dot, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
             }
-            ctx.fillStyle = '#3b0764';
+            ctx.fillStyle = dz().ink;
             ctx.font = K.font(size);
             ctx.fillText(t, left + dot * 2 + dg + tw / 2, cy + 2);
         });
@@ -845,31 +964,32 @@
         const ds = K.fitOneLine(ctx, day + sep + date, W - 220, size, 26);
         const dw = ctx.measureText(day).width, sw = ctx.measureText(sep).width, tw = ctx.measureText(date).width;
         const pw2 = dw + sw + tw + 90;
-        ctx.fillStyle = 'rgba(11, 16, 51, 0.85)';
-        ctx.strokeStyle = '#facc15';
+        ctx.fillStyle = dz().deep(0.85);
+        ctx.strokeStyle = dz().accent;
         ctx.lineWidth = 3;
         ctx.beginPath(); ctx.roundRect(W / 2 - pw2 / 2, py2 - ph2 / 2, pw2, ph2, ph2 / 2); ctx.fill(); ctx.stroke();
         ctx.font = K.font(ds);
         ctx.textAlign = 'left';
         let x = W / 2 - (dw + sw + tw) / 2;
-        ctx.fillStyle = '#facc15'; ctx.fillText(day, x, py2 + 2); x += dw;
-        ctx.fillStyle = 'rgba(250, 204, 21, 0.6)'; ctx.fillText(sep, x, py2 + 2); x += sw;
+        ctx.fillStyle = dz().accent; ctx.fillText(day, x, py2 + 2); x += dw;
+        ctx.fillStyle = dz().a(0.6); ctx.fillText(sep, x, py2 + 2); x += sw;
         ctx.fillStyle = '#ffffff'; ctx.fillText(date, x, py2 + 2);
         ctx.textAlign = 'center';
     }
 
     /** Beech ka sunehra gola, andar chinh (rashi symbol / 🍀 / 12). */
     function drawSymbol(ctx, glyph, size = 160, font = null, cy = CY, r = 150) {
+        drawMedalBack(ctx, W / 2, cy, r);
         ctx.save();
-        ctx.shadowColor = 'rgba(250, 204, 21, 0.7)';
+        ctx.shadowColor = dz().a(0.7);
         ctx.shadowBlur = r / 3;
         const cg = ctx.createRadialGradient(W / 2, cy, r / 7, W / 2, cy, r + 10);
-        cg.addColorStop(0, '#fde68a');
-        cg.addColorStop(1, '#d97706');
+        cg.addColorStop(0, dz().medal[0]);
+        cg.addColorStop(1, dz().medal[1]);
         ctx.fillStyle = cg;
         ctx.beginPath(); ctx.arc(W / 2, cy, r, 0, Math.PI * 2); ctx.fill();
         ctx.restore();
-        ctx.fillStyle = '#3b0764';
+        ctx.fillStyle = dz().ink;
         ctx.font = font || `${size}px "Segoe UI Symbol", "Noto Sans Symbols 2", ${K.STACK}`;
         ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
         ctx.fillText(glyph, W / 2, cy + r / 19);
@@ -885,9 +1005,9 @@
         const swatch = colorHex(item.lucky_color);
         pills.forEach((t, k) => {
             const cx = k === 0 ? W * 0.27 : W * 0.73, w = 450, h = 100;
-            ctx.fillStyle = 'rgba(250, 204, 21, 0.95)';
+            ctx.fillStyle = dz().a(0.95);
             ctx.beginPath(); ctx.roundRect(cx - w / 2, cy - h / 2, w, h, 48); ctx.fill();
-            ctx.fillStyle = '#3b0764';
+            ctx.fillStyle = dz().ink;
             ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
 
             // Shubh rang wali pill me us rang ka gola (rang pehchana na jaaye to bina gole)
@@ -900,7 +1020,7 @@
                 ctx.strokeStyle = '#ffffff';
                 ctx.lineWidth = 5;
                 ctx.beginPath(); ctx.arc(left + dot, cy, dot, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
-                ctx.fillStyle = '#3b0764';
+                ctx.fillStyle = dz().ink;
                 ctx.font = K.font(size);
                 ctx.fillText(t, left + dot * 2 + gap + tw / 2, cy + 2);
                 return;
@@ -1148,7 +1268,7 @@
         ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
         const x0 = W / 2 - step * 2;
         for (let k = 0; k < 5; k++) {
-            ctx.fillStyle = k < n ? '#facc15' : 'rgba(255,255,255,0.22)';
+            ctx.fillStyle = k < n ? dz().accent : 'rgba(255,255,255,0.22)';
             ctx.fillText('★', x0 + k * step, cy);
         }
         ctx.restore();
@@ -1157,7 +1277,7 @@
     function drawSymbolRow(ctx, y0) {
         ctx.save();
         ctx.font = `58px "Segoe UI Symbol", ${K.STACK}`;
-        ctx.fillStyle = 'rgba(250, 204, 21, 0.75)';
+        ctx.fillStyle = dz().a(0.75);
         ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
         SYMBOLS.forEach((s, k) => ctx.fillText(s + '︎', 90 + (k % 6) * 180, y0 + Math.floor(k / 6) * 110));
         ctx.restore();
@@ -1172,7 +1292,7 @@
         lines.forEach((l, i) => {
             const y = y0 + i * lh;
             ctx.shadowColor = 'rgba(0,0,0,0.55)'; ctx.shadowBlur = 24; ctx.shadowOffsetY = 6;
-            ctx.strokeStyle = '#1e0538'; ctx.lineWidth = stroke;
+            ctx.strokeStyle = dz().stroke; ctx.lineWidth = stroke;
             ctx.strokeText(l, x, y);
             ctx.shadowColor = 'transparent';
             ctx.fillStyle = fillColor;
@@ -1189,14 +1309,14 @@
      * chips = [{glyph, name}] (jodi me glyph = do chinh).
      */
     function drawShortIntro(c, emoji, title, sub, chips = []) {
-        const ctx = c.getContext('2d');
+        const ctx = c.getContext('2d'); drawLang = itemsLang;
         K.reset(ctx);
         drawSky(ctx, 77, 380, [215, 260]);
 
         // Beech me halki roshni — title ubhar ke aaye
         const glow = ctx.createRadialGradient(W / 2, 800, 40, W / 2, 800, 620);
-        glow.addColorStop(0, 'rgba(250, 204, 21, 0.20)');
-        glow.addColorStop(1, 'rgba(250, 204, 21, 0)');
+        glow.addColorStop(0, dz().a(0.20));
+        glow.addColorStop(1, dz().a(0));
         ctx.fillStyle = glow;
         ctx.fillRect(0, 0, W, H);
 
@@ -1205,7 +1325,7 @@
 
         // Title — jitna bada fit ho (2-3 line)
         const f = K.fit(ctx, title, { maxW: W - 110, maxH: 430, size: 150, minSize: 78, lineHeight: 1.14 });
-        strokedLines(ctx, f.lines, 805, f.lh, '#facc15', Math.max(12, Math.round(f.size / 8)));
+        strokedLines(ctx, f.lines, 805, f.lh, dz().accent, Math.max(12, Math.round(f.size / 8)));
 
         // Sub-line — laal pill
         ctx.save();
@@ -1215,7 +1335,7 @@
         ctx.fillStyle = '#dc2626';
         ctx.beginPath(); ctx.roundRect(W / 2 - sw / 2, 1085 - sh / 2, sw, sh, sh / 2); ctx.fill();
         ctx.shadowColor = 'transparent';
-        ctx.strokeStyle = '#facc15'; ctx.lineWidth = 4; ctx.stroke();
+        ctx.strokeStyle = dz().accent; ctx.lineWidth = 4; ctx.stroke();
         ctx.fillStyle = '#ffffff';
         ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
         ctx.fillText(sub, W / 2, 1088);
@@ -1228,16 +1348,16 @@
             chips.forEach((ch, k) => {
                 const x = W / 2 + (k - (n - 1) / 2) * step;
                 ctx.save();
-                ctx.shadowColor = 'rgba(250, 204, 21, 0.75)'; ctx.shadowBlur = 36;
+                ctx.shadowColor = dz().a(0.75); ctx.shadowBlur = 36;
                 const g = ctx.createRadialGradient(x, cy, 16, x, cy, r + 8);
-                g.addColorStop(0, '#fde68a'); g.addColorStop(1, '#d97706');
+                g.addColorStop(0, dz().medal[0]); g.addColorStop(1, dz().medal[1]);
                 ctx.fillStyle = g;
                 ctx.beginPath(); ctx.arc(x, cy, r, 0, Math.PI * 2); ctx.fill();
                 ctx.restore();
                 ctx.save();
                 ctx.strokeStyle = '#ffffff'; ctx.lineWidth = 6;
                 ctx.beginPath(); ctx.arc(x, cy, r, 0, Math.PI * 2); ctx.stroke();
-                ctx.fillStyle = '#3b0764';
+                ctx.fillStyle = dz().ink;
                 ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
                 const pair = [...ch.glyph.replace(/︎/g, '')].length > 1;
                 ctx.font = `${pair ? 86 : 132}px "Segoe UI Symbol", "Noto Sans Symbols 2", ${K.STACK}`;
@@ -1260,13 +1380,13 @@
     function drawShortPanel(ctx, label, line, swatch = null) {
         const px = 60, pw = W - 120, py = 1010, ph = 360;
         ctx.fillStyle = 'rgba(255,255,255,0.12)';
-        ctx.strokeStyle = swatch || 'rgba(250, 204, 21, 0.55)';
+        ctx.strokeStyle = swatch || dz().a(0.55);
         ctx.lineWidth = swatch ? 9 : 3;
         ctx.beginPath(); ctx.roundRect(px, py, pw, ph, 36); ctx.fill(); ctx.stroke();
         ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
         let cy = py + ph / 2, maxH = ph - 70;
         if (label) {
-            ctx.fillStyle = '#facc15';
+            ctx.fillStyle = dz().accent;
             K.fitOneLine(ctx, label, pw - 80, 46, 30);
             ctx.fillText(label, W / 2, py + 54);
             cy = py + ph / 2 + 32; maxH = ph - 136;
@@ -1284,7 +1404,7 @@
         ctx.fillText(num(pos) + ' / ' + num(total), W / 2, 1590);
         const gap = Math.min(60, (W - 200) / total), x0 = W / 2 - gap * (total - 1) / 2;
         for (let k = 0; k < total; k++) {
-            ctx.fillStyle = k < pos ? '#facc15' : 'rgba(255,255,255,0.25)';
+            ctx.fillStyle = k < pos ? dz().accent : 'rgba(255,255,255,0.25)';
             ctx.beginPath(); ctx.arc(x0 + k * gap, 1650, k === pos - 1 ? 13 : 9, 0, Math.PI * 2); ctx.fill();
         }
     }
@@ -1306,7 +1426,7 @@
      * opt = {label, line, stars, day, swatch}
      */
     function drawShortRashi(c, item, pos, total, rank = null, opt = {}) {
-        const ctx = c.getContext('2d');
+        const ctx = c.getContext('2d'); drawLang = itemsLang;
         const L = tr(), S = st();
         const i = item._idx;
         K.reset(ctx);
@@ -1320,7 +1440,7 @@
         ctx.font = K.font(104);
         ctx.fillText(L.names[i], W / 2, 690);
         if (L.letters) {
-            ctx.fillStyle = '#fcd34d';
+            ctx.fillStyle = dz().soft;
             K.fitOneLine(ctx, '(' + L.letters[i] + ')', W - 200, 42, 28, '400');
             ctx.fillText('(' + L.letters[i] + ')', W / 2, 770);
         }
@@ -1338,20 +1458,20 @@
 
     /** Jodi frame: do sunehre gole (dono chinh) + ❤️, "Mesh + Simha", ★, mel ki line. */
     function drawShortJodi(c, a, b, pos, total, label) {
-        const ctx = c.getContext('2d');
+        const ctx = c.getContext('2d'); drawLang = itemsLang;
         const L = tr(), T = tt();
         K.reset(ctx);
         drawSky(ctx, a._idx);
         drawDatePill(ctx, 120);
         [[a, W * 0.29], [b, W * 0.71]].forEach(([it, x]) => {
             ctx.save();
-            ctx.shadowColor = 'rgba(250, 204, 21, 0.7)'; ctx.shadowBlur = 44;
+            ctx.shadowColor = dz().a(0.7); ctx.shadowBlur = 44;
             const g = ctx.createRadialGradient(x, CY, 18, x, CY, 140);
-            g.addColorStop(0, '#fde68a'); g.addColorStop(1, '#d97706');
+            g.addColorStop(0, dz().medal[0]); g.addColorStop(1, dz().medal[1]);
             ctx.fillStyle = g;
             ctx.beginPath(); ctx.arc(x, CY, 130, 0, Math.PI * 2); ctx.fill();
             ctx.restore();
-            ctx.fillStyle = '#3b0764';
+            ctx.fillStyle = dz().ink;
             ctx.font = `140px "Segoe UI Symbol", "Noto Sans Symbols 2", ${K.STACK}`;
             ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
             ctx.fillText(SYMBOLS[it._idx] + '︎', x, CY + 7);
@@ -1376,11 +1496,11 @@
 
     /** Aakhri frame — 👍 Like • ↗️ Share • 🔔 Subscribe. */
     function drawShortEnd(c) {
-        const ctx = c.getContext('2d');
+        const ctx = c.getContext('2d'); drawLang = itemsLang;
         const S = st();
         K.reset(ctx);
         drawSky(ctx, 55);
-        bigText(ctx, S.endLine, 300, 80, '#facc15', 200);
+        bigText(ctx, S.endLine, 300, 80, dz().accent, 200);
 
         const btns = [
             ['👍', S.like, '#2563eb', 560],
@@ -1679,32 +1799,34 @@
     // ---------- Drawing helpers (16:9) ----------
     const symFont = px => `${px}px "Segoe UI Symbol", "Noto Sans Symbols 2", ${K.STACK}`;
     function wSky(ctx, idx, colors = null) {
-        const sky = colors || (idx < 12 ? ELEMENT_SKY[idx % 4] : ['#0b1033', '#2a1260', '#4a1450']);
+        const sky = colors || (idx < 12 ? dz().sky(idx) : dz().skyAlt);
         const g = ctx.createLinearGradient(0, 0, VW, VH);
         g.addColorStop(0, sky[0]); g.addColorStop(0.55, sky[1]); g.addColorStop(1, sky[2]);
         ctx.fillStyle = g;
         ctx.fillRect(0, 0, VW, VH);
         const r = rng(11 + idx * 131);
-        for (let i = 0; i < 320; i++) {
+        for (let i = 0; i < Math.round(320 * dz().starCount); i++) {
             ctx.fillStyle = `rgba(255,255,255,${0.2 + r() * 0.6})`;
             ctx.beginPath(); ctx.arc(r() * VW, r() * VH, r() * 2.4 + 0.4, 0, Math.PI * 2); ctx.fill();
         }
+        drawDeco(ctx, VW, VH, idx);
     }
     function wGold(ctx, x, y, r, glyph, font) {
+        if (r >= 120) drawMedalBack(ctx, x, y, r);
         ctx.save();
-        ctx.shadowColor = 'rgba(250, 204, 21, 0.7)'; ctx.shadowBlur = r / 3;
+        ctx.shadowColor = dz().a(0.7); ctx.shadowBlur = r / 3;
         const g = ctx.createRadialGradient(x, y, r / 7, x, y, r + 8);
-        g.addColorStop(0, '#fde68a'); g.addColorStop(1, '#d97706');
+        g.addColorStop(0, dz().medal[0]); g.addColorStop(1, dz().medal[1]);
         ctx.fillStyle = g;
         ctx.beginPath(); ctx.arc(x, y, r, 0, Math.PI * 2); ctx.fill();
         ctx.restore();
         ctx.save();
-        ctx.fillStyle = '#3b0764'; ctx.font = font;
+        ctx.fillStyle = dz().ink; ctx.font = font;
         ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
         ctx.fillText(glyph, x, y + r / 19);
         ctx.restore();
     }
-    function wPanel(ctx, x, y, w, h, fill = 'rgba(255,255,255,0.10)', stroke = 'rgba(250, 204, 21, 0.45)') {
+    function wPanel(ctx, x, y, w, h, fill = 'rgba(255,255,255,0.10)', stroke = dz().a(0.45)) {
         ctx.save();
         ctx.fillStyle = fill;
         ctx.beginPath(); ctx.roundRect(x, y, w, h, 28); ctx.fill();
@@ -1744,7 +1866,7 @@
         ctx.fillStyle = bg;
         ctx.beginPath(); ctx.roundRect(cx - w / 2, cy - h / 2, w, h, h / 2); ctx.fill();
         ctx.shadowColor = 'transparent';
-        ctx.strokeStyle = '#facc15'; ctx.lineWidth = 4; ctx.stroke();
+        ctx.strokeStyle = dz().accent; ctx.lineWidth = 4; ctx.stroke();
         ctx.fillStyle = color; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
         ctx.fillText(text, cx, cy + 2);
         ctx.restore();
@@ -1754,7 +1876,7 @@
         ctx.font = `${size}px "Segoe UI Symbol", ${K.STACK}`;
         ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
         for (let k = 0; k < 5; k++) {
-            ctx.fillStyle = k < n ? '#facc15' : 'rgba(255,255,255,0.22)';
+            ctx.fillStyle = k < n ? dz().accent : 'rgba(255,255,255,0.22)';
             ctx.fillText('★', cx + (k - 2) * step, cy);
         }
         ctx.restore();
@@ -1762,7 +1884,7 @@
     /** 12 rashi ka chakra — beech me bada emoji gola. */
     function wWheel(ctx, cx, cy, R, centerGlyph) {
         ctx.save();
-        ctx.strokeStyle = 'rgba(250, 204, 21, 0.35)'; ctx.lineWidth = 3;
+        ctx.strokeStyle = dz().a(0.35); ctx.lineWidth = 3;
         [R + 72, R - 72].forEach(rad => { ctx.beginPath(); ctx.arc(cx, cy, rad, 0, Math.PI * 2); ctx.stroke(); });
         ctx.restore();
         SYMBOLS.forEach((s, k) => {
@@ -1778,7 +1900,7 @@
         ctx.fillStyle = 'rgba(0,0,0,0.28)';
         ctx.fillRect(0, 0, VW, 84);
         ctx.save();
-        ctx.textBaseline = 'middle'; ctx.textAlign = 'left'; ctx.fillStyle = '#facc15';
+        ctx.textBaseline = 'middle'; ctx.textAlign = 'left'; ctx.fillStyle = dz().accent;
         const top = T.head + '  •  ' + weekRangeLabel();
         K.fitOneLine(ctx, top, 1400, 40, 24);
         ctx.fillText(top, 48, 44);
@@ -1787,7 +1909,7 @@
         ctx.fillText(right, VW - 48, 44);
         ctx.restore();
         ctx.fillStyle = 'rgba(255,255,255,0.15)'; ctx.fillRect(0, 84, VW, 6);
-        ctx.fillStyle = '#facc15'; ctx.fillRect(0, 84, VW * progress, 6);
+        ctx.fillStyle = dz().accent; ctx.fillRect(0, 84, VW * progress, 6);
     }
 
     /** Sunehre gole + ranking badge + naam (outline) — special frame aur thumbnail dono me. */
@@ -1815,37 +1937,37 @@
 
     /** ⭐ Is hafte ka special: bada title, 3-4 rashi ke gole + naam + chhoti line. */
     function drawWeekSpecial(c, sp) {
-        const ctx = c.getContext('2d');
+        const ctx = c.getContext('2d'); drawLang = weekLang;
         K.reset(ctx);
-        wSky(ctx, 98, ['#1e0b3a', '#4c1d95', '#7c2d12']);
+        wSky(ctx, 98, dz().skySpecial);
         wTopBar(ctx, '⭐ ' + sp.badge, 0);
         const f = K.fit(ctx, sp.head, { maxW: 1700, maxH: 230, size: 112, minSize: 60, lineHeight: 1.12 });
-        strokedLines(ctx, f.lines, 240, f.lh, '#facc15', Math.max(10, Math.round(f.size / 8)), VW / 2);
+        strokedLines(ctx, f.lines, 240, f.lh, dz().accent, Math.max(10, Math.round(f.size / 8)), VW / 2);
         const n = sp.chips.length, step = n === 4 ? 430 : 540, r = n === 4 ? 135 : 150, cy = 545;
         sp.chips.forEach((ch, k) => {
             const x = VW / 2 + (k - (n - 1) / 2) * step;
             wChip(ctx, ch, x, cy, r, 58, sp.rank ? k + 1 : null);
-            wBox(ctx, x - (step - 60) / 2, cy + r + 100, step - 60, 66, 'rgba(0,0,0,0.38)', ch.line, '#fde68a', 32);
+            wBox(ctx, x - (step - 60) / 2, cy + r + 100, step - 60, 66, 'rgba(0,0,0,0.38)', ch.line, dz().medal[0], 32);
         });
-        wText(ctx, sp.hint, VW / 2, 1000, 1600, 60, 40, 26, '#fcd34d', 'center');
+        wText(ctx, sp.hint, VW / 2, 1000, 1600, 60, 40, 26, dz().soft, 'center');
     }
 
     function drawWeekIntro(c) {
-        const ctx = c.getContext('2d');
+        const ctx = c.getContext('2d'); drawLang = weekLang;
         const T = wt();
         K.reset(ctx);
         wSky(ctx, 99);
         wWheel(ctx, 480, 560, 300, '🔮');
         const tx = 1330;
         const f = K.fit(ctx, T.head, { maxW: 980, maxH: 330, size: 150, minSize: 80, lineHeight: 1.12 });
-        strokedLines(ctx, f.lines, 330, f.lh, '#facc15', Math.max(12, Math.round(f.size / 8)), tx);
+        strokedLines(ctx, f.lines, 330, f.lh, dz().accent, Math.max(12, Math.round(f.size / 8)), tx);
         wPill(ctx, weekRangeLabel(), tx, 590, 52, '#dc2626', '#ffffff', 980);
         wText(ctx, T.sub, tx, 730, 980, 70, 46, 28, '#ffffff', 'center');
-        wText(ctx, T.hint, tx, 880, 980, 60, 36, 24, '#fcd34d', 'center');
+        wText(ctx, T.hint, tx, 880, 980, 60, 36, 24, dz().soft, 'center');
     }
 
     function drawWeekRashi(c, it, pos) {
-        const ctx = c.getContext('2d');
+        const ctx = c.getContext('2d'); drawLang = weekLang;
         const L = wl(), T = wt();
         const i = it._idx;
         K.reset(ctx);
@@ -1861,7 +1983,7 @@
         K.fitOneLine(ctx, L.names[i], 620, 100, 60);
         ctx.fillText(L.names[i], lx, 580);
         if (L.letters) {
-            ctx.fillStyle = '#fcd34d';
+            ctx.fillStyle = dz().soft;
             K.fitOneLine(ctx, '(' + L.letters[i] + ')', 620, 38, 22, '400');
             ctx.fillText('(' + L.letters[i] + ')', lx, 648);
         }
@@ -1870,27 +1992,27 @@
         ctx.fillText(T.week, lx, 722);
         ctx.restore();
         wStars(ctx, wRating(it), lx, 790);
-        wBox(ctx, 80, 862, 560, 78, 'rgba(250, 204, 21, 0.95)', L.num + ': ' + wnum(it.lucky_number), '#3b0764', 38);
-        wBox(ctx, 80, 960, 560, 78, 'rgba(250, 204, 21, 0.95)', L.color + ': ' + K.str(it.lucky_color), '#3b0764', 38, colorHex(it.lucky_color));
+        wBox(ctx, 80, 862, 560, 78, dz().a(0.95), L.num + ': ' + wnum(it.lucky_number), dz().ink, 38);
+        wBox(ctx, 80, 960, 560, 78, dz().a(0.95), L.color + ': ' + K.str(it.lucky_color), dz().ink, 38, colorHex(it.lucky_color));
 
         // Daayi taraf: hafte ka saar
         const x0 = 720, rw = 1140;
         wPanel(ctx, x0, 112, rw, 330);
         ctx.save();
-        ctx.textAlign = 'left'; ctx.textBaseline = 'middle'; ctx.fillStyle = '#facc15';
+        ctx.textAlign = 'left'; ctx.textBaseline = 'middle'; ctx.fillStyle = dz().accent;
         K.fitOneLine(ctx, T.overview, rw - 64, 38, 26);
         ctx.fillText(T.overview, x0 + 32, 160);
         ctx.restore();
         wText(ctx, K.str(it.overview) || wShort(it), x0 + 32, 312, rw - 64, 225, 44, 24);
 
         // Prem / Kaam / Dhan / Swasthya — % meter + line
-        const boxes = [['love', T.love, '#ec4899'], ['career', T.career, '#38bdf8'], ['money', T.money, '#facc15'], ['health', T.health, '#22c55e']];
+        const boxes = [['love', T.love, '#ec4899'], ['career', T.career, '#38bdf8'], ['money', T.money, dz().accent], ['health', T.health, '#22c55e']];
         boxes.forEach(([k, label, col], j) => {
             const bx = x0 + (j % 2) * 575, by = 468 + Math.floor(j / 2) * 188, bw = 565, bh = 176;
             wPanel(ctx, bx, by, bw, bh, 'rgba(255,255,255,0.10)', null);
             const sc = wScore(it, k + '_score');
             ctx.save();
-            ctx.textBaseline = 'middle'; ctx.textAlign = 'left'; ctx.fillStyle = '#fde68a'; ctx.font = K.font(32);
+            ctx.textBaseline = 'middle'; ctx.textAlign = 'left'; ctx.fillStyle = dz().medal[0]; ctx.font = K.font(32);
             ctx.fillText(label, bx + 24, by + 36);
             ctx.textAlign = 'right'; ctx.fillStyle = '#ffffff';
             ctx.fillText(wnum(sc * 10) + '%', bx + bw - 24, by + 36);
@@ -1905,17 +2027,17 @@
         // Shubh din / Savdhan din / Upay
         wBox(ctx, x0, 852, 565, 70, 'rgba(22, 163, 74, 0.9)', T.luckyDays + ': ' + (wDayNames(it) || '—'), '#ffffff', 32);
         wBox(ctx, x0 + 575, 852, 565, 70, 'rgba(217, 119, 6, 0.9)', T.careful + ': ' + wCareful(it), '#ffffff', 32);
-        wPanel(ctx, x0, 938, rw, 104, 'rgba(250, 204, 21, 0.95)', null);
-        wText(ctx, T.upay + ': ' + K.str(it.upay), x0 + rw / 2, 990, rw - 60, 90, 34, 22, '#3b0764', 'center', 1.25);
+        wPanel(ctx, x0, 938, rw, 104, dz().a(0.95), null);
+        wText(ctx, T.upay + ': ' + K.str(it.upay), x0 + rw / 2, 990, rw - 60, 90, 34, 22, dz().ink, 'center', 1.25);
     }
 
     function drawWeekEnd(c) {
-        const ctx = c.getContext('2d');
+        const ctx = c.getContext('2d'); drawLang = weekLang;
         const T = wt(), S = SHORT_I18N[weekLang] || SHORT_I18N.gujarati;
         K.reset(ctx);
         wSky(ctx, 55);
         const f = K.fit(ctx, T.endLine, { maxW: 1500, maxH: 220, size: 96, minSize: 56, lineHeight: 1.15 });
-        strokedLines(ctx, f.lines, 210, f.lh, '#facc15', 12, VW / 2);
+        strokedLines(ctx, f.lines, 210, f.lh, dz().accent, 12, VW / 2);
         [['👍', S.like, '#2563eb', 420], ['↗️', S.share, '#16a34a', 960], ['🔔', S.subscribe, '#dc2626', 1500]].forEach(([icon, label, color, x]) => {
             const bw = 470, bh = 150, y = 480;
             ctx.save();
@@ -1931,10 +2053,10 @@
             ctx.fillText(label, x + 45, y + 4);
             ctx.restore();
         });
-        wText(ctx, T.endShorts, VW / 2, 690, 1500, 80, 54, 30, '#fcd34d', 'center');
+        wText(ctx, T.endShorts, VW / 2, 690, 1500, 80, 54, 30, dz().soft, 'center');
         wText(ctx, S.endAsk, VW / 2, 800, 1500, 70, 46, 28, '#ffffff', 'center');
         ctx.save();
-        ctx.font = symFont(64); ctx.fillStyle = 'rgba(250, 204, 21, 0.6)';
+        ctx.font = symFont(64); ctx.fillStyle = dz().a(0.6);
         ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
         SYMBOLS.forEach((s, k) => ctx.fillText(s + '︎', VW / 2 + (k - 5.5) * 140, 960));
         ctx.restore();
@@ -1945,20 +2067,20 @@
      * daayi taraf us hafte ke special ki 3-4 rashi ke bade gole. 1920×1080 par, save 1280×720.
      */
     function drawWeekThumb(c, sp) {
-        const ctx = c.getContext('2d');
+        const ctx = c.getContext('2d'); drawLang = weekLang;
         const T = wt();
         K.reset(ctx);
-        wSky(ctx, 5, ['#3b0764', '#86198f', '#b91c1c']);
+        wSky(ctx, 5, dz().skyThumb);
         [[560, 470], [1450, 540]].forEach(([gx, gy]) => {
             const glow = ctx.createRadialGradient(gx, gy, 40, gx, gy, 640);
-            glow.addColorStop(0, 'rgba(250, 204, 21, 0.20)'); glow.addColorStop(1, 'rgba(250, 204, 21, 0)');
+            glow.addColorStop(0, dz().a(0.20)); glow.addColorStop(1, dz().a(0));
             ctx.fillStyle = glow; ctx.fillRect(0, 0, VW, VH);
         });
 
         wPill(ctx, sp.badge, 560, 150, 66, '#dc2626', '#ffffff', 1020);
         const f = K.fit(ctx, T.head, { maxW: 1020, maxH: 470, size: 210, minSize: 100, lineHeight: 1.08 });
-        strokedLines(ctx, f.lines, 470, f.lh, '#facc15', Math.max(14, Math.round(f.size / 7)), 560);
-        wPill(ctx, weekRangeLabel(), 560, 805, 56, 'rgba(11, 16, 51, 0.92)', '#ffffff', 1020);
+        strokedLines(ctx, f.lines, 470, f.lh, dz().accent, Math.max(14, Math.round(f.size / 7)), 560);
+        wPill(ctx, weekRangeLabel(), 560, 805, 56, dz().deep(0.92), '#ffffff', 1020);
         ctx.save();
         K.fitOneLine(ctx, T.sub, 1020, 48, 28);
         strokedLines(ctx, [T.sub], 940, 56, '#ffffff', 10, 560);

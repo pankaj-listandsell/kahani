@@ -81,7 +81,7 @@ class Story extends Model
      * 🎬 Is hafte ka Saptahik video (type 'rashifal_week', category = Somvar) jo upload nahi hua.
      * Sirf usi hafte (Somvar–Ravivar) — purane hafte ka kabhi nahi.
      */
-    public static function nextRashifalWeekPart(int $userId): ?Part
+    public static function nextRashifalWeekPart(int $userId, string $statusCol = 'yt_status'): ?Part
     {
         $monday = now()->startOfWeek(\Carbon\Carbon::MONDAY)->toDateString();
         $stories = static::where('status', 'published')->where('user_id', $userId)
@@ -93,9 +93,9 @@ class Story extends Model
             foreach ($story->parts as $part) {
                 $first = $part->cards->first();
                 // Lamba video banne + upload me der lagti hai — 'posting' 60 min tak atka maano
-                $stuck = $first?->yt_status === 'posting'
+                $stuck = $first?->{$statusCol} === 'posting'
                     && $first->updated_at?->lt(now()->subMinutes(max(60, PartCard::POSTING_STALE_MINUTES)));
-                if ($first && ($first->yt_status === null || $stuck)) {
+                if ($first && ($first->{$statusCol} === null || $stuck)) {
                     return $part;
                 }
             }
@@ -118,7 +118,7 @@ class Story extends Model
      * Aaj ke Rashifal YouTube Shorts (type 'rashifal_short', category = din) me se agla part
      * jo upload nahi hua — har part = ek Short (roz 3 themes). Status pehle card par.
      */
-    public static function nextRashifalShortPart(int $userId): ?Part
+    public static function nextRashifalShortPart(int $userId, string $statusCol = 'yt_status'): ?Part
     {
         $stories = static::where('status', 'published')->where('user_id', $userId)
             ->where('type', 'rashifal_short')->where('category', now()->toDateString())
@@ -131,9 +131,9 @@ class Story extends Model
                     continue; // 12 Rashi Short band — YouTube par sirf Top 3
                 }
                 $first = $part->cards->first();
-                $stuck = $first?->yt_status === 'posting'
+                $stuck = $first?->{$statusCol} === 'posting'
                     && $first->updated_at?->lt(now()->subMinutes(PartCard::POSTING_STALE_MINUTES));
-                if ($first && ($first->yt_status === null || $stuck)) {
+                if ($first && ($first->{$statusCol} === null || $stuck)) {
                     return $part;
                 }
             }

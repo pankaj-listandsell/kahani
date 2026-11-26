@@ -4,6 +4,7 @@ namespace App\Console\Commands;
 
 use App\Console\Commands\Concerns\HandlesAutoPostFailures;
 use App\Exceptions\CardBusyException;
+use App\Models\Part;
 use App\Models\PartCard;
 use App\Models\Setting;
 use App\Models\Story;
@@ -11,6 +12,7 @@ use App\Models\User;
 use App\Services\FacebookService;
 use Illuminate\Console\Command;
 use Illuminate\Support\Carbon;
+use Illuminate\Support\Facades\Storage;
 
 class FacebookAutoPost extends Command
 {
@@ -87,17 +89,16 @@ class FacebookAutoPost extends Command
             }
         }
 
-        $card = $this->nextPendingCard($uid);
-        if (! $card) {
+        $job = $this->nextJob($uid, $facebook);
+        if (! $job) {
             return;
         }
-
-        $type = Setting::getFor($uid, 'fb_post_type', 'image') === 'reel' ? 'reel' : 'image';
+        [$label, $card, $post] = $job;
 
         try {
-            $id = $type === 'reel' ? $facebook->postReel($card) : $facebook->postPhoto($card);
+            $id = $post();
             $this->recordSuccess($uid, 'fb', $now);
-            $this->info("User #{$uid}: posted {$type} card #{$card->id} → {$id}");
+            $this->info("User #{$uid}: posted {$label} → {$id}");
         } catch (\App\Exceptions\FacebookRateLimitException $e) {
             // FB ne "We limit how often you can post…" diya — 2 ghante ruk jao.
             // Card 'failed' nahi hua (pending hai), cooldown ke baad dobara try hoga.
@@ -105,9 +106,78 @@ class FacebookAutoPost extends Command
         } catch (CardBusyException $e) {
             $this->warn("User #{$uid}: " . $e->getMessage()); // button se post ho raha hai — slot rehne do
         } catch (\Throwable $e) {
-            $this->error("User #{$uid} card #{$card->id} failed: " . $e->getMessage());
+            $this->error("User #{$uid} {$label} failed: " . $e->getMessage());
             $this->recordFailure($uid, 'fb', $card, $e, $now);
+            // Album: account/limit error par pehla card wapas pending hua → baaki bhi, warna agla album aadha banega
+            if (! empty($job[3]) && $card->fresh()?->fb_status === null) {
+                PartCard::whereIn('id', collect($job[3])->pluck('id'))->update(['fb_status' => null, 'fb_error' => null]);
+            }
         }
+    }
+
+    /**
+     * Is slot me kya post karna hai — [label, status wala card, fn() => post id].
+     * Kram: 🎬 Saptahik video → 📅 Panchang / 🔯 aaj ka Rashifal (12 photo ek album me)
+     * → 📺 aaj ke 3 Rashifal Reels → baaki cards.
+     */
+    protected function nextJob(int $uid, FacebookService $facebook): ?array
+    {
+        // 1) Is hafte ka Saptahik video (YouTube wala hi video)
+        $week = Story::nextRashifalWeekPart($uid, 'fb_status');
+        if ($week && $this->videoReady($uid, $week, 'yt/week-' . $week->id . '.mp4')) {
+            return ["Saptahik video (part #{$week->id})", $week->cards->first(), fn () => $facebook->postWeekVideo($week)];
+        }
+
+        // 2) Aaj ka Panchang (ek photo) / Rashifal (saare cards ek album post me)
+        if ($card = Story::nextRashifalCard($uid, 'facebook', 'fb_status')) {
+            $part = $card->part;
+            if ($part?->story?->type === 'rashifal') {
+                $cards = $part->cards->whereNull('fb_status')->values();
+
+                return ["Rashifal album (part #{$part->id}, {$cards->count()} photo)", $card, fn () => $facebook->postRashifalAlbum($part, $cards), $cards];
+            }
+
+            return $this->cardJob($uid, $card, $facebook);
+        }
+
+        // 3) Aaj ke Rashifal Shorts → Facebook Reels
+        $short = Story::nextRashifalShortPart($uid, 'fb_status');
+        if ($short && $this->videoReady($uid, $short, 'yt/part-' . $short->id . '.mp4')) {
+            return ["Rashifal Reel (part #{$short->id})", $short->cards->first(), fn () => $facebook->postShortPart($short)];
+        }
+
+        $card = $this->nextPendingCard($uid);
+
+        return $card ? $this->cardJob($uid, $card, $facebook) : null;
+    }
+
+    protected function cardJob(int $uid, PartCard $card, FacebookService $facebook): array
+    {
+        $type = Setting::getFor($uid, 'fb_post_type', 'image') === 'reel' ? 'reel' : 'image';
+
+        return ["{$type} card #{$card->id}", $card, fn () => $type === 'reel' ? $facebook->postReel($card) : $facebook->postPhoto($card)];
+    }
+
+    /**
+     * Video YouTube ke liye ban chuka ho to wahi reuse. Agar YouTube auto-post chalu hai aur
+     * abhi upload baaki / chal raha hai to ruko — warna video do baar banega (aur weekly me
+     * Gemini voice ki free limit do baar lagegi). YouTube band ho to Facebook khud bana lega.
+     */
+    protected function videoReady(int $uid, Part $part, string $mp4): bool
+    {
+        $ytStatus = $part->cards->first()?->yt_status;
+        $ytActive = Setting::getFor($uid, 'yt_auto_enabled', '0') === '1'
+            && filled(Setting::getFor($uid, 'yt_refresh_token'));
+
+        // YouTube abhi bana/upload kar raha — file adhoori ho sakti hai
+        if ($ytActive && $ytStatus === 'posting') {
+            return false;
+        }
+        if (Storage::disk('public')->exists($mp4)) {
+            return true;
+        }
+
+        return ! ($ytActive && $ytStatus === null);
     }
 
     protected function activeWindow(int $userId, Carbon $now): ?array
@@ -182,8 +252,8 @@ class FacebookAutoPost extends Command
             if (! $story->targetsPlatform('facebook')) {
                 continue; // ye story Facebook ke liye target nahi
             }
-            if (in_array($story->type, ['rashifal', 'panchang'], true)) {
-                continue; // upar nextRashifalCard() sambhalta hai — doosre din ka rashifal kabhi nahi
+            if (in_array($story->type, ['rashifal', 'rashifal_short', 'rashifal_week', 'panchang'], true)) {
+                continue; // upar nextJob() sambhalta hai — doosre din ka rashifal kabhi nahi
             }
             $isCollection = $story->isCollection();
             foreach ($story->parts as $part) {
