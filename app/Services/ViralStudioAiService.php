@@ -37,6 +37,25 @@ class ViralStudioAiService
         'Ghaziabad', 'Rohtak', 'Hisar', 'Panipat', 'Bikaner', 'Ujjain', 'Sagar', 'Bilaspur', 'Siliguri', 'Guwahati',
     ];
 
+    /**
+     * Salah ke sawaal (patr) likhne ke alag-alag andaaz — har card ko alag, taaki saare ek jaise na lagein.
+     * Lambai wahi rehti hai (style ke hisaab se), sirf likhne ka tareeka badalta hai.
+     */
+    public const SALAH_FORMATS = [
+        'Classic letter: starts with a respectful greeting to the expert ("Namaste didi,"), introduces self, explains, asks for advice.',
+        'Diary entry: written like a page from a personal diary ("Aaje farithi e j thayu…"), raw feelings, ends by deciding to finally ask for advice.',
+        'WhatsApp-style message: short broken lines, a few emojis, "please help 🙏", natural chat language — but still a full detailed story.',
+        'Starts in the middle of a scene: opens with the exact moment that hurt ("Te raate jyare te ghare aavya…"), then goes back to explain how it all started.',
+        'Opens with a quote: begins with a painful / shocking line someone said to them, in quotes, then explains the story behind it.',
+        'Timeline: tells it step by step with time markers ("Lagn na 6 mahina pachhi… 2 varsh pachhi… have…").',
+        'Dilemma: "Ek taraf … biji taraf …" — clearly lays out two choices and why each is hard, then asks which way to go.',
+        'Numbered questions: explains the situation, then lists 2-3 specific questions (1. … 2. … 3. …).',
+        'Unsent letter: first addresses the other person directly ("Priya pati, kadach tame aa kyarey nahi vancho…"), then turns to the expert for advice.',
+        'Self-intro first: "Hu 34 varsh ni gruhini chhu, 2 balako ni maa…" — background and daily routine first, then the problem that broke the routine.',
+        'Secret confession: "Aa vaat me aaj sudhi koine nathi kahi…" — whispering tone, the hidden truth revealed slowly.',
+        'Asking on behalf of someone: "Aa mari sakhi / bhai ni vaat chhe…" — tells a close friend or sibling story with worry, and asks how to help them.',
+    ];
+
     /** Bhasha ke hisaab se shahar: Gujarati = Gujarat, Hindi/Hinglish = poora Bharat. */
     protected function citiesFor(string $language, int $count)
     {
@@ -64,14 +83,14 @@ class ViralStudioAiService
 
         [$questionRule, $askerRule, $answerRule, $solutionsRule, $limit] = $style === 'confession'
             ? [
-                '150-200 words, a heartfelt first-person confession told like a story: age, city, living situation, how it started, what happened step by step, how they felt (loneliness, attraction, guilt, confusion), what they tried, ends asking "what should I do?". Bold, gossip-worthy, emotionally honest, but never explicit.',
+                '150-200 words, a heartfelt first-person confession told like a story: age, city, living situation, how it started, what happened step by step, how they felt (loneliness, attraction, guilt, confusion), what they tried, ends asking "what should I do?". Follow the writing FORMAT given for that card. Bold, gossip-worthy, emotionally honest, but never explicit. If the confession involves an intimate night, never describe it — tell it through the next-morning aftermath (her bindi on his pillow, bangles near the bed, his shirt on the chair, a missed call at 2 a.m., silence and secret smiles at breakfast) so an adult reader understands, followed by the guilt / confusion.',
                 'First name + city (e.g. ' . ($guj ? '"રિયા, અમદાવાદ"' : '"Riya, Jaipur"') . ').',
                 '45-60 words: name the psychology behind the feeling (e.g. validation craving, loneliness, emotional dependence) without judging.',
                 'Array of exactly 2 objects {"heading": 3-6 word step title, "text": 20-35 word explanation}.',
                 320,
             ]
             : [
-                '55-80 words, first person, starts with a greeting (e.g. "નમસ્તે,"), realistic detail, ends asking for advice.',
+                '55-80 words, first person, realistic detail, ends asking for advice. Follow the writing FORMAT given for that card.',
                 'Short anonymous signature: who + city (e.g. ' . ($guj ? '"એક ચિંતિત માતા, વડોદરા"' : '"a worried mother, Lucknow"') . ').',
                 '50-70 words: validate the feeling, explain the reason simply.',
                 'Array of exactly 4 objects {"heading": 3-7 word bold step title, "text": 12-25 word explanation}.',
@@ -80,6 +99,12 @@ class ViralStudioAiService
 
         // Har card ka alag sheher — Gujarati: poore Gujarat se, Hindi/Hinglish: poore Bharat se
         $cities   = $this->citiesFor($language, $count);
+        // Har card ka alag likhne ka andaaz (letter / diary / WhatsApp / timeline …)
+        $formats = collect(self::SALAH_FORMATS)->shuffle()->take(max(1, $count))->values();
+        $formatLine = 'Writing FORMAT of the reader letter (`question`) — a DIFFERENT one for each card, in this order: '
+            . $formats->map(fn ($x, $i) => 'card ' . ($i + 1) . ' = ' . $x)->implode(' | ')
+            . '. Translate any example phrases into the output language.';
+
         $cityLine = 'Cities for `asker` (use them in this order, one per card; write the name in the output language/script): '
             . $cities->map(fn ($c, $i) => 'card ' . ($i + 1) . ' = ' . $c)->implode(', ')
             . '. Use the same city inside the letter (`question`) where a city is mentioned. '
@@ -93,6 +118,7 @@ Generate {$count} cards in {$langPrompt}.
 Category: {$category}.
 {$topicLine}
 {$cityLine}
+{$formatLine}
 
 Tone & safety:
 - Warm, respectful, practical — like a trusted elder sister / family counsellor. Relatable to {$audience} families.
@@ -136,8 +162,11 @@ Make it BOLD, ROMANTIC and full of MOOD (the most sensual version that is still 
 - The intimate scene is THE moment — write it slowly, step by step, with sensory detail (breath, warmth, touch, scent, sound of rain, dim light):
   first a soft kiss on the forehead or cheek → a long, deep kiss on the lips → kisses on her neck, behind the ear, on the shoulder → his hands on her waist, back and hair, her fingers in his hair, bodies pressed close in an embrace → her shy smile, closed eyes, trembling voice.
 - Use warm, mood-setting words in the output language (e.g. Gujarati: "ધબકારા", "શ્વાસ", "સ્પર્શ", "ગરમાવો", "ધ્રુજારી", "નજીક", "આલિંગન", "હોઠ", "ગરદન" …).
-- Title and first line must be a daring, curiosity-driven hook (forbidden, secret, "that night…").
-- End right at the peak with a strong cut-away ("darwajo bandh thayo…", "light bujhai gai…", "e raate badhi maryadao tooti gai — baaki fakt e banne jaane chhe") and then the next-morning aftermath (a secret smile, guilt, a changed relationship).
+- Flirty, teasing dialogue: playful lines, a whispered dare ("aaje raate jaldi na jata…"), a shy "na" that sounds like "ha", a name said softly.
+- Stretch the tension: almost-kisses, an interruption (phone ringing, a knock, footsteps), stolen glances in a crowd, the fear of getting caught.
+- Title and first line must be a daring, curiosity-driven hook (forbidden, secret, "that night…", "pati na mitra e e raate…").
+- End right at the peak with a strong cut-away ("darwajo bandh thayo…", "light bujhai gai…", "e raate badhi maryadao tooti gai — baaki fakt e banne jaane chhe").
+- THE AFTERMATH TELLS WHAT HAPPENED (this is the most important trick): never describe the night itself — instead, right after the cut-away, jump to the next morning / a few hours later and let 2-3 small, innocent-looking details make it unmistakable to an adult reader that they spent the night together. Examples of the style (vary them, invent new ones): her red bindi stuck on his pillow; her bangles scattered near the bed; his shirt on the chair and her dupatta on the window; the sound of the shower and her cheeks still red; she wears his shirt to make tea; both silent at breakfast, smiling into their cups; a missed call from the husband / wife at 2 a.m.; the rain stopped, but neither slept. Then the feeling: a secret smile, guilt, "e khotu hatu… pan farithi joie chhe", or the fear that someone will find out.
 
 Hard limits (strict — posted on Instagram/Facebook):
 - All characters are adults (22+). Consent is clear and mutual.
@@ -222,8 +251,8 @@ PROMPT;
         $rules = $this->kahaniRules($life);
 
         $plan = $parts === 2
-            ? "Part 1 = hook, the characters, the place and growing attraction — STOP at a tense, unfinished moment (a knock, a touch, a whispered question) so readers want part 2.\n  Part 2 = the key intimate moment (as allowed below), the cut-away and the aftermath / twist ending."
-            : "Part 1 = hook, the characters, the place and the first spark — STOP at a curious, unfinished moment.\n  Part 2 = attraction grows, tension and temptation build — STOP right before the key moment (cliffhanger).\n  Part 3 = the key intimate moment (as allowed below), the cut-away and the aftermath / twist ending.";
+            ? "Part 1 = hook, the characters, the place and growing attraction — STOP at a tense, unfinished moment (a knock, a touch, a whispered question) so readers want part 2.\n  Part 2 = the key intimate moment (as allowed below), the cut-away, then the next-morning AFTERMATH details that tell what happened, and the twist / feeling ending."
+            : "Part 1 = hook, the characters, the place and the first spark — STOP at a curious, unfinished moment.\n  Part 2 = attraction grows, tension and temptation build — STOP right before the key moment (cliffhanger).\n  Part 3 = the key intimate moment (as allowed below), the cut-away, then the next-morning AFTERMATH details that tell what happened, and the twist / feeling ending.";
 
         $timeout = min(240, 90 + $count * $parts * 15);
 

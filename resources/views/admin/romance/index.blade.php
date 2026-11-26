@@ -510,18 +510,11 @@
             ctx.fillStyle = bg; ctx.beginPath(); ctx.arc(x, y, rad, 0, Math.PI * 2); ctx.fill();
         }
 
-        // Upar: bhaag ki progress patti (1/3 → ek hissa bhara)
-        const segW = (W - 160 - (item.total - 1) * 16) / item.total;
-        for (let k = 0; k < item.total; k++) {
-            ctx.fillStyle = k < item.part ? T.accent : 'rgba(255,255,255,0.18)';
-            ctx.beginPath(); ctx.roundRect(80 + k * (segW + 16), 54, segW, 12, 6); ctx.fill();
-        }
-
         // Bhaag ki ribbon
         ctx.save();
         const pl = partLabel(item);
         const ps = K.fitOneLine(ctx, pl, 420, 40, 26);
-        const pw = ctx.measureText(pl).width + 90, ph = ps + 30, py = 100;
+        const pw = ctx.measureText(pl).width + 90, ph = ps + 30, py = 60;
         const rg = ctx.createLinearGradient(W / 2 - pw / 2, 0, W / 2 + pw / 2, 0);
         rg.addColorStop(0, T.accent); rg.addColorStop(1, T.accent2);
         ctx.fillStyle = rg;
@@ -536,26 +529,26 @@
         const tf = K.fit(ctx, String(item.title || '').trim(), { maxW: W - 150, maxH: 200, size: 62, minSize: 40, lineHeight: 1.22 });
         ctx.shadowColor = `rgba(${T.glow}, 0.8)`; ctx.shadowBlur = 26;
         ctx.fillStyle = '#ffffff';
-        const ty = 205 + (tf.lines.length * tf.lh) / 2;
+        const ty = 165 + (tf.lines.length * tf.lh) / 2;
         K.drawLines(ctx, tf.lines, W / 2, ty, tf.lh);
         ctx.restore();
-        const lineY = 205 + tf.lines.length * tf.lh + 22;
+        const lineY = 165 + tf.lines.length * tf.lh + 22;
         const lg = ctx.createLinearGradient(W / 2 - 220, 0, W / 2 + 220, 0);
         lg.addColorStop(0, `rgba(${T.glow}, 0)`); lg.addColorStop(0.5, T.accent); lg.addColorStop(1, `rgba(${T.glow}, 0)`);
         ctx.fillStyle = lg; ctx.fillRect(W / 2 - 220, lineY, 440, 4);
 
         // Kahani: halka gulabi-safed text
         const paras = K.str(item.story).split(/\n\s*\n|\n/).map(p => p.trim()).filter(Boolean).map(p => [{ t: p, b: false }]);
-        const top = lineY + 40, bottom = H - 250;
+        const top = lineY + 40, bottom = H - 220;
         ctx.fillStyle = '#fdf2f8';
         const layout = fillRich(ctx, paras, W - 140, bottom - top);
         K.drawRich(ctx, layout, 70, top);
 
-        // Neeche: follow patti (gulabi) + chhota brand
+        // Neeche: follow patti (gulabi)
         const last = item.part >= item.total;
         const main = last ? L.end : L.next;
         const sub = last ? L.endSub : L.nextSub.replace('{n}', num(item.part + 1));
-        const bx = 60, bw = W - 120, bh = 150, by = H - 70 - bh;
+        const bx = 60, bw = W - 120, bh = 150, by = H - 45 - bh;
         ctx.save();
         const fg = ctx.createLinearGradient(bx, 0, bx + bw, 0);
         fg.addColorStop(0, T.accent); fg.addColorStop(1, T.accent2);
@@ -569,9 +562,6 @@
         ctx.fillStyle = 'rgba(0,0,0,0.65)';
         K.fitOneLine(ctx, sub, bw - 100, 32, 22, '400');
         ctx.fillText(sub, W / 2, by + 106);
-        ctx.fillStyle = `rgba(${T.glow}, 0.9)`;
-        K.fitOneLine(ctx, '♥ ' + brandName(), 500, 30, 20);
-        ctx.fillText('♥ ' + brandName(), W / 2, H - 36);
         ctx.restore();
     }
 
